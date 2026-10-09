@@ -1,6 +1,6 @@
 /**
  * 東吳通勤達人 LINE Bot
- * 功能：557 即時到站、降雨機率、多路線比較器（比較器.gs）、所有訊息記錄到試算表
+ * 功能：557 即時到站、降雨機率、多路線比較器（比較器.gs）、晚上提醒（晚上提醒.gs）、所有訊息記錄到試算表
  *
  * 金鑰放在「專案設定 → 指令碼屬性」，不要寫在程式碼裡：
  *   TDX_CLIENT_ID / TDX_CLIENT_SECRET / CWA_API_KEY / LINE_CHANNEL_ACCESS_TOKEN / GEMINI_API_KEY
@@ -17,6 +17,7 @@ const HELP = [
   '・「天氣」：上學時段會不會下雨',
   '・「8 點在 D 棟上課」：幫你比較 557 和其他路線，算幾點出門',
   '・「我從劍南路站出發，第三節在一教」：文湖線的同學也可以問',
+  '・「訂閱提醒」：明天下雨或考試週，前一晚 9 點提醒你',
   '',
   '也可以直接點下面的按鈕 👇',
 ].join('\n');
@@ -27,6 +28,7 @@ const QUICK_REPLY = {
     '557 去學校',
     '557 回家',
     '明天會下雨嗎',
+    '訂閱提醒',
   ].map(label => ({
     type: 'action',
     action: { type: 'message', label: label, text: label },
@@ -54,7 +56,11 @@ function handleEvent_(ev) {
   const text = ev.message.text.trim();
   let answer;
   try {
-    answer = route_(text);
+    if (/^(訂閱提醒|取消提醒)$/.test(text)) {
+      answer = subscribe_(ev.source.userId, text === '訂閱提醒'); // 晚上提醒.gs
+    } else {
+      answer = route_(text);
+    }
   } catch (err) {
     console.error(err);
     answer = '抱歉，資料暫時抓不到，等一下再試一次 🙏';
