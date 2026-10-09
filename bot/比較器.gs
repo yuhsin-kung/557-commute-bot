@@ -113,6 +113,7 @@ function liveReply_(originName, building, classAt) {
     lines.push('', '💡 現在是尖峰，557 可能擠不上。其他車到錢穆故居站下車也一樣。');
   }
   if (classAt) lines.push('', '⏰ 上課時間 ' + fmt_(classAt));
+  if (!building) lines.push('', '📝 跟我說「8 點在 D 棟上課」，可以算到教室的時間');
   lines.push('', '（TDX 即時資料・' + nowText_() + '・車程為估計值）');
   return lines.join('\n');
 }

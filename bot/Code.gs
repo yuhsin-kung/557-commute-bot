@@ -23,13 +23,13 @@ const HELP = [
 
 const QUICK_REPLY = {
   items: [
-    ['幫我比較路線', '我現在要去學校'],
-    ['557 去學校', '557 去學校'],
-    ['557 回家', '557 回家'],
-    ['明天會下雨嗎', '明天會下雨嗎'],
-  ].map(([label, text]) => ({
+    '幫我比較路線',
+    '557 去學校',
+    '557 回家',
+    '明天會下雨嗎',
+  ].map(label => ({
     type: 'action',
-    action: { type: 'message', label: label, text: text },
+    action: { type: 'message', label: label, text: label },
   })),
 };
 
@@ -69,6 +69,9 @@ function route_(text) {
   }
   if (/雨|天氣|傘/.test(text)) {
     return rainReply_();
+  }
+  if (text === '幫我比較路線') {
+    return liveReply_('士林站', '', null); // 比較器.gs：士林站現在最快的幾班車
   }
   if (/^(557|557 去學校|公車)$/.test(text)) {
     return busReply_(0, ['捷運士林站(中正)', '士林國中'], '557 士林 → 東吳');
