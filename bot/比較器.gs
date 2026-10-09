@@ -37,7 +37,7 @@ const BUILDINGS = {
   A: ['寵惠堂', '行政大樓', 1, 6], B: ['綜合大樓', '綜大', 2, 5], C: ['愛徒樓', '安素堂', 4, 3],
   D: ['第二教學研究大樓', '二教 松怡廳', 3, 4], E: ['汽機車停車場', '停車場', 2, 7], F: ['文化樓', '', 4, 8],
   G: ['戴蓀堂', '', 3, 7], H: ['哲生樓', '', 5, 8], I: ['光道廳', '', 5, 9], J: ['研討室', '', 5, 9],
-  K: ['心理學系實驗室', '心理實驗室', 6, 9], L: ['心理學系', '', 5, 9], M: ['超庸館', '', 6, 10],
+  K: ['心理學系實驗室', '心理實驗室', 6, 9], L: ['心理學系', '心理系', 5, 9], M: ['超庸館', '', 6, 10],
   N: ['圖書館', '', 6, 8], P: ['雷德樓', '教師研究一樓', 6, 10], Q: ['教師研究二樓', '', 7, 8],
   R: ['第一教學研究大樓', '一教', 8, 10], S: ['楓雅學苑', '', 9, 9], T: ['東荊學廬', '', 10, 10],
   U: ['東桂學廬', '', 9, 11], 1: ['榕華樓', '', 8, 11], 2: ['柚芳樓', '', 8, 10], 3: ['松勁樓', '', 9, 9],
@@ -61,6 +61,7 @@ function compareReply_(text) {
   const q = parseQuestion_(text);
   if (q.intent === '回家') return busReply_(1, ['東吳大學(錢穆故居)'], '557 東吳 → 士林');
   if (q.intent === '天氣') return rainReply_();
+  if (q.intent === '站牌') return stationReply_(); // 站位變更.gs
   if (q.intent === '其他' && !q.building && !q.arriveTime) return HELP;
 
   const origin = ORIGINS[q.origin] ? q.origin : '士林站';
@@ -159,8 +160,14 @@ function planReply_(originName, building, classAt, isTomorrow) {
 
 // ===== 解析學生的問題 =====
 
+/**
+ * Gemini 免費版每分鐘只能叫幾次（gemini-3.5-flash 是 5 次），尖峰很容易用完，
+ * 所以規則看得懂的句子（有時間或大樓、回家、天氣、站牌）就不叫 Gemini，看不懂的才交給它。
+ */
 function parseQuestion_(text) {
-  return parseWithGemini_(text) || parseWithRules_(text);
+  const byRules = parseWithRules_(text);
+  if (byRules.arriveTime || byRules.building || byRules.intent !== '其他') return byRules;
+  return parseWithGemini_(text) || byRules;
 }
 
 function parseWithGemini_(text) {
@@ -173,13 +180,14 @@ function parseWithGemini_(text) {
     systemInstruction: { parts: [{ text:
       '你是東吳大學外雙溪校區的通勤小幫手，把學生的訊息整理成 JSON。\n'
       + '大樓代號：' + buildingList + '\n節次：' + periodList + '。早八=08:10。\n'
-      + '說「8點上課」就用 08:00。沒提到的欄位填空字串。出發地只能是：士林站、劍南路站、大直站，沒提到填空字串。' } ] },
+      + '說「8點上課」就用 08:00。沒提到的欄位填空字串。出發地只能是：士林站、劍南路站、大直站，沒提到填空字串。\n'
+      + '問公車在哪裡上車、站牌在哪、要去哪裡排隊，intent 填「站牌」。' } ] },
     generationConfig: {
       responseMimeType: 'application/json',
       responseSchema: {
         type: 'OBJECT',
         properties: {
-          intent: { type: 'STRING', enum: ['去學校', '回家', '天氣', '其他'] },
+          intent: { type: 'STRING', enum: ['去學校', '回家', '天氣', '站牌', '其他'] },
           arriveTime: { type: 'STRING', description: '要抵達的時間 HH:MM' },
           building: { type: 'STRING', description: '大樓代號' },
           day: { type: 'STRING', enum: ['今天', '明天', '未指定'] },
@@ -190,14 +198,20 @@ function parseWithGemini_(text) {
     },
   };
   try {
-    const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent', {
+    const call = model => UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
       method: 'post',
       contentType: 'application/json',
       headers: { 'x-goog-api-key': key },
       payload: JSON.stringify(body),
       muteHttpExceptions: true,
     });
-    if (res.getResponseCode() !== 200) return null;
+    // 先用 lite（免費額度比較多），超過額度（429）或塞車（503）再換 flash
+    let res = call('gemini-3.5-flash-lite');
+    if (res.getResponseCode() !== 200) res = call('gemini-3.5-flash');
+    if (res.getResponseCode() !== 200) {
+      console.error('Gemini ' + res.getResponseCode() + ' ' + res.getContentText().slice(0, 200));
+      return null;
+    }
     const q = JSON.parse(JSON.parse(res.getContentText()).candidates[0].content.parts[0].text);
     q.building = String(q.building || '').toUpperCase();
     return q;
@@ -209,13 +223,22 @@ function parseWithGemini_(text) {
 
 /** Gemini 不能用時的備案：用規則抓時間、大樓、出發地 */
 function parseWithRules_(text) {
-  const t = text.replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
+  const CN = { 一: 1, 二: 2, 兩: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+  const t = text
+    .replace(/[Ａ-Ｚａ-ｚ０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    // 「八點半」「十點」「十一點」→ 8點半、10點、11點
+    .replace(/(十?[一二兩三四五六七八九]|十)(?=\s*點)/g, m => String(m === '十' ? 10 : m[0] === '十' ? 10 + CN[m[1]] : CN[m]));
   let arriveTime = '';
-  const period = t.match(/第\s*([1-9A-E])\s*節/i);
-  const clock = t.match(/(\d{1,2})\s*[:：點]\s*(\d{1,2})?/);
+  const period = t.match(/第\s*([1-9A-E一二三四五六七八九])\s*節/i);
+  const clock = t.match(/(\d{1,2})\s*[:：點]\s*(\d{1,2}|半)?/);
   if (/早八/.test(t)) arriveTime = '08:10';
-  else if (period) arriveTime = PERIODS[period[1].toUpperCase()];
-  else if (clock) arriveTime = ('0' + clock[1]).slice(-2) + ':' + ('0' + (clock[2] || '0')).slice(-2);
+  else if (period) arriveTime = PERIODS[CN[period[1]] || period[1].toUpperCase()];
+  else if (clock) {
+    let hour = Number(clock[1]);
+    if (hour < 7) hour += 12; // 最早的課 8:10，「兩點」「6點」一定是下午
+    const minute = clock[2] === '半' ? 30 : Number(clock[2] || 0);
+    arriveTime = ('0' + hour).slice(-2) + ':' + ('0' + minute).slice(-2);
+  }
 
   let building = '';
   const code = t.match(/([A-U1-6])\s*棟/i);
@@ -231,6 +254,7 @@ function parseWithRules_(text) {
   let intent = '其他';
   if (/回家|回程|下課/.test(t)) intent = '回家';
   else if (/雨|天氣|傘/.test(t)) intent = '天氣';
+  else if (/站牌|上車|排隊|出口|去哪|哪(裡|邊|兒)/.test(t) && !arriveTime && !building) intent = '站牌';
   else if (arriveTime || building || /上課|學校|出門|東吳|怎麼去/.test(t)) intent = '去學校';
 
   return {

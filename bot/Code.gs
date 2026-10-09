@@ -78,7 +78,7 @@ function route_(text) {
   if (/雨|天氣|傘/.test(text)) {
     return rainReply_();
   }
-  if (/站牌|站位|上車地點|候車|哪裡排|在哪(裡)?(搭|排|上車)/.test(text)) {
+  if (/站牌|站位|上車(地點|處)|候車|排隊|哪(裡|邊|兒)?(搭|排|上車|等)/.test(text)) {
     return stationReply_(); // 站位變更.gs
   }
   if (text === '幫我比較路線') {

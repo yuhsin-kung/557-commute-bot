@@ -83,13 +83,16 @@ function summarizeStation_(text) {
 function gemini_(prompt) {
   const key = PROPS.getProperty('GEMINI_API_KEY');
   if (!key) return '';
-  const res = UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent', {
+  const call = model => UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
     method: 'post',
     contentType: 'application/json',
     headers: { 'x-goog-api-key': key },
     payload: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
     muteHttpExceptions: true,
   });
+  // 摘要要寫得好，先用 flash；免費版每分鐘只有 5 次，超過就換 lite
+  let res = call('gemini-3.5-flash');
+  if (res.getResponseCode() !== 200) res = call('gemini-3.5-flash-lite');
   if (res.getResponseCode() !== 200) {
     console.error('Gemini ' + res.getResponseCode() + ' ' + res.getContentText().slice(0, 200));
     return '';
