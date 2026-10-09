@@ -49,6 +49,9 @@ const PERIODS = {
   7: '15:10', 8: '16:10', 9: '17:10', A: '18:25', B: '19:20', C: '20:20', D: '21:15',
 };
 
+// 學校的劍南路站師生專車：上課日 07:50 從捷運劍南路站發車，到 A 棟前（德育中心 115-1 時刻表，不適用 T-PASS）
+const JIANNAN_SHUTTLE = '07:50';
+
 const BUFFER_MIN = 5;      // 提早幾分鐘到教室
 const PEAK_EXTRA_MIN = 10; // 尖峰 557 可能擠不上，要多等一兩班
 
@@ -138,6 +141,14 @@ function planReply_(originName, building, classAt, isTomorrow) {
     const by = addMin_(mustArrive, -(o.rideMin[QIAN] + walkMin_(building, QIAN) + 5 + extra.min));
     lines.push('🚇 ' + o.stop + '：' + fmt_(by) + ' 前到站'
       + '\n　可以搭 ' + o.routes.map(r => r[0]).join('、') + ' 到錢穆故居站' + (building ? '，走 ' + walkMin_(building, QIAN) + ' 分鐘' : ''));
+    // 學校專車進校園到 A 棟前，用「從校內站走過去」的時間估
+    const shuttle = timeOn_(classAt, JIANNAN_SHUTTLE);
+    const shuttleArrive = addMin_(shuttle, o.rideMin[QIAN] + 2 + walkMin_(building, CAMPUS));
+    const weekday = Number(Utilities.formatDate(classAt, TZ, 'u')) <= 5;
+    if (originName === '劍南路站' && weekday && shuttleArrive <= mustArrive) {
+      lines.push('🚐 學校的劍南路站師生專車：' + JIANNAN_SHUTTLE + ' 發車，約 ' + fmt_(shuttleArrive) + ' 到教室'
+        + '\n　在【捷運劍南路站】站牌（往自強隧道方向）上車，不適用 T-PASS');
+    }
   }
 
   if (extra.reasons.length) lines.push('', '⚠️ ' + extra.reasons.join('、') + '，已多算 ' + extra.min + ' 分鐘');
@@ -287,10 +298,11 @@ function rainPop_(when) {
   return slot ? Number(slot.ElementValue[0].ProbabilityOfPrecipitation) : 0;
 }
 
+/** 學校公告的尖峰入校時段（德育中心 115-1 時刻表）：07:20–08:20、09:00–10:00，尖峰班距 4–6 分 */
 function isPeak_(when) {
   const day = Number(Utilities.formatDate(when, TZ, 'u')); // 1=週一 … 7=週日
   const hm = Utilities.formatDate(when, TZ, 'HH:mm');
-  return day <= 5 && hm >= '07:20' && hm <= '09:10';
+  return day <= 5 && ((hm >= '07:20' && hm <= '08:20') || (hm >= '09:00' && hm <= '10:00'));
 }
 
 function timeOn_(date, hhmm) {
