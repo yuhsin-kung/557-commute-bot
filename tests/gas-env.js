@@ -75,12 +75,14 @@ function formatDate(date, timeZone, pattern) {
  * env.setNow('2026-10-12T07:30:00+08:00')：把共乘的時鐘調到這個時間
  * env.fetches：所有被攔下來的網路呼叫
  * env.quotaLeft：假裝 LINE 本月還剩幾則推播
+ * env.respond['網址的一部分'] = 資料：假裝那個網址回這份資料（例如 YouBike 開放資料）
+ * env.mails：MailApp.sendEmail 寄出的信
  */
 function loadBot(files, props = {}) {
   const sheets = {};
   const store = Object.assign({ LINE_CHANNEL_ACCESS_TOKEN: 'test-token' }, props);
   const cache = {};
-  const env = { sheets, fetches: [], quotaLeft: 200, triggers: [], names: {}, forms: [], props: store };
+  const env = { sheets, fetches: [], quotaLeft: 200, triggers: [], names: {}, forms: [], props: store, respond: {}, mails: [] };
 
   const fetch = (url, options = {}) => {
     env.fetches.push({ url, options, body: options.payload && typeof options.payload === 'string' ? JSON.parse(options.payload) : options.payload });
@@ -88,15 +90,24 @@ function loadBot(files, props = {}) {
     if (url.includes('/v2/bot/profile/')) body = { displayName: env.names[url.split('/').pop()] || '同學' + url.slice(-1) };
     else if (url.endsWith('/message/quota')) body = { type: 'limited', value: 200 };
     else if (url.endsWith('/message/quota/consumption')) body = { totalUsage: 200 - env.quotaLeft };
+    Object.keys(env.respond).forEach(part => { if (url.includes(part)) body = env.respond[part]; });
     return { getResponseCode: () => 200, getContentText: () => JSON.stringify(body) };
   };
+
+  const clock = () => (typeof context.__now === 'number' ? context.__now : Date.now());
 
   const html = content => ({ content, title: '', setTitle(t) { this.title = t; return this; }, addMetaTag() { return this; }, getContent() { return this.content; } });
 
   const context = {
     console: { log() {}, error() {} },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k in store ? store[k] : null), setProperty: (k, v) => { store[k] = v; } }) },
-    CacheService: { getScriptCache: () => ({ get: k => cache[k] || null, put: (k, v) => { cache[k] = v; }, remove: k => { delete cache[k]; } }) },
+    // 快取會過期：用共乘的假時鐘（env.setNow）算，沒設定就用真的時間
+    CacheService: { getScriptCache: () => ({
+      get: k => (cache[k] && cache[k].until > clock() ? cache[k].value : null),
+      put: (k, v, seconds) => { cache[k] = { value: v, until: clock() + (seconds || 600) * 1000 }; },
+      remove: k => { delete cache[k]; },
+    }) },
+    MailApp: { sendEmail: mail => { env.mails.push(mail); } },
     LockService: { getScriptLock: () => ({ waitLock() {}, tryLock: () => true, releaseLock() {} }) },
     SpreadsheetApp: { getActiveSpreadsheet: () => ({ getId: () => 'TEST-SHEET', getSheetByName: n => sheets[n] || null, insertSheet: n => (sheets[n] = makeSheet()) }) },
     ScriptApp: {
