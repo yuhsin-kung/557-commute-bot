@@ -105,9 +105,19 @@ function gemini_(prompt) {
 function stationReply_() {
   const summary = PROPS.getProperty('STATION_SUMMARY');
   const checked = PROPS.getProperty('STATION_CHECKED_AT');
-  return '🚏 557 上車地點\n\n'
-    + (summary || '・捷運士林站：中正路 205 號（大成安心購）前\n・士林國中站：中正路 341 號（富邦銀行士林分行）前，尖峰建議來這裡排\n・校內：操場側站牌後，依藍線排隊')
-    + '\n\n（來源：德育中心' + (checked ? '，' + checked + ' 更新' : '') + '）\n' + STATION_PAGE_URL;
+  const fallback = [
+    { label: '捷運士林站', value: '中正路 205 號前', sub: '大成安心購前面' },
+    { label: '士林國中站', value: '中正路 341 號前', sub: '富邦銀行士林分行前面。尖峰建議來這裡排', best: true },
+    { label: '校內', value: '操場側站牌後', sub: '依藍線排隊' },
+  ];
+  return card_({ // 卡片.gs
+    badge: '德育中心公告',
+    title: '557 上車地點',
+    rows: summary ? [] : fallback,
+    notes: summary ? [summary] : [],
+    footer: '來源：德育中心' + (checked ? '，' + checked + ' 更新' : ''),
+    buttons: [{ label: '看德育中心公告', uri: STATION_PAGE_URL }, { label: '557 現在到哪了', text: '557' }],
+  });
 }
 
 // ===== 紀錄 =====
@@ -145,7 +155,7 @@ function 設定站位檢查排程() {
   ScriptApp.newTrigger('檢查站位變更').timeBased().everyHours(CHECK_EVERY_HOURS).create();
   檢查站位變更();
   console.log('✅ 已設定：每 ' + CHECK_EVERY_HOURS + ' 小時檢查一次德育中心頁面');
-  console.log(stationReply_());
+  console.log(plain_(stationReply_()));
 }
 
 /** 不推播：假裝頁面改了，看 Gemini 會寫出什麼摘要 */
