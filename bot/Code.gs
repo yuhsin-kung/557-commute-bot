@@ -21,6 +21,9 @@ function helpCard_() {
       { label: '共乘', value: '「共乘」', sub: '找同學一起搭計程車，可以現在走或預約' },
       { label: '天氣', value: '「明天會下雨嗎」' },
       { label: '上車地點', value: '「557 在哪裡搭」' },
+      { label: '打卡', value: '「打卡」', sub: '從錢穆故居站走進學校拿積分，7:30 前到校有早餐券' },
+      { label: '我的紀錄', value: '「我的紀錄」', sub: '積分、成就、少排放多少碳' },
+      { label: '其他', value: '「YouBike」「共享雨傘」', sub: '還有「新生教學」「包車」' },
       { label: '提醒', value: '「訂閱提醒」', sub: '明天下雨、考試週、站牌搬家，前一晚提醒你' },
     ],
     footer: '也可以直接點下面的按鈕',
@@ -34,6 +37,8 @@ const QUICK_REPLY = {
     '557 去學校',
     '557 回家',
     '共乘',
+    '打卡',
+    '我的紀錄',
     '明天會下雨嗎',
     '訂閱提醒',
   ].map(label => ({
@@ -78,7 +83,8 @@ function handleEvent_(ev) {
     } else if (/^(訂閱提醒|取消提醒)$/.test(text)) {
       answer = subscribe_(ev.source.userId, text === '訂閱提醒'); // 晚上提醒.gs
     } else {
-      answer = route_(text);
+      // 積分、打卡、YouBike、雨傘、新生、包車：要知道是誰傳的，所以排在 route_ 前面
+      answer = memberReply_(ev.source.userId, text) || route_(text);
     }
   } catch (err) {
     console.error(err);
@@ -86,6 +92,24 @@ function handleEvent_(ev) {
   }
   reply_(ev.replyToken, answer);
   log_(ev, text, answer);
+}
+
+/**
+ * 模組三、四、五的指令。認得就回覆，不認得回傳 null 交給 route_。
+ * 這幾個要比 route_ 先判斷：「借傘」有「傘」字、「排隊禮儀」有「排隊」，不先攔下來會被當成問天氣、問站牌。
+ */
+function memberReply_(uid, text) {
+  if (/^(打卡|到校打卡|步行積分)$/.test(text)) return ptCheckinButton_(uid); // 積分.gs
+  if (/^(我的紀錄|我的積分|積分|成就|碳足跡)$/.test(text)) return ptMine_(uid);
+  if (text === '全校減碳') return ptSchool_();
+  if (text === '騎車到校') return ptBike_(uid);
+  if (/^(youbike|ubike|微笑單車|腳踏車)$/i.test(text)) return ybReply_(); // YouBike.gs
+  if (/^(借傘|還傘|共享雨傘)(\s|$)/.test(text)) return umText_(uid, text); // 雨傘.gs
+  if (text === '新生教學' || text === '新生') return nbIntro_(); // 新生.gs
+  if (text === '新生測驗' || /^答\s*[1-3]$/.test(text)) return nbQuiz_(uid, text);
+  if (text === '排隊禮儀') return nbEtiquette_();
+  if (/^包車(\s|$)/.test(text)) return charterText_(uid, text);
+  return null;
 }
 
 function route_(text) {

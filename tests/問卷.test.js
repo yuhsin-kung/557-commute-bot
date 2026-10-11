@@ -5,7 +5,8 @@ const fs = require('fs');
 const path = require('path');
 const { loadBot } = require('./gas-env');
 
-const DOC = fs.readFileSync(path.join(__dirname, '..', '問卷題目.md'), 'utf8');
+// Windows 上 git 會把這份文件的換行換成 CRLF，先拿掉 CR 才比得到每一行的結尾
+const DOC = fs.readFileSync(path.join(__dirname, '..', '問卷題目.md'), 'utf8').replace(/\r/g, '');
 
 /** 從「問卷題目.md」讀出某一份問卷的題目和選項 */
 function questionsInDoc(from, to) {
