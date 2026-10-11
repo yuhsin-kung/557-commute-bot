@@ -62,7 +62,7 @@ function compareReply_(text) {
   if (q.intent === '回家') return busReply_(1, ['東吳大學(錢穆故居)'], '557 東吳 → 士林');
   if (q.intent === '天氣') return rainReply_();
   if (q.intent === '站牌') return stationReply_(); // 站位變更.gs
-  if (q.intent === '其他' && !q.building && !q.arriveTime) return HELP;
+  if (q.intent === '其他' && !q.building && !q.arriveTime) return helpCard_(); // Code.gs
 
   const origin = ORIGINS[q.origin] ? q.origin : '士林站';
   const building = BUILDINGS[q.building] ? q.building : '';
@@ -84,6 +84,8 @@ function liveReply_(originName, building, classAt) {
   const o = ORIGINS[originName];
   const etas = etaAtStop_(o.stop);
   const now = new Date();
+  const target = building ? building + ' 棟' : '東吳大學';
+  const head = { badge: '多路線比較', title: originName + ' → ' + target, subtitle: building ? BUILDINGS[building][0] : '' };
 
   const options = [];
   o.routes.forEach(([route, dir, dest]) => {
@@ -96,66 +98,83 @@ function liveReply_(originName, building, classAt) {
   });
 
   if (!options.length) {
-    return '🚌 ' + o.stop + '\n現在沒有車往東吳的即時資料（可能是末班車已過或還沒發車）。\n\n（TDX 即時資料・' + nowText_() + '）';
+    return card_(Object.assign(head, { // 卡片.gs
+      notes: ['現在 ' + o.stop + ' 沒有車往東吳的即時資料，可能是末班車已過或還沒發車。'],
+      footer: 'TDX 即時資料・' + nowText_(),
+      buttons: [{ label: '找人共乘', text: '共乘' }],
+    }));
   }
   options.sort((a, b) => a.arrive - b.arrive);
 
-  const target = building ? building + ' 棟 ' + BUILDINGS[building][0] : '東吳大學';
-  const lines = ['🧭 從' + o.stop + '到 ' + target, ''];
-  options.slice(0, 4).forEach((opt, i) => {
-    const late = classAt && opt.arrive > classAt ? ' ⚠️ 會遲到' : '';
-    lines.push((i === 0 ? '⭐ ' : '・') + opt.route + '：' + (opt.waitMin <= 1 ? '即將進站' : opt.waitMin + ' 分鐘後到站')
-      + '\n　→ ' + (opt.dest === CAMPUS ? '直接進校園' : '錢穆故居站下車') + (building ? '，走 ' + opt.walk + ' 分鐘' : '')
-      + '\n　約 ' + fmt_(opt.arrive) + ' 到' + late);
-  });
+  const rows = options.slice(0, 4).map((opt, i) => ({
+    label: opt.route,
+    value: (opt.waitMin <= 1 ? '即將進站' : opt.waitMin + ' 分鐘後') + '・' + fmt_(opt.arrive) + ' 到',
+    sub: (opt.dest === CAMPUS ? '直接進校園' : '錢穆故居站下車') + (building ? '，走 ' + opt.walk + ' 分鐘' : '')
+      + (classAt && opt.arrive > classAt ? '（會遲到）' : ''),
+    best: i === 0,
+  }));
 
+  const notes = [];
+  const warns = [];
   const best = options[0];
   const bus557 = options.find(x => x.route === '557');
   if (originName === '士林站' && best.route !== '557') {
-    lines.push('', '💡 ' + best.route + ' 跟 557 走一樣的路，到錢穆故居站下車就好，不用擠 557！');
+    notes.push(best.route + ' 跟 557 走一樣的路，到錢穆故居站下車就好，不用擠 557。');
   } else if (originName === '士林站' && bus557 && isPeak_(now)) {
-    lines.push('', '💡 現在是尖峰，557 可能擠不上。其他車到錢穆故居站下車也一樣。');
+    warns.push('現在是尖峰，557 可能擠不上。其他車到錢穆故居站下車也一樣。');
   }
-  if (classAt) lines.push('', '⏰ 上課時間 ' + fmt_(classAt));
-  if (!building) lines.push('', '📝 跟我說「8 點在 D 棟上課」，可以算到教室的時間');
-  lines.push('', '（TDX 即時資料・' + nowText_() + '・車程為估計值）');
-  return lines.join('\n');
+  if (classAt && best.arrive > classAt) warns.push(fmt_(classAt) + ' 上課，最快的車也會遲到。可以考慮共乘。');
+  if (!building) notes.push('跟我說「8 點在 D 棟上課」，可以算到教室的時間。');
+
+  return card_(Object.assign(head, {
+    rows: rows,
+    notes: notes,
+    warns: warns,
+    footer: (classAt ? fmt_(classAt) + ' 上課・' : '') + 'TDX 即時資料・' + nowText_() + '・車程為估計值',
+    buttons: [{ label: '找人共乘', text: '共乘' }, { label: '557 在哪裡搭', text: '557 在哪裡搭' }],
+  }));
 }
 
 /** 出門建議模式：上課時間還很久，用預估車程往回推 */
 function planReply_(originName, building, classAt, isTomorrow) {
   const o = ORIGINS[originName];
   const mustArrive = addMin_(classAt, -BUFFER_MIN);
-  const lines = ['🗓 ' + (isTomorrow ? '明天' : '今天') + ' ' + fmt_(classAt) + ' 上課'
-    + (building ? '（' + building + ' 棟 ' + BUILDINGS[building][0] + '）' : ''), ''];
-
   const extra = crowdExtra_(classAt);
   const peak = isPeak_(addMin_(classAt, -30));
+  const rows = [];
 
   if (originName === '士林站') {
     const by557 = addMin_(mustArrive, -(o.rideMin[CAMPUS] + walkMin_(building, CAMPUS) + (peak ? PEAK_EXTRA_MIN : 0) + extra.min));
     const byOther = addMin_(mustArrive, -(o.rideMin[QIAN] + walkMin_(building, QIAN) + 5 + extra.min));
-    lines.push('🚌 搭 557 進校園：' + fmt_(by557) + ' 前到士林站排隊' + (peak ? '\n　（尖峰可能要等一兩班，已多算 ' + PEAK_EXTRA_MIN + ' 分鐘）' : ''));
-    lines.push('🚌 搭其他車到錢穆故居站：' + fmt_(byOther) + ' 前到士林站'
-      + '\n　255、304、紅30、683、957、北環幹線… 哪班先來搭哪班' + (building ? '\n　下車後走 ' + walkMin_(building, QIAN) + ' 分鐘' : ''));
+    rows.push({ label: '搭 557 進校園', value: fmt_(by557) + ' 前到士林站',
+      sub: peak ? '尖峰可能要等一兩班，已多算 ' + PEAK_EXTRA_MIN + ' 分鐘' : '' });
+    rows.push({ label: '搭其他車', value: fmt_(byOther) + ' 前到士林站',
+      sub: '255、304、紅30、683、957、北環幹線… 哪班先來搭哪班，到錢穆故居站下車' + (building ? '，走 ' + walkMin_(building, QIAN) + ' 分鐘' : '') });
   } else {
     const by = addMin_(mustArrive, -(o.rideMin[QIAN] + walkMin_(building, QIAN) + 5 + extra.min));
-    lines.push('🚇 ' + o.stop + '：' + fmt_(by) + ' 前到站'
-      + '\n　可以搭 ' + o.routes.map(r => r[0]).join('、') + ' 到錢穆故居站' + (building ? '，走 ' + walkMin_(building, QIAN) + ' 分鐘' : ''));
+    rows.push({ label: o.stop, value: fmt_(by) + ' 前到站',
+      sub: '搭 ' + o.routes.map(r => r[0]).join('、') + ' 到錢穆故居站' + (building ? '，走 ' + walkMin_(building, QIAN) + ' 分鐘' : '') });
     // 學校專車進校園到 A 棟前，用「從校內站走過去」的時間估
     const shuttle = timeOn_(classAt, JIANNAN_SHUTTLE);
     const shuttleArrive = addMin_(shuttle, o.rideMin[QIAN] + 2 + walkMin_(building, CAMPUS));
     const weekday = Number(Utilities.formatDate(classAt, TZ, 'u')) <= 5;
     if (originName === '劍南路站' && weekday && shuttleArrive <= mustArrive) {
-      lines.push('🚐 學校的劍南路站師生專車：' + JIANNAN_SHUTTLE + ' 發車，約 ' + fmt_(shuttleArrive) + ' 到教室'
-        + '\n　在【捷運劍南路站】站牌（往自強隧道方向）上車，不適用 T-PASS');
+      rows.push({ label: '學校專車', value: JIANNAN_SHUTTLE + ' 發車',
+        sub: '約 ' + fmt_(shuttleArrive) + ' 到教室。在【捷運劍南路站】站牌（往自強隧道方向）上車，不適用 T-PASS' });
     }
   }
+  rows[0].best = true;
 
-  if (extra.reasons.length) lines.push('', '⚠️ ' + extra.reasons.join('、') + '，已多算 ' + extra.min + ' 分鐘');
-  if (originName === '士林站') lines.push('', '💡 住文湖線沿線？說「我從劍南路站出發」可以看其他路線');
-  lines.push('', '（依預估車程推算，出門前再問我一次可以看即時到站）');
-  return lines.join('\n');
+  return card_({ // 卡片.gs
+    badge: '出門建議',
+    title: (isTomorrow ? '明天 ' : '今天 ') + fmt_(classAt) + ' 上課',
+    subtitle: building ? building + ' 棟 ' + BUILDINGS[building][0] : '',
+    rows: rows,
+    notes: originName === '士林站' ? ['住文湖線沿線？說「我從劍南路站出發」可以看其他路線。'] : [],
+    warns: extra.reasons.length ? [extra.reasons.join('、') + '，已多算 ' + extra.min + ' 分鐘。'] : [],
+    footer: '依預估車程推算，出門前再問我一次可以看即時到站',
+    buttons: [{ label: '預約共乘', text: originName === '士林站' ? '共乘 去學校 預約' : '共乘' }],
+  });
 }
 
 // ===== 解析學生的問題 =====
@@ -356,6 +375,6 @@ function logCompare_(text, origin, building, classAt, mode) {
 function 測試比較器() {
   if (tooSoon_('測試比較器', 60)) return; // Code.gs：公開網頁也呼叫得到，一分鐘只跑一次
   ['8點在D棟上課', '明天早八 H棟 我要幾點出門', '我從劍南路站出發，第三節在一教', '我現在要去學校'].forEach(t => {
-    console.log('【' + t + '】\n' + compareReply_(t) + '\n');
+    console.log('【' + t + '】\n' + plain_(compareReply_(t)) + '\n');
   });
 }

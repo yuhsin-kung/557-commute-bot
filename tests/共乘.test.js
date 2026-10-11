@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadBot } = require('./gas-env');
 
-const FILES = ['Code.gs', '共乘.gs', '等車室.gs'];
+const FILES = ['Code.gs', '卡片.gs', '共乘.gs', '等車室.gs'];
 const MON_0730 = '2026-10-12T07:30:00+08:00'; // 週一早上
 
 function start(now = MON_0730) {

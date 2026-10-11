@@ -75,6 +75,7 @@ function formatDate(date, timeZone, pattern) {
  * env.setNow('2026-10-12T07:30:00+08:00')：把共乘的時鐘調到這個時間
  * env.fetches：所有被攔下來的網路呼叫
  * env.quotaLeft：假裝 LINE 本月還剩幾則推播
+ * env.onFetch = (url, options) => ({ code, body })：假裝某個網址的回應
  */
 function loadBot(files, props = {}) {
   const sheets = {};
@@ -84,6 +85,9 @@ function loadBot(files, props = {}) {
 
   const fetch = (url, options = {}) => {
     env.fetches.push({ url, options, body: options.payload && typeof options.payload === 'string' ? JSON.parse(options.payload) : options.payload });
+    // env.onFetch 可以假裝某個網址回什麼：回傳 { code, body }，不處理就回傳 undefined
+    const custom = env.onFetch && env.onFetch(url, options);
+    if (custom) return { getResponseCode: () => custom.code || 200, getContentText: () => (typeof custom.body === 'string' ? custom.body : JSON.stringify(custom.body || {})) };
     let body = {};
     if (url.includes('/v2/bot/profile/')) body = { displayName: env.names[url.split('/').pop()] || '同學' + url.slice(-1) };
     else if (url.endsWith('/message/quota')) body = { type: 'limited', value: 200 };

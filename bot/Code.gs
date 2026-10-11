@@ -2,6 +2,7 @@
  * 東吳通勤達人 LINE Bot
  * 功能：557 即時到站、降雨機率、多路線比較器（比較器.gs）、晚上提醒（晚上提醒.gs）、
  *       站位變更推播（站位變更.gs）、計程車共乘（共乘.gs、等車室.gs）、所有訊息記錄到試算表
+ * 回覆的樣子（卡片、配色）在 卡片.gs
  *
  * 金鑰放在「專案設定 → 指令碼屬性」，不要寫在程式碼裡：
  *   TDX_CLIENT_ID / TDX_CLIENT_SECRET / CWA_API_KEY / LINE_CHANNEL_ACCESS_TOKEN / GEMINI_API_KEY
@@ -9,21 +10,23 @@
 const PROPS = PropertiesService.getScriptProperties();
 const TZ = 'Asia/Taipei';
 
-const HELP = [
-  '嗨！我是東吳通勤達人 🚌',
-  '',
-  '你可以問我：',
-  '・「557」：士林站往東吳的下一班車',
-  '・「回家」：東吳往士林的下一班車',
-  '・「天氣」：上學時段會不會下雨',
-  '・「8 點在 D 棟上課」：幫你比較 557 和其他路線，算幾點出門',
-  '・「我從劍南路站出發，第三節在一教」：文湖線的同學也可以問',
-  '・「557 在哪裡搭」：最新的上車站牌和排隊方式',
-  '・「共乘」：找同學一起搭計程車，可以現在走或預約',
-  '・「訂閱提醒」：明天下雨、考試週、站牌搬家，都會提醒你',
-  '',
-  '也可以直接點下面的按鈕 👇',
-].join('\n');
+/** 使用說明的卡片（加好友、看不懂的句子會回這張） */
+function helpCard_() {
+  return card_({ // 卡片.gs
+    badge: '東吳通勤達人',
+    title: '嗨！我可以幫你這些',
+    rows: [
+      { label: '比較路線', value: '「8 點在 D 棟上課」', sub: '比較 557 和其他公車，算幾點出門。文湖線的同學可以說「我從劍南路站出發」' },
+      { label: '557 到站', value: '「557」「回家」' },
+      { label: '共乘', value: '「共乘」', sub: '找同學一起搭計程車，可以現在走或預約' },
+      { label: '天氣', value: '「明天會下雨嗎」' },
+      { label: '上車地點', value: '「557 在哪裡搭」' },
+      { label: '提醒', value: '「訂閱提醒」', sub: '明天下雨、考試週、站牌搬家，前一晚提醒你' },
+    ],
+    footer: '也可以直接點下面的按鈕',
+    buttons: [{ label: '幫我比較路線', text: '幫我比較路線' }],
+  });
+}
 
 const QUICK_REPLY = {
   items: [
@@ -51,8 +54,8 @@ function doPost(e) {
 
 function handleEvent_(ev) {
   if (ev.type === 'follow') {
-    reply_(ev.replyToken, HELP);
-    log_(ev, '（加入好友）', HELP);
+    reply_(ev.replyToken, helpCard_());
+    log_(ev, '（加入好友）', helpCard_());
     return;
   }
   if (ev.type === 'postback') {
@@ -109,11 +112,18 @@ function route_(text) {
 function busReply_(direction, stopNames, title) {
   const filter = "RouteName/Zh_tw eq '557' and Direction eq " + direction;
   const etas = tdx_('EstimatedTimeOfArrival/City/Taipei/557?$format=JSON&$filter=' + encodeURIComponent(filter));
-  const lines = stopNames.map(name => {
-    const hits = etas.filter(e => e.StopName.Zh_tw === name);
-    return '📍 ' + name + '\n　' + (hits.length ? hits.map(etaText_).join('、') : '沒有資料');
+  return card_({ // 卡片.gs
+    badge: '557 即時到站',
+    title: title,
+    rows: stopNames.map(name => {
+      const hits = etas.filter(e => e.StopName.Zh_tw === name);
+      return { label: name, value: hits.length ? hits.map(etaText_).join('、') : '沒有資料' };
+    }),
+    footer: 'TDX 即時資料・' + nowText_(),
+    buttons: direction === 0
+      ? [{ label: '比較其他路線', text: '幫我比較路線' }, { label: '557 在哪裡搭', text: '557 在哪裡搭' }]
+      : [{ label: '找人共乘回士林', text: '共乘 回士林' }],
   });
-  return '🚌 ' + title + '\n\n' + lines.join('\n') + '\n\n（TDX 即時資料・' + nowText_() + '）';
 }
 
 function etaText_(e) {
@@ -172,12 +182,20 @@ function rainReply_() {
   const pop = Number(slot.ElementValue[0].ProbabilityOfPrecipitation);
 
   let advice;
-  if (pop >= 60) advice = '☔ 很可能下雨！557 會比平常擠，建議早 10 分鐘出門、記得帶傘。';
-  else if (pop >= 30) advice = '🌥 有機會下雨，帶把傘比較保險。';
-  else advice = '☀️ 應該不會下雨，可以考慮從錢穆故居站走進學校 🚶';
+  if (pop >= 60) advice = '很可能下雨。557 會比平常擠，建議早 10 分鐘出門、記得帶傘。';
+  else if (pop >= 30) advice = '有機會下雨，帶把傘比較保險。';
+  else advice = '應該不會下雨，可以考慮從錢穆故居站走進學校。';
 
-  return '🌦 ' + (isTomorrow ? '明天' : '今天') + '早上 6–9 點（士林區）\n'
-    + '降雨機率：' + pop + '%\n\n' + advice + '\n\n（中央氣象署・' + nowText_() + '）';
+  return card_({ // 卡片.gs
+    badge: '上學時段天氣',
+    title: (isTomorrow ? '明天' : '今天') + '早上 6–9 點',
+    subtitle: '士林區',
+    rows: [{ label: '降雨機率', value: pop + '%', best: pop >= 60 }],
+    notes: pop >= 60 ? [] : [advice],
+    warns: pop >= 60 ? [advice] : [],
+    footer: '中央氣象署・' + nowText_(),
+    buttons: [{ label: '下雨前一晚提醒我', text: '訂閱提醒' }],
+  });
 }
 
 // ===== LINE 回覆、紀錄 =====
@@ -188,12 +206,18 @@ function reply_(replyToken, answer) {
     .map(m => (typeof m === 'string' ? { type: 'text', text: m } : m));
   const last = messages[messages.length - 1];
   if (!last.quickReply) last.quickReply = QUICK_REPLY; // 沒有自己的按鈕時，放預設的那一排
-  UrlFetchApp.fetch('https://api.line.me/v2/bot/message/reply', {
+  const send = list => UrlFetchApp.fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'post',
     contentType: 'application/json',
     headers: { Authorization: 'Bearer ' + PROPS.getProperty('LINE_CHANNEL_ACCESS_TOKEN') },
-    payload: JSON.stringify({ replyToken: replyToken, messages: messages }),
+    payload: JSON.stringify({ replyToken: replyToken, messages: list }),
+    muteHttpExceptions: true,
   });
+  const res = send(messages);
+  if (res.getResponseCode() === 200) return;
+  // 卡片的格式只要有一點不對，LINE 就整則不收。這時改用純文字再回一次，Bot 才不會沒反應
+  console.error('LINE 不接受這則回覆：' + res.getResponseCode() + ' ' + res.getContentText().slice(0, 300));
+  send([{ type: 'text', text: plain_(answer).slice(0, 4900) || '抱歉，剛剛出了點問題，請再試一次。', quickReply: QUICK_REPLY }]);
 }
 
 function log_(ev, userText, botText) {
@@ -204,10 +228,7 @@ function log_(ev, userText, botText) {
     sheet.appendRow(['時間', '使用者 ID', '使用者訊息', 'Bot 回覆']);
     sheet.setFrozenRows(1);
   }
-  // 共乘的回覆是訊息物件（有按鈕），紀錄裡只留文字
-  const shown = typeof botText === 'string' ? botText
-    : (Array.isArray(botText) ? botText : [botText]).map(m => (typeof m === 'string' ? m : m.text || m.altText || '')).join('\n');
-  sheet.appendRow([new Date(), ev.source && ev.source.userId, userText, shown]);
+  sheet.appendRow([new Date(), ev.source && ev.source.userId, userText, plain_(botText)]); // 卡片.gs：紀錄裡只留文字
 }
 
 /**
@@ -235,8 +256,8 @@ function nowText_() {
 
 function 測試() {
   if (tooSoon_('測試', 60)) return; // Code.gs：公開網頁也呼叫得到，一分鐘只跑一次
-  console.log(route_('557'));
-  console.log(route_('回家'));
-  console.log(route_('天氣'));
+  console.log(plain_(route_('557')));
+  console.log(plain_(route_('回家')));
+  console.log(plain_(route_('天氣')));
   log_({ source: { userId: '測試' } }, '測試', '測試成功');
 }
