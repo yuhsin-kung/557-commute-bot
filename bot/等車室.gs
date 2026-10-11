@@ -43,6 +43,10 @@ const ROOM_HTML = `<!doctype html>
 <script>
 var TOKEN = '__TOKEN__', BOT = '__BOT__';
 var state = null, offset = 0, lastCount = -1, soundOn = false, audio = null, busy = false;
+// 這一頁是包在 Apps Script 的框架裡顯示的，瀏覽器會擋掉框架裡的 confirm()、alert()，
+// 所以「確定要離開嗎」要直接畫在頁面上。asking 是正在問的那一句，failed 是上一個動作沒送成功。
+var asking = '', failed = false;
+var ASK = { wait: '確定要離開這一團嗎？', formed: '已經成團了，現在離開會扣信用分。確定嗎？' };
 
 function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 function chat(text) { return 'https://line.me/R/oaMessage/' + encodeURIComponent(BOT) + '/?' + encodeURIComponent(text); }
@@ -71,14 +75,23 @@ function poll() {
   if (busy) return;
   google.script.run.withSuccessHandler(render).withFailureHandler(function () {}).cpRoomState(TOKEN);
 }
-function act(action, ask) {
-  if (ask && !confirm(ask)) return;
+function act(action) {
+  asking = '';
+  failed = false;
   busy = true;
   document.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
   google.script.run
     .withSuccessHandler(function (s) { busy = false; render(s); })
-    .withFailureHandler(function () { busy = false; render(state); })
+    .withFailureHandler(function () { busy = false; failed = true; render(state); })
     .cpRoomAction(TOKEN, action);
+}
+function ask(kind) { asking = ASK[kind]; render(state); }
+function keep() { asking = ''; render(state); }
+function leaveButton(label, kind) {
+  if (!asking) return '<button onclick="ask(\\'' + kind + '\\')">' + label + '</button>';
+  return '<div class="note warn">' + esc(asking) + '</div>'
+    + '<button class="main" onclick="act(\\'leave\\')">確定離開</button>'
+    + '<button onclick="keep()">不要，留下來</button>';
 }
 
 function members(s) {
@@ -125,7 +138,7 @@ function render(s) {
         + '<div class="hint">' + nextShare(s) + '</div>'
         + members(s) + meet + arrivedBtn
         + (soundOn ? '' : '<button onclick="enableSound()">🔔 開啟提示音（有人加入會響）</button>')
-        + '<button onclick="act(\\'leave\\', \\'確定要離開這一團嗎？\\')">離開</button></div>';
+        + leaveButton('離開', 'wait') + '</div>';
     } else if (s.status === '已成團' || s.status === '已叫車') {
       var called = s.status === '已叫車';
       h = '<div class="card">' + head
@@ -144,7 +157,7 @@ function render(s) {
           h += '<div class="note">團主已經叫車了，上車後按下面的按鈕。</div>';
         }
         if (called || !s.isLeader) h += '<button class="' + (called ? 'main' : '') + '" onclick="act(\\'board\\')">上車了</button>';
-        h += '<button onclick="act(\\'leave\\', \\'已經成團了，現在離開會扣信用分。確定嗎？\\')">我不搭了</button>';
+        h += leaveButton('我不搭了', 'formed');
       }
       h += '</div>';
     } else if (s.status === '已出發') {
@@ -161,6 +174,7 @@ function render(s) {
     }
     document.getElementById('foot').textContent = '信用分 ' + s.credit + '・積分 ' + s.points;
   }
+  if (failed) h += '<div class="card warn">剛剛沒有送出去，請再按一次。</div>';
   app.innerHTML = h;
   tick();
 }

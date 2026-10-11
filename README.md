@@ -254,7 +254,7 @@ GEMINI_API_KEY
 npm test
 ```
 
-跑 `tests/共乘.test.js`：25 個測試，涵蓋共乘的成團、平分車資、獨行獎勵、預約通知、沒出現扣分、等車室資料。用的是 `tests/gas-env.js` 的假環境，不連網路、不碰真的試算表。
+跑 `tests/共乘.test.js`：26 個測試，涵蓋共乘的成團、平分車資、獨行獎勵、預約通知、沒出現扣分、等車室資料。用的是 `tests/gas-env.js` 的假環境，不連網路、不碰真的試算表。
 
 ```bash
 npm run preview

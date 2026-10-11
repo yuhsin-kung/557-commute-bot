@@ -11,7 +11,10 @@ env.run('cpNow_ = () => new Date(Date.now() + __skip)');
 ['A', 'B', 'C', 'D'].forEach((u, i) => { env.names[u] = ['小安', '阿哲', '芷晴', '冠廷'][i]; });
 
 // 等車室網頁用 google.script.run 呼叫 Apps Script；預覽時改成打這台伺服器的 /rpc
+// 真的等車室是包在 Apps Script 的框架裡，瀏覽器會擋掉 confirm、alert；預覽時也讓它們失效，才測得出來
 const SHIM = `<script>
+window.confirm = function () { return false; };
+window.alert = window.prompt = function () {};
 window.google = { script: { run: (function make(ok, fail) {
   return new Proxy({}, { get: function (_, name) {
     if (name === 'withSuccessHandler') return function (f) { return make(f, fail); };

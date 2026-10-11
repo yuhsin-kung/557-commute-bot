@@ -302,6 +302,12 @@ test('等車室網頁裡的程式語法正確', () => {
   assert.doesNotThrow(() => new Function('google', 'document', 'window', script.replace(/setInterval\([^)]*\);|poll\(\);/g, '')));
 });
 
+test('等車室網頁不用 confirm、alert：Apps Script 的框架裡這些會被瀏覽器擋掉', () => {
+  const env = start();
+  const script = env.run('ROOM_HTML').match(/<script>([\s\S]*)<\/script>/)[1].replace(/\/\/.*$/gm, '');
+  assert.equal(/\b(confirm|alert|prompt)\s*\(/.test(script), false);
+});
+
 test('Code.gs：共乘的訊息會轉給共乘.gs，回覆帶自己的按鈕', () => {
   const env = start();
   const send = ev => { env.call('handleEvent_', Object.assign({ replyToken: 'r', source: { userId: 'A' } }, ev)); return env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body; };
