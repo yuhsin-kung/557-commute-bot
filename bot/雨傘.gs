@@ -2,7 +2,7 @@
  * 共享雨傘（20）：錢穆故居站和校門口各放幾把，借了走到另一端再還
  *
  * 在 LINE 傳「借傘」→ 選在哪裡借 → Bot 給一把傘號；傳「還傘」→ 選在哪裡還。
- * 一個人一次只能借一把。歸還有積分（積分.gs）。每一筆都記在「雨傘」分頁。
+ * 一個人一次只能借一把。歸還有積分（積分.gs），一天只給一次。每一筆都記在「雨傘」分頁。
  * 雨傘清單要先建立：在編輯器執行一次「建立雨傘清單」（之後可以直接在試算表加傘號）。
  * 用到共乘.gs 的 cpSheet_、cpLocked_、cpNow_、cpQuick_，積分.gs 的 ptAdd_、PT。
  */
@@ -46,6 +46,8 @@ function umReturn_(uid, spot) {
   const mine = umRows_().filter(u => u.status === '借出' && u.user === uid)[0];
   if (!mine) return '你現在沒有借傘喔。';
   umSave_(mine.row, [mine.id, '在架', '', spot, mine.out, cpNow_()]);
+  // 借還只要打字就算數，所以還傘的積分一天只給一次，不然重複借還可以一直加分
+  if (ptDoneToday_(uid, '還傘')) return '☂️ 已歸還 ' + mine.id + '，謝謝！今天的還傘積分已經領過了。';
   const fresh = ptAdd_(uid, '還傘', PT.UMBRELLA, 0, mine.id + ' 還到' + spot);
   return '☂️ 已歸還 ' + mine.id + '，謝謝！+' + PT.UMBRELLA + ' 分' + ptBadgeText_(fresh);
 }
