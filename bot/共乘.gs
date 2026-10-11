@@ -322,6 +322,7 @@ function cpSolo_(g) {
 
 function doGet(e) {
   const token = e && e.parameter && e.parameter.t;
+  if (e && e.parameter && e.parameter.page === 'geo') return geoTestPage_(); // 定位測試.gs
   if (e && e.parameter && e.parameter.page === 'room' && /^[0-9a-f-]{36}$/.test(token || '')) {
     return HtmlService.createHtmlOutput(ROOM_HTML.replace('__TOKEN__', token).replace('__BOT__', CP_BOT_ID)) // 等車室.gs
       .setTitle('共乘等車室')

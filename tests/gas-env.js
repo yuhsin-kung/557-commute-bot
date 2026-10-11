@@ -47,7 +47,7 @@ function loadBot(files, props = {}) {
   const sheets = {};
   const store = Object.assign({ LINE_CHANNEL_ACCESS_TOKEN: 'test-token' }, props);
   const cache = {};
-  const env = { sheets, fetches: [], quotaLeft: 200, triggers: [], names: {} };
+  const env = { sheets, fetches: [], quotaLeft: 200, triggers: [], names: {}, forms: [], props: store };
 
   const fetch = (url, options = {}) => {
     env.fetches.push({ url, options, body: options.payload && typeof options.payload === 'string' ? JSON.parse(options.payload) : options.payload });
@@ -65,7 +65,7 @@ function loadBot(files, props = {}) {
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k in store ? store[k] : null), setProperty: (k, v) => { store[k] = v; } }) },
     CacheService: { getScriptCache: () => ({ get: k => cache[k] || null, put: (k, v) => { cache[k] = v; }, remove: k => { delete cache[k]; } }) },
     LockService: { getScriptLock: () => ({ waitLock() {}, tryLock: () => true, releaseLock() {} }) },
-    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getSheetByName: n => sheets[n] || null, insertSheet: n => (sheets[n] = makeSheet()) }) },
+    SpreadsheetApp: { getActiveSpreadsheet: () => ({ getId: () => 'TEST-SHEET', getSheetByName: n => sheets[n] || null, insertSheet: n => (sheets[n] = makeSheet()) }) },
     ScriptApp: {
       getService: () => ({ getUrl: () => 'https://script.google.com/macros/s/TEST/exec' }),
       getProjectTriggers: () => env.triggers,
@@ -86,6 +86,15 @@ function loadBot(files, props = {}) {
       computeDigest: (algorithm, text) => [...crypto.createHash(algorithm).update(text, 'utf8').digest()].map(b => (b > 127 ? b - 256 : b)),
     },
     HtmlService: { createHtmlOutput: html },
+    FormApp: {
+      DestinationType: { SPREADSHEET: 'SPREADSHEET' },
+      createTextValidation: () => { const v = { setHelpText: () => v, requireNumberGreaterThanOrEqualTo: () => v, build: () => v }; return v; },
+      create: title => {
+        env.forms.push(title);
+        const item = new Proxy({}, { get: () => () => item }); // 題目的設定全部可以一路串下去
+        return new Proxy({}, { get: (_, name) => (name === 'getPublishedUrl' ? () => 'https://forms.example/' + env.forms.length : name === 'getEditUrl' ? () => 'https://forms.example/edit' : () => item) });
+      },
+    },
     ContentService: { createTextOutput: text => ({ text }) },
   };
   vm.createContext(context);

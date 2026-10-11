@@ -15,6 +15,11 @@ const REMIND_HOUR = 21;       // 每晚幾點檢查
 // ===== 排程每晚執行 =====
 
 function 晚上提醒() {
+  // 一天只跑一次：這個函式公開網頁也呼叫得到（見 Code.gs 的 tooSoon_），不能讓人重複觸發把推播額度用光
+  const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+  if (PROPS.getProperty('REMIND_LAST_DAY') === today) return;
+  PROPS.setProperty('REMIND_LAST_DAY', today);
+
   const result = buildReminder_(addMin_(new Date(), 24 * 60));
   if (!result.message) {
     logPush_('不用提醒', result.pop, result.event, 0, result.reason);
@@ -154,6 +159,7 @@ function 設定晚上提醒排程() {
 
 /** 只印出來、不發送：看看未來幾天各會不會提醒 */
 function 測試晚上提醒() {
+  if (tooSoon_('測試晚上提醒', 60)) return; // Code.gs：公開網頁也呼叫得到，一分鐘只跑一次
   for (let d = 1; d <= 3; d++) {
     const day = addMin_(new Date(), d * 24 * 60);
     const r = buildReminder_(day);
@@ -167,6 +173,12 @@ function 測試晚上提醒() {
 
 /** 不管有沒有下雨，強制發一則測試訊息給所有訂閱的人（會用掉額度，測試時才用） */
 function 試發給訂閱者() {
+  // 要先在指令碼屬性把 ALLOW_TEST_PUSH 設成 1 才會發，發完自動關掉，避免被公開網頁拿來刷推播額度
+  if (PROPS.getProperty('ALLOW_TEST_PUSH') !== '1') {
+    console.log('沒有發送。要試發的話：專案設定 → 指令碼屬性 → 新增 ALLOW_TEST_PUSH，值填 1，再執行一次。');
+    return;
+  }
+  PROPS.setProperty('ALLOW_TEST_PUSH', '0');
   sendToSubscribers_({
     message: '🧪 這是測試訊息\n\n如果你收到這則，代表晚上提醒可以正常推播 🎉',
     reason: '手動測試',

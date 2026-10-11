@@ -150,6 +150,7 @@ function 設定站位檢查排程() {
 
 /** 不推播：假裝頁面改了，看 Gemini 會寫出什麼摘要 */
 function 測試站位變更() {
+  if (tooSoon_('測試站位變更', 60)) return; // Code.gs：公開網頁也呼叫得到，一分鐘只跑一次
   const now = fetchStationPage_();
   const fake = now.replace('中正路２０５號', '中正路２２１號').replace('大成安心購', '全家便利商店');
   console.log('【假裝 557 站牌搬到全家前】\n' + (diffSummary_(now, fake) || '（判斷為無實質變更）'));

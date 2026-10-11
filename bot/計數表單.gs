@@ -4,6 +4,12 @@
  * 答案自動存進這份試算表的新分頁。網址會印在執行記錄裡。
  */
 function 建立計數表單() {
+  // 只建立一次：建過就印出網址。要重建的話，到指令碼屬性刪掉 COUNT_FORM_URL
+  const props = PropertiesService.getScriptProperties();
+  if (props.getProperty('COUNT_FORM_URL')) {
+    console.log('表單已經建立過了，填寫用網址：' + props.getProperty('COUNT_FORM_URL'));
+    return;
+  }
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const form = FormApp.create('557 士林站現場計數');
   form.setDescription(
@@ -57,6 +63,7 @@ function 建立計數表單() {
 
   form.addParagraphTextItem().setTitle('備註').setHelpText('例如：車子直接過站沒停、有專車、隊伍被馬路切斷');
 
+  props.setProperty('COUNT_FORM_URL', form.getPublishedUrl());
   console.log('填寫用網址（傳給計數的同學）：' + form.getPublishedUrl());
   console.log('編輯表單網址（隊員自己用）：' + form.getEditUrl());
 }

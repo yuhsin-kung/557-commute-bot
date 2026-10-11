@@ -5,7 +5,7 @@ const http = require('http');
 const { loadBot } = require('./gas-env');
 
 const PORT = 4557;
-const env = loadBot(['Code.gs', '共乘.gs', '等車室.gs']);
+const env = loadBot(['Code.gs', '共乘.gs', '等車室.gs', '定位測試.gs']);
 env.context.__skip = 0;
 env.run('cpNow_ = () => new Date(Date.now() + __skip)');
 ['A', 'B', 'C', 'D'].forEach((u, i) => { env.names[u] = ['小安', '阿哲', '芷晴', '冠廷'][i]; });
@@ -39,7 +39,7 @@ function home(result) {
 <style>body{font:15px/1.7 sans-serif;padding:20px;max-width:900px}th{text-align:left;padding-right:12px;white-space:nowrap}pre{background:#f3f4f6;padding:12px;border-radius:8px;white-space:pre-wrap}</style>
 <h1>共乘預覽</h1>
 <p>現在時間：${env.call('cpNow_').toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}
-｜ <a href="/skip?min=1">快轉 1 分鐘</a> ｜ <a href="/skip?min=5">快轉 5 分鐘</a></p>
+｜ <a href="/skip?min=1">快轉 1 分鐘</a> ｜ <a href="/skip?min=5">快轉 5 分鐘</a> ｜ <a href="/geo">定位測試頁</a></p>
 <table>${users}</table>
 ${result ? '<h2>Bot 回覆</h2><pre id="reply">' + result.replace(/</g, '&lt;') + '</pre>' : ''}
 <h2>共乘團</h2><pre id="groups">${JSON.stringify(env.call('cpLoadGroups_').map(g => ({ 團號: g.id, 方向: g.dir, 類型: g.type, 狀態: g.status, 成員: g.members.map(m => m.name) })), null, 1)}</pre>`;
@@ -54,12 +54,14 @@ http.createServer((req, res) => {
     req.on('data', c => { raw += c; });
     req.on('end', () => {
       const { fn, args } = JSON.parse(raw);
-      if (!/^cpRoom(State|Action)$/.test(fn)) { res.writeHead(400); return res.end(); }
+      if (!/^(cpRoomState|cpRoomAction|geoTestLog)$/.test(fn)) { res.writeHead(400); return res.end(); }
       send(JSON.stringify(env.call(fn, ...args)), 'application/json');
     });
   } else if (url.pathname === '/room') {
     const page = env.call('doGet', { parameter: { page: 'room', t: env.call('cpUser_', url.searchParams.get('u')).token } });
     send(page.content.replace('<head>', '<head><title>' + page.title + '</title>').replace('<script>', SHIM + '<script>'));
+  } else if (url.pathname === '/geo') {
+    send(env.call('doGet', { parameter: { page: 'geo' } }).content.replace('<script>', SHIM + '<script>'));
   } else if (url.pathname === '/say') {
     send(home(textOf(env.call('cpText_', url.searchParams.get('u'), url.searchParams.get('t')))));
   } else if (url.pathname === '/skip') {

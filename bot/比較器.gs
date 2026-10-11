@@ -354,6 +354,7 @@ function logCompare_(text, origin, building, classAt, mode) {
 }
 
 function 測試比較器() {
+  if (tooSoon_('測試比較器', 60)) return; // Code.gs：公開網頁也呼叫得到，一分鐘只跑一次
   ['8點在D棟上課', '明天早八 H棟 我要幾點出門', '我從劍南路站出發，第三節在一教', '我現在要去學校'].forEach(t => {
     console.log('【' + t + '】\n' + compareReply_(t) + '\n');
   });

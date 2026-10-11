@@ -70,6 +70,8 @@ function handleEvent_(ev) {
   try {
     if (/^(共乘|我的共乘|取消共乘)(\s|$)/.test(text)) {
       answer = cpText_(ev.source.userId, text); // 共乘.gs
+    } else if (text === '定位測試') {
+      answer = geoTestButton_(); // 定位測試.gs（暫時的）
     } else if (/^(訂閱提醒|取消提醒)$/.test(text)) {
       answer = subscribe_(ev.source.userId, text === '訂閱提醒'); // 晚上提醒.gs
     } else {
@@ -208,6 +210,23 @@ function log_(ev, userText, botText) {
   sheet.appendRow([new Date(), ev.source && ev.source.userId, userText, shown]);
 }
 
+/**
+ * 等車室、定位測試是公開網頁，網頁裡的程式可以呼叫這個專案裡任何「名稱不是底線結尾」的函式，
+ * 包括只打算在編輯器手動執行的那些。所以：
+ *   - 內部用的函式名稱一律用底線結尾（外面呼叫不到）
+ *   - 手動執行的函式要嘛重複執行也沒差，要嘛用這個擋住連續執行
+ * 回傳 true 代表 seconds 秒內已經執行過，這次應該直接結束。
+ */
+function tooSoon_(name, seconds) {
+  const cache = CacheService.getScriptCache();
+  if (cache.get('ran_' + name)) {
+    console.log('「' + name + '」' + seconds + ' 秒內執行過了，等一下再試。');
+    return true;
+  }
+  cache.put('ran_' + name, '1', seconds);
+  return false;
+}
+
 function nowText_() {
   return Utilities.formatDate(new Date(), TZ, 'HH:mm');
 }
@@ -215,6 +234,7 @@ function nowText_() {
 // ===== 在編輯器裡手動執行，確認金鑰和資料都正常 =====
 
 function 測試() {
+  if (tooSoon_('測試', 60)) return; // Code.gs：公開網頁也呼叫得到，一分鐘只跑一次
   console.log(route_('557'));
   console.log(route_('回家'));
   console.log(route_('天氣'));
