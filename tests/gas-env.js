@@ -23,6 +23,39 @@ function makeSheet() {
   };
 }
 
+// 假的 Google 表單：把題目記在 env.forms[n].items，測試可以檢查出了哪些題
+function fakeForm(env, title) {
+  const record = { title, items: [], settings: {} };
+  env.forms.push(record);
+  const add = type => {
+    const it = { type, required: false };
+    record.items.push(it);
+    const api = {
+      item: it,
+      setTitle: t => { it.title = t; return api; },
+      setHelpText: t => { it.help = t; return api; },
+      setChoiceValues: c => { it.choices = c.slice(); return api; },
+      setRequired: r => { it.required = r; return api; },
+      showOtherOption: b => { it.other = b; return api; },
+      setBounds: (low, high) => { it.bounds = [low, high]; return api; },
+      setLabels: (low, high) => { it.labels = [low, high]; return api; },
+      setValidation: () => api,
+      createChoice: (value, page) => ({ value, goTo: page ? page.item.title : undefined }),
+      setChoices: cs => { it.choices = cs.map(c => c.value); it.goTo = cs.map(c => c.goTo); return api; },
+    };
+    return api;
+  };
+  const set = key => value => { record.settings[key] = value; };
+  return {
+    setDescription: set('description'), setConfirmationMessage: set('confirmation'), setCollectEmail: set('collectEmail'), setProgressBar: set('progressBar'),
+    setDestination: (type, id) => { record.settings.destination = id; },
+    addTextItem: () => add('text'), addParagraphTextItem: () => add('paragraph'), addMultipleChoiceItem: () => add('one'), addCheckboxItem: () => add('many'),
+    addScaleItem: () => add('scale'), addSectionHeaderItem: () => add('header'), addPageBreakItem: () => add('page'),
+    getPublishedUrl: () => 'https://forms.example/' + env.forms.length,
+    getEditUrl: () => 'https://forms.example/edit/' + env.forms.length,
+  };
+}
+
 // Utilities.formatDate 用的是 Java 的格式，這裡只做 Bot 用到的那幾種
 function formatDate(date, timeZone, pattern) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
@@ -89,11 +122,7 @@ function loadBot(files, props = {}) {
     FormApp: {
       DestinationType: { SPREADSHEET: 'SPREADSHEET' },
       createTextValidation: () => { const v = { setHelpText: () => v, requireNumberGreaterThanOrEqualTo: () => v, build: () => v }; return v; },
-      create: title => {
-        env.forms.push(title);
-        const item = new Proxy({}, { get: () => () => item }); // 題目的設定全部可以一路串下去
-        return new Proxy({}, { get: (_, name) => (name === 'getPublishedUrl' ? () => 'https://forms.example/' + env.forms.length : name === 'getEditUrl' ? () => 'https://forms.example/edit' : () => item) });
-      },
+      create: title => fakeForm(env, title),
     },
     ContentService: { createTextOutput: text => ({ text }) },
   };
