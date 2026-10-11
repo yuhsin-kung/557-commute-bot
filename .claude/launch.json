@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "carpool-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tests/preview-room.js"],
+      "port": 4557
+    }
+  ]
+}

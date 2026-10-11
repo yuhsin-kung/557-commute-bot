@@ -1,7 +1,7 @@
 /**
  * 東吳通勤達人 LINE Bot
  * 功能：557 即時到站、降雨機率、多路線比較器（比較器.gs）、晚上提醒（晚上提醒.gs）、
- *       站位變更推播（站位變更.gs）、所有訊息記錄到試算表
+ *       站位變更推播（站位變更.gs）、計程車共乘（共乘.gs、等車室.gs）、所有訊息記錄到試算表
  *
  * 金鑰放在「專案設定 → 指令碼屬性」，不要寫在程式碼裡：
  *   TDX_CLIENT_ID / TDX_CLIENT_SECRET / CWA_API_KEY / LINE_CHANNEL_ACCESS_TOKEN / GEMINI_API_KEY
@@ -19,6 +19,7 @@ const HELP = [
   '・「8 點在 D 棟上課」：幫你比較 557 和其他路線，算幾點出門',
   '・「我從劍南路站出發，第三節在一教」：文湖線的同學也可以問',
   '・「557 在哪裡搭」：最新的上車站牌和排隊方式',
+  '・「共乘」：找同學一起搭計程車，可以現在走或預約',
   '・「訂閱提醒」：明天下雨、考試週、站牌搬家，都會提醒你',
   '',
   '也可以直接點下面的按鈕 👇',
@@ -29,6 +30,7 @@ const QUICK_REPLY = {
     '幫我比較路線',
     '557 去學校',
     '557 回家',
+    '共乘',
     '明天會下雨嗎',
     '訂閱提醒',
   ].map(label => ({
@@ -53,12 +55,22 @@ function handleEvent_(ev) {
     log_(ev, '（加入好友）', HELP);
     return;
   }
+  if (ev.type === 'postback') {
+    const picked = cpPostback_(ev.source.userId, ev.postback); // 共乘.gs：預約的時間選擇器
+    if (picked) {
+      reply_(ev.replyToken, picked);
+      log_(ev, '（選時間）' + ev.postback.params.datetime, picked);
+    }
+    return;
+  }
   if (ev.type !== 'message' || ev.message.type !== 'text') return;
 
   const text = ev.message.text.trim();
   let answer;
   try {
-    if (/^(訂閱提醒|取消提醒)$/.test(text)) {
+    if (/^(共乘|我的共乘|取消共乘)(\s|$)/.test(text)) {
+      answer = cpText_(ev.source.userId, text); // 共乘.gs
+    } else if (/^(訂閱提醒|取消提醒)$/.test(text)) {
       answer = subscribe_(ev.source.userId, text === '訂閱提醒'); // 晚上提醒.gs
     } else {
       answer = route_(text);
@@ -168,15 +180,17 @@ function rainReply_() {
 
 // ===== LINE 回覆、紀錄 =====
 
-function reply_(replyToken, text) {
+/** answer 可以是一段文字、一個 LINE 訊息物件，或是它們的陣列（最多 5 則） */
+function reply_(replyToken, answer) {
+  const messages = (Array.isArray(answer) ? answer : [answer])
+    .map(m => (typeof m === 'string' ? { type: 'text', text: m } : m));
+  const last = messages[messages.length - 1];
+  if (!last.quickReply) last.quickReply = QUICK_REPLY; // 沒有自己的按鈕時，放預設的那一排
   UrlFetchApp.fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'post',
     contentType: 'application/json',
     headers: { Authorization: 'Bearer ' + PROPS.getProperty('LINE_CHANNEL_ACCESS_TOKEN') },
-    payload: JSON.stringify({
-      replyToken: replyToken,
-      messages: [{ type: 'text', text: text, quickReply: QUICK_REPLY }],
-    }),
+    payload: JSON.stringify({ replyToken: replyToken, messages: messages }),
   });
 }
 
@@ -188,7 +202,10 @@ function log_(ev, userText, botText) {
     sheet.appendRow(['時間', '使用者 ID', '使用者訊息', 'Bot 回覆']);
     sheet.setFrozenRows(1);
   }
-  sheet.appendRow([new Date(), ev.source && ev.source.userId, userText, botText]);
+  // 共乘的回覆是訊息物件（有按鈕），紀錄裡只留文字
+  const shown = typeof botText === 'string' ? botText
+    : (Array.isArray(botText) ? botText : [botText]).map(m => (typeof m === 'string' ? m : m.text || m.altText || '')).join('\n');
+  sheet.appendRow([new Date(), ev.source && ev.source.userId, userText, shown]);
 }
 
 function nowText_() {

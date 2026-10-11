@@ -1,2 +1,4 @@
 keys.env
 *.env
+.claude/settings.local.json
+node_modules/

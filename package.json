@@ -1,0 +1,12 @@
+{
+  "name": "557-commute-bot",
+  "private": true,
+  "description": "東吳通勤達人 LINE Bot（Apps Script）。程式在 bot/，這裡的 Node 只用來跑測試。",
+  "scripts": {
+    "test": "node --test \"tests/*.test.js\"",
+    "preview": "node tests/preview-room.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
