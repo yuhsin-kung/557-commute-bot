@@ -2,7 +2,7 @@
  * 東吳通勤達人 LINE Bot
  * 功能：557 即時到站、降雨機率、多路線比較器（比較器.gs）、晚上提醒（晚上提醒.gs）、
  *       站位變更推播（站位變更.gs）、計程車共乘（共乘.gs、等車室.gs）、所有訊息記錄到試算表
- * 回覆的樣子（卡片、配色）在 卡片.gs
+ * 回覆的樣子（卡片、配色）在 卡片.gs；主選單和每個功能的按鈕在 選單.gs
  *
  * 金鑰放在「專案設定 → 指令碼屬性」，不要寫在程式碼裡：
  *   TDX_CLIENT_ID / TDX_CLIENT_SECRET / CWA_API_KEY / LINE_CHANNEL_ACCESS_TOKEN / GEMINI_API_KEY
@@ -10,37 +10,16 @@
 const PROPS = PropertiesService.getScriptProperties();
 const TZ = 'Asia/Taipei';
 
-/** 使用說明的卡片（加好友、看不懂的句子會回這張） */
-function helpCard_() {
-  return card_({ // 卡片.gs
-    badge: '東吳通勤達人',
-    title: '嗨！我可以幫你這些',
-    rows: [
-      { label: '比較路線', value: '「8 點在 D 棟上課」', sub: '比較 557 和其他公車，算幾點出門。文湖線的同學可以說「我從劍南路站出發」' },
-      { label: '557 到站', value: '「557」「回家」' },
-      { label: '共乘', value: '「共乘」', sub: '找同學一起搭計程車，可以現在走或預約' },
-      { label: '天氣', value: '「明天會下雨嗎」' },
-      { label: '上車地點', value: '「557 在哪裡搭」' },
-      { label: '打卡', value: '「打卡」', sub: '從錢穆故居站走進學校拿積分，7:30 前到校有早餐券' },
-      { label: '我的紀錄', value: '「我的紀錄」', sub: '積分、成就、少排放多少碳' },
-      { label: '其他', value: '「YouBike」「共享雨傘」', sub: '還有「新生教學」「包車」' },
-      { label: '提醒', value: '「訂閱提醒」', sub: '明天下雨、考試週、站牌搬家，前一晚提醒你' },
-    ],
-    footer: '也可以直接點下面的按鈕',
-    buttons: [{ label: '幫我比較路線', text: '幫我比較路線' }],
-  });
-}
-
+// 每則回覆下面的一排小按鈕（回覆自己有按鈕時不放）。「選單」放第一個，隨時可以回到全部功能
 const QUICK_REPLY = {
   items: [
+    '選單',
     '幫我比較路線',
+    '出門時間',
     '557 去學校',
-    '557 回家',
     '共乘',
     '打卡',
     '我的紀錄',
-    '明天會下雨嗎',
-    '訂閱提醒',
   ].map(label => ({
     type: 'action',
     action: { type: 'message', label: label, text: label },
@@ -59,8 +38,8 @@ function doPost(e) {
 
 function handleEvent_(ev) {
   if (ev.type === 'follow') {
-    reply_(ev.replyToken, helpCard_());
-    log_(ev, '（加入好友）', helpCard_());
+    reply_(ev.replyToken, menuWelcome_()); // 選單.gs
+    log_(ev, '（加入好友）', menuWelcome_());
     return;
   }
   if (ev.type === 'postback') {
@@ -78,6 +57,10 @@ function handleEvent_(ev) {
   try {
     if (/^(共乘|我的共乘|取消共乘)(\s|$)/.test(text)) {
       answer = cpText_(ev.source.userId, text); // 共乘.gs
+    } else if (/^(選單|主選單|功能|全部功能|更多功能|使用說明|說明|menu|help)$/i.test(text)) {
+      answer = menuCard_(); // 選單.gs
+    } else if (/^出門時間(\s|$)/.test(text)) {
+      answer = menuFlow_(text); // 選單.gs：用點的排出門時間
     } else if (text === '定位測試') {
       answer = geoTestButton_(); // 定位測試.gs（暫時的）
     } else if (/^(訂閱提醒|取消提醒)$/.test(text)) {

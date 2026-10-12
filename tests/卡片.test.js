@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { loadBot } = require('./gas-env');
 const { sampleCards } = require('./sample-cards');
 
-const FILES = ['Code.gs', '卡片.gs', '比較器.gs', '晚上提醒.gs', '站位變更.gs', '共乘.gs', '等車室.gs', '定位測試.gs'];
+const FILES = ['Code.gs', '卡片.gs', '選單.gs', '比較器.gs', '晚上提醒.gs', '站位變更.gs', '共乘.gs', '等車室.gs', '定位測試.gs'];
 const plain = x => JSON.parse(JSON.stringify(x));
 
 /** 走過卡片裡每一個元件 */
@@ -116,12 +116,12 @@ test('LINE 不接受卡片時，改用純文字再回一次', () => {
   const env = loadBot(FILES);
   let calls = 0;
   env.onFetch = url => (url.endsWith('/message/reply') && ++calls === 1 ? { code: 400, body: { message: 'A message (messages[0]) in the request body is invalid' } } : undefined);
-  env.call('reply_', 'token', env.call('helpCard_'));
+  env.call('reply_', 'token', env.call('stationReply_'));
   const replies = env.fetches.filter(f => f.url.endsWith('/message/reply'));
   assert.equal(replies.length, 2);
   assert.equal(replies[0].body.messages[0].type, 'flex');
   assert.equal(replies[1].body.messages[0].type, 'text');
-  assert.match(replies[1].body.messages[0].text, /嗨！我可以幫你這些/);
+  assert.match(replies[1].body.messages[0].text, /^557 上車地點\n・捷運士林站：中正路 205 號前/);
   assert.ok(replies[1].body.messages[0].quickReply);
 });
 
@@ -130,5 +130,5 @@ test('訊息紀錄裡存的是卡片的純文字版', () => {
   env.call('handleEvent_', { type: 'follow', replyToken: 'r', source: { userId: 'A' } });
   const row = env.sheets['訊息紀錄'].rows[1];
   assert.equal(row[2], '（加入好友）');
-  assert.match(row[3], /^嗨！我可以幫你這些\n・比較路線：「8 點在 D 棟上課」/);
+  assert.match(row[3], /^嗨！我是東吳通勤達人。[\s\S]*全部功能（往左滑還有更多）\n【怎麼去學校】現在最快的車、排出門時間/);
 });

@@ -1,7 +1,7 @@
 // 用假資料做出每一種回覆的卡片。測試、送 LINE 驗證格式、電腦上預覽都用這一份。
 const { loadBot } = require('./gas-env');
 
-const FILES = ['Code.gs', '卡片.gs', '比較器.gs', '晚上提醒.gs', '站位變更.gs', '共乘.gs', '等車室.gs', '定位測試.gs'];
+const FILES = ['Code.gs', '卡片.gs', '選單.gs', '比較器.gs', '晚上提醒.gs', '站位變更.gs', '共乘.gs', '等車室.gs', '定位測試.gs'];
 
 function sampleCards() {
   const env = loadBot(FILES);
@@ -43,7 +43,7 @@ function sampleCards() {
   env.props.STATION_CHECKED_AT = '10/13 09:00';
   keep('上車地點有摘要', env.call('stationReply_'));
 
-  keep('使用說明', env.call('helpCard_'));
+  keep('主選單', env.call('menuCard_'));
   return cards;
 }
 

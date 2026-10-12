@@ -36,24 +36,27 @@ function render(node, inRow) {
 function cardsPage() {
   const cards = sampleCards();
   const items = Object.keys(cards).map(name => {
-    const b = cards[name].contents;
-    return `<figure><figcaption>${esc(name)}</figcaption><div class="bubble">${['header', 'body', 'footer'].filter(k => b[k]).map(k => render(b[k], false)).join('')}</div></figure>`;
+    const c = cards[name].contents;
+    const bubble = b => `<div class="bubble${b.size === 'kilo' ? ' kilo' : ''}">${['header', 'body', 'footer'].filter(k => b[k]).map(k => render(b[k], false)).join('')}</div>`;
+    // 一排可以左右滑的卡片：預覽時全部攤開來看
+    if (c.type === 'carousel') return `<figure class="wide"><figcaption>${esc(name)}（手機上是左右滑）</figcaption><div class="row">${c.contents.map(bubble).join('')}</div></figure>`;
+    return `<figure><figcaption>${esc(name)}</figcaption>${bubble(c)}</figure>`;
   }).join('');
   return `<!doctype html><meta charset="utf-8"><title>卡片預覽</title>
 <style>body{margin:0;padding:24px;background:#8C9BAF;font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif}
 .wrap{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}figure{margin:0}figcaption{color:#fff;font-size:14px;margin-bottom:6px}
-.bubble{width:300px;border-radius:16px;overflow:hidden;background:#fff}</style>
+.bubble{width:300px;border-radius:16px;overflow:hidden;background:#fff}.bubble.kilo{width:260px}.wide{flex-basis:100%}.row{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}</style>
 <div class="wrap" id="cards">${items}</div>`;
 }
 
 // 圖文選單：上排左到右、下排左到右。text 是按了以後替使用者傳出去的字，要跟 LINE 後台設定的一樣
 const MENU = [
-  { icon: 'route', label: '比較路線', hint: '現在最快的車', text: '幫我比較路線', primary: true },
+  { icon: 'route', label: '最快的車', hint: '現在怎麼去學校', text: '幫我比較路線', primary: true },
+  { icon: 'clock', label: '出門時間', hint: '幾點要出門', text: '出門時間' },
   { icon: 'bus', label: '557 到站', hint: '士林站下一班', text: '557 去學校' },
   { icon: 'car', label: '共乘', hint: '一起搭計程車', text: '共乘' },
-  { icon: 'cloud-rain', label: '天氣', hint: '明早會下雨嗎', text: '明天會下雨嗎' },
-  { icon: 'map-pin', label: '上車地點', hint: '557 在哪裡搭', text: '557 在哪裡搭' },
-  { icon: 'bell', label: '提醒', hint: '下雨前一晚通知', text: '訂閱提醒' },
+  { icon: 'map-pin', label: '打卡', hint: '走路拿積分', text: '打卡' },
+  { icon: 'layout-grid', label: '全部功能', hint: '所有按鈕在這裡', text: '選單' },
 ];
 
 function menuPage() {

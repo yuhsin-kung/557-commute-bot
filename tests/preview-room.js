@@ -6,7 +6,7 @@ const { loadBot } = require('./gas-env');
 const { cardsPage, menuPage, saveMenu } = require('./preview-design');
 
 const PORT = 4557;
-const env = loadBot(['Code.gs', '卡片.gs', '共乘.gs', '等車室.gs', '定位測試.gs']);
+const env = loadBot(['Code.gs', '卡片.gs', '選單.gs', '共乘.gs', '等車室.gs', '定位測試.gs']);
 env.context.__skip = 0;
 env.run('cpNow_ = () => new Date(Date.now() + __skip)');
 ['A', 'B', 'C', 'D'].forEach((u, i) => { env.names[u] = ['小安', '阿哲', '芷晴', '冠廷'][i]; });

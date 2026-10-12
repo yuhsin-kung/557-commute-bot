@@ -13,6 +13,7 @@
  *   warns     要注意的事（琥珀色字）
  *   footer    最下面的小字（資料來源、時間）
  *   buttons   按鈕：{ label, text } 按了替使用者傳出 text；{ label, uri } 按了打開網頁
+ *   size      卡片寬度，預設 mega；cards_ 的一排卡片預設用小一點的 kilo
  *
  * 每張卡片都帶一份純文字版（altText）：通知預覽、訊息紀錄、LINE 不接受卡片時的備用回覆都用它。
  */
@@ -30,6 +31,19 @@ const UI = {
 };
 
 function card_(spec) {
+  return { type: 'flex', altText: cardText_(spec).slice(0, 400), contents: cardBubble_(spec) };
+}
+
+/** 一排可以左右滑的卡片（最多 12 張）。altText 是通知預覽和訊息紀錄看到的字 */
+function cards_(specs, altText) {
+  return {
+    type: 'flex',
+    altText: String(altText).slice(0, 400),
+    contents: { type: 'carousel', contents: specs.map(spec => cardBubble_(Object.assign({ size: 'kilo' }, spec))) },
+  };
+}
+
+function cardBubble_(spec) {
   const body = [];
   (spec.rows || []).forEach((row, i) => {
     if (i > 0) body.push({ type: 'separator', color: UI.line });
@@ -47,6 +61,7 @@ function card_(spec) {
 
   const bubble = {
     type: 'bubble',
+    size: spec.size || 'mega', // 一排卡片用小一點的 kilo，一次看得到下一張的邊
     header: { type: 'box', layout: 'vertical', backgroundColor: UI.brand, paddingAll: '16px', spacing: 'xs', contents: header },
     body: { type: 'box', layout: 'vertical', backgroundColor: UI.paper, paddingAll: '16px', spacing: 'md', contents: body },
   };
@@ -54,7 +69,7 @@ function card_(spec) {
   if (buttons.length) {
     bubble.footer = { type: 'box', layout: 'vertical', backgroundColor: UI.paper, paddingAll: '12px', paddingTop: '0px', spacing: 'sm', contents: buttons };
   }
-  return { type: 'flex', altText: cardText_(spec).slice(0, 400), contents: bubble };
+  return bubble;
 }
 
 function cardRow_(row) {

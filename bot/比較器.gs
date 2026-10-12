@@ -62,8 +62,12 @@ function compareReply_(text) {
   if (q.intent === '回家') return busReply_(1, ['東吳大學(錢穆故居)'], '557 東吳 → 士林');
   if (q.intent === '天氣') return rainReply_();
   if (q.intent === '站牌') return stationReply_(); // 站位變更.gs
-  if (q.intent === '其他' && !q.building && !q.arriveTime) return helpCard_(); // Code.gs
+  if (q.intent === '其他' && !q.building && !q.arriveTime) return menuUnknown_(); // 選單.gs：看不懂就給按鈕
+  return compareQuery_(q, text);
+}
 
+/** q 是整理好的問題：{ arriveTime, building, day, origin }。打字問的和用按鈕點的（選單.gs）都走這裡 */
+function compareQuery_(q, text) {
   const origin = ORIGINS[q.origin] ? q.origin : '士林站';
   const building = BUILDINGS[q.building] ? q.building : '';
   const now = new Date();
@@ -101,7 +105,7 @@ function liveReply_(originName, building, classAt) {
     return card_(Object.assign(head, { // 卡片.gs
       notes: ['現在 ' + o.stop + ' 沒有車往東吳的即時資料，可能是末班車已過或還沒發車。'],
       footer: 'TDX 即時資料・' + nowText_(),
-      buttons: [{ label: '找人共乘', text: '共乘' }],
+      buttons: [{ label: '找人共乘', text: '共乘' }, { label: '排明天的出門時間', text: '出門時間 明天' }],
     }));
   }
   options.sort((a, b) => a.arrive - b.arrive);
@@ -124,14 +128,14 @@ function liveReply_(originName, building, classAt) {
     warns.push('現在是尖峰，557 可能擠不上。其他車到錢穆故居站下車也一樣。');
   }
   if (classAt && best.arrive > classAt) warns.push(fmt_(classAt) + ' 上課，最快的車也會遲到。可以考慮共乘。');
-  if (!building) notes.push('跟我說「8 點在 D 棟上課」，可以算到教室的時間。');
+
 
   return card_(Object.assign(head, {
     rows: rows,
     notes: notes,
     warns: warns,
     footer: (classAt ? fmt_(classAt) + ' 上課・' : '') + 'TDX 即時資料・' + nowText_() + '・車程為估計值',
-    buttons: [{ label: '找人共乘', text: '共乘' }, { label: '557 在哪裡搭', text: '557 在哪裡搭' }],
+    buttons: [{ label: '找人共乘', text: '共乘' }, { label: '算到教室的時間', text: '出門時間 今天' }, { label: '557 在哪裡搭', text: '557 在哪裡搭' }],
   }));
 }
 
@@ -170,10 +174,15 @@ function planReply_(originName, building, classAt, isTomorrow) {
     title: (isTomorrow ? '明天 ' : '今天 ') + fmt_(classAt) + ' 上課',
     subtitle: building ? building + ' 棟 ' + BUILDINGS[building][0] : '',
     rows: rows,
-    notes: originName === '士林站' ? ['住文湖線沿線？說「我從劍南路站出發」可以看其他路線。'] : [],
     warns: extra.reasons.length ? [extra.reasons.join('、') + '，已多算 ' + extra.min + ' 分鐘。'] : [],
-    footer: '依預估車程推算，出門前再問我一次可以看即時到站',
-    buttons: [{ label: '預約共乘', text: originName === '士林站' ? '共乘 去學校 預約' : '共乘' }],
+    footer: '依預估車程推算，出門前按「現在最快的車」可以看即時到站',
+    buttons: [{ label: '預約共乘', text: originName === '士林站' ? '共乘 去學校 預約' : '共乘' }]
+      // 換出發站、換時間都用按的（選單.gs 的「出門時間」流程）
+      .concat(Object.keys(ORIGINS).filter(name => name !== originName).map(name => ({
+        label: '改從' + name + '出發',
+        text: ['出門時間', isTomorrow ? '明天' : '今天', fmt_(classAt), building || '不指定', name].join(' '),
+      })))
+      .concat([{ label: '換一個時間', text: '出門時間' }, { label: '現在最快的車', text: '幫我比較路線' }]),
   });
 }
 
