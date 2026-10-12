@@ -30,7 +30,9 @@ test('card_：標題列磚紅底白字，第一顆按鈕是主要按鈕，其他
   assert.deepEqual(b.header.contents.map(c => c.text), ['小字', '標題', '副標']);
   assert.equal(b.header.contents[1].color, '#FFFFFF');
   assert.equal(b.body.backgroundColor, '#FBF7F0');
-  assert.deepEqual(b.footer.contents.map(c => [c.style, c.action.type]), [['primary', 'message'], ['link', 'uri']]);
+  assert.deepEqual(b.footer.contents.filter(c => c.type === 'button').map(c => [c.style, c.action.type]), [['primary', 'message'], ['link', 'uri']]);
+  const last = b.footer.contents[b.footer.contents.length - 1];
+  assert.deepEqual([last.type, last.text, last.action.text], ['text', '回選單 ›', '選單'], '最下面有回選單');
   assert.equal(b.footer.contents[0].color, '#A63A2B');
   assert.equal(card.altText, '標題（副標）\n★ A：1\n　說明\n・B：2\n\n提示\n\n注意\n\n（來源）');
 });
@@ -44,7 +46,7 @@ test('card_：提醒用琥珀色，不用品牌的紅色', () => {
 
 test('card_：沒有內容時也不會產生 LINE 不接受的空卡片；純文字版最多 400 字', () => {
   const env = loadBot(FILES);
-  const empty = plain(env.call('card_', { title: '只有標題', notes: [''], buttons: [] }));
+  const empty = plain(env.call('card_', { title: '只有標題', notes: [''], buttons: [], menu: false }));
   assert.equal(empty.contents.body.contents.length, 1);
   assert.equal(empty.contents.footer, undefined);
   const long = plain(env.call('card_', { title: 't', notes: ['字'.repeat(900)] }));
@@ -122,7 +124,7 @@ test('LINE 不接受卡片時，改用純文字再回一次', () => {
   assert.equal(replies[0].body.messages[0].type, 'flex');
   assert.equal(replies[1].body.messages[0].type, 'text');
   assert.match(replies[1].body.messages[0].text, /^557 上車地點\n・捷運士林站：中正路 205 號前/);
-  assert.ok(replies[1].body.messages[0].quickReply);
+  assert.equal('quickReply' in replies[1].body.messages[0], false, '備用的純文字也不放輸入框上面那排按鈕');
 });
 
 test('訊息紀錄裡存的是卡片的純文字版', () => {
@@ -130,5 +132,6 @@ test('訊息紀錄裡存的是卡片的純文字版', () => {
   env.call('handleEvent_', { type: 'follow', replyToken: 'r', source: { userId: 'A' } });
   const row = env.sheets['訊息紀錄'].rows[1];
   assert.equal(row[2], '（加入好友）');
-  assert.match(row[3], /^嗨！我是東吳通勤達人。[\s\S]*全部功能（往左滑還有更多）\n【怎麼去學校】現在最快的車、排出門時間/);
+  assert.equal(row[3].split('\n')[0], '嗨！我是東吳通勤達人。');
+  assert.ok(row[3].endsWith('想做什麼？先選一類，我再把按鈕傳給你。\n［出門前提醒］［557 以外的選擇］［新生與排隊］［積分與打卡］'), row[3]);
 });

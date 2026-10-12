@@ -1,7 +1,10 @@
 // 用假資料做出每一種回覆的卡片。測試、送 LINE 驗證格式、電腦上預覽都用這一份。
 const { loadBot } = require('./gas-env');
 
-const FILES = ['Code.gs', '卡片.gs', '選單.gs', '比較器.gs', '晚上提醒.gs', '站位變更.gs', '共乘.gs', '等車室.gs', '定位測試.gs'];
+const fs = require('fs');
+const path = require('path');
+// 全部的 .gs 都載入（Code.gs 要排第一個）
+const FILES = fs.readdirSync(path.join(__dirname, '..', 'bot')).filter(f => f.endsWith('.gs')).sort((a, b) => (a === 'Code.gs' ? -1 : b === 'Code.gs' ? 1 : 0));
 
 function sampleCards() {
   const env = loadBot(FILES);
@@ -43,7 +46,23 @@ function sampleCards() {
   env.props.STATION_CHECKED_AT = '10/13 09:00';
   keep('上車地點有摘要', env.call('stationReply_'));
 
-  keep('主選單', env.call('menuCard_'));
+  // 訊息裡的按鈕（choices_）：選單、分類、一步一步點的流程
+  keep('選單', env.call('menuCard_'));
+  keep('分類：出門前提醒', env.call('menuCategory_', '出門前提醒'));
+  keep('分類：557 以外的選擇', env.call('menuCategory_', '557 以外的選擇'));
+  keep('出門時間：選哪一天', env.call('menuFlow_', '出門時間'));
+  keep('出門時間：選節次', env.call('menuFlow_', '出門時間 明天'));
+  keep('出門時間：選大樓', env.call('menuFlow_', '出門時間 明天 08:10'));
+  keep('共乘：選方向', env.call('cpText_', 'A', '共乘'));
+  keep('共乘：現在走', env.call('cpText_', 'A', '共乘 去學校 現在走'));
+  keep('共乘：選時間', env.call('cpText_', 'A', '共乘 去學校 預約'));
+  keep('共乘：打開等車室', env.call('cpText_', 'A', '共乘 去學校 加入'));
+  keep('打卡', env.call('ptCheckinButton_', 'A'));
+  keep('新生測驗', env.call('nbQuiz_', 'A', '新生測驗'));
+  keep('新生教學', env.call('nbIntro_'));
+  env.run('rainPop_ = () => 80');
+  const reminder = env.call('buildReminder_', new Date('2026-10-13T12:00:00+08:00'));
+  keep('推播：雨天提醒', env.call('choices_', reminder.message, reminder.buttons, { title: reminder.title, menu: false }));
   return cards;
 }
 

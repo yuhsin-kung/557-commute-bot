@@ -89,15 +89,9 @@ function ptBadgeText_(fresh) {
 
 /** 「打卡」：給一個按鈕打開打卡頁 */
 function ptCheckinButton_(uid) {
-  return {
-    type: 'template',
-    altText: '到校打卡',
-    template: {
-      type: 'buttons',
-      text: '在錢穆故居站先打一次，走進學校再打一次，就有步行積分。7:30 前到校還有早餐券。',
-      actions: [{ type: 'uri', label: '打開打卡頁', uri: cpWebAppUrl_() + '?page=checkin&t=' + cpUser_(uid).token }],
-    },
-  };
+  return choices_('在錢穆故居站先打一次，走進學校再打一次，就有步行積分。7:30 前到校還有早餐券。', // 卡片.gs
+    [{ label: '打開打卡頁', uri: cpWebAppUrl_() + '?page=checkin&t=' + cpUser_(uid).token }, ['我的紀錄', '我的紀錄']],
+    { title: '到校打卡', badge: '積分' });
 }
 
 /** 「我的紀錄」 */

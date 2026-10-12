@@ -7,7 +7,7 @@
  * 「包車」：說明規劃中，按「我有興趣」記一筆到「意願紀錄」
  *
  * 上車地點會因捷運施工調整，所以這裡不寫死站牌位置，一律請學生傳「557 在哪裡搭」（站位變更.gs）。
- * 用到共乘.gs 的 cpQuick_、cpSheet_、cpNow_，積分.gs 的 ptAdd_、ptStats_、PT。
+ * 用到卡片.gs 的 choices_，共乘.gs 的 cpSheet_、cpNow_，積分.gs 的 ptAdd_、ptStats_、PT。
  */
 const NB_QUIZ = [
   { q: '不確定 557 現在在哪裡上車，最可靠的方法是？', a: ['問路人', '傳「557 在哪裡搭」給我', '照去年的位置'], ok: 1 },
@@ -17,7 +17,7 @@ const NB_QUIZ = [
 
 function nbIntro_() {
   const video = PROPS.getProperty('NEWBIE_VIDEO_URL');
-  return cpQuick_([
+  return choices_([
     '🎒 第一次搭 557？三件事先知道',
     '',
     '1️⃣ 上車地點會調整：捷運施工期間站牌搬過家，傳「557 在哪裡搭」看最新位置。',
@@ -29,7 +29,7 @@ function nbIntro_() {
 }
 
 function nbEtiquette_() {
-  return cpQuick_([
+  return choices_([
     '🙋 排隊禮儀：一起排好，大家都快',
     '',
     '・隊伍被馬路切斷時，接在最後面，不要從斷開的地方排進去。',
@@ -56,14 +56,12 @@ function nbQuiz_(uid, text) {
   const score = state.score + (right ? 1 : 0);
   const feedback = right ? '⭕ 答對了！' : '❌ 正確答案是「' + item.a[item.ok] + '」。';
   if (state.i + 1 < NB_QUIZ.length) {
-    const next = nbAsk_(uid, state.i + 1, score);
-    next.text = feedback + '\n\n' + next.text;
-    return next;
+    return nbAsk_(uid, state.i + 1, score, feedback);
   }
   cache.remove('quiz_' + uid);
   cpSheet_('測驗紀錄', ['時間', '使用者 ID', '答對題數']).appendRow([cpNow_(), uid, score]);
   if (score < NB_QUIZ.length) {
-    return cpQuick_(feedback + '\n\n測驗結束：答對 ' + score + '/' + NB_QUIZ.length + ' 題。全對才有積分，再試一次吧！', [['新生測驗', '新生測驗']]);
+    return choices_(feedback + '\n\n測驗結束：答對 ' + score + '/' + NB_QUIZ.length + ' 題。全對才有積分，再試一次吧！', [['新生測驗', '新生測驗']]);
   }
   // 全對只送一次積分
   const first = ptStats_(uid).測驗 === 0;
@@ -71,11 +69,13 @@ function nbQuiz_(uid, text) {
   return feedback + '\n\n🎉 全部答對！' + (first ? '+' + PT.QUIZ + ' 分' : '（積分之前領過了）') + ptBadgeText_(fresh);
 }
 
-function nbAsk_(uid, i, score) {
+/** 出第 i 題。feedback 是上一題答對或答錯的說明，放在題目前面。三個選項是三顆按鈕，選項就寫在按鈕上 */
+function nbAsk_(uid, i, score, feedback) {
   CacheService.getScriptCache().put('quiz_' + uid, JSON.stringify({ i: i, score: score }), 30 * 60);
   const item = NB_QUIZ[i];
-  return cpQuick_('第 ' + (i + 1) + ' 題／共 ' + NB_QUIZ.length + ' 題\n' + item.q + '\n\n' + item.a.map((a, k) => (k + 1) + '. ' + a).join('\n'),
-    item.a.map((a, k) => [(k + 1) + '. ' + a, '答 ' + (k + 1)]));
+  return choices_((feedback ? feedback + '\n\n' : '') + item.q,
+    item.a.map((a, k) => [a, '答 ' + (k + 1)]),
+    { title: '第 ' + (i + 1) + ' 題／共 ' + NB_QUIZ.length + ' 題', badge: '新生測驗', primary: false, menu: false });
 }
 
 // ===== 學生自組包車（43）：還在調查需求 =====
@@ -86,7 +86,7 @@ function charterText_(uid, text) {
     return '收到！你的意願記下來了，包車確定開辦時會通知有訂閱提醒的同學。';
   }
   const survey = PROPS.getProperty('SURVEY1_URL'); // 問卷表單.gs「建立通勤問卷」存的網址
-  return cpQuick_([
+  return choices_([
     '🚐 學生自組包車（規劃中）',
     '',
     '想法：固定在尖峰時段從士林站直達校園，用學期訂閱制。',

@@ -22,15 +22,8 @@ function geoTestPage_() {
 }
 
 function geoTestButton_() {
-  return {
-    type: 'template',
-    altText: '定位測試',
-    template: {
-      type: 'buttons',
-      text: '打開測試頁，按「測試定位」。手機問要不要允許定位時，請按允許。',
-      actions: [{ type: 'uri', label: '打開定位測試', uri: cpWebAppUrl_() + '?page=geo' }], // 共乘.gs
-    },
-  };
+  return choices_('打開測試頁，按「測試定位」。手機問要不要允許定位時，請按允許。', // 卡片.gs
+    [{ label: '打開定位測試', uri: cpWebAppUrl_() + '?page=geo' }], { title: '定位測試' }); // 共乘.gs
 }
 
 /** 測試頁回報結果。這是公開網頁能呼叫的函式，所以每個欄位都只收固定格式、限制長度 */

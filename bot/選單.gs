@@ -1,64 +1,68 @@
 /**
  * 主選單和「用點的」流程：每個功能都有按鈕，不用記關鍵字、不用打字
  *
- *   「選單」      → 四張可以左右滑的卡片，每個功能一顆按鈕
- *   「出門時間」  → 點哪一天 → 點第幾節 → 點哪一棟 → 出門建議（原本要打「明天早八 D 棟」）
- *   加好友、看不懂的句子 → 也是回主選單
+ * 按鈕都做在訊息裡（卡片.gs 的 choices_），不用輸入框上面那排快速回覆。
+ *   「選單」        → 一則訊息，四個分類的按鈕（照專案的模組分）
+ *   按一個分類      → Bot 把那一類的功能按鈕傳到聊天室
+ *   「出門時間」    → 點哪一天 → 點第幾節 → 點哪一棟 → 出門建議（原本要打「明天早八 D 棟」）
+ *   加好友、看不懂的句子 → 也是回選單
  *
- * 要加新功能的按鈕：在 MENU_CARDS 加一列 [按鈕上的字, 按了傳出的字]。
+ * 要加新功能的按鈕：在 MENU 對應的分類加一列 [按鈕上的字, 按了傳出的字]。
  * tests/選單.test.js 會檢查每一顆按鈕傳出去的字 Bot 都認得。
- * 用到 卡片.gs 的 cards_，共乘.gs 的 cpQuick_，比較器.gs 的 PERIODS、BUILDINGS、ORIGINS、compareQuery_、timeOn_。
+ * 用到 卡片.gs 的 choices_，比較器.gs 的 PERIODS、BUILDINGS、ORIGINS、compareQuery_、timeOn_。
  */
-const MENU_CARDS = [
+// 分類照《557 通勤平台：專案整理》的模組：學生會直接用到的是模組二、三、五，積分（模組四）另外一類
+const MENU = [
   {
-    badge: '出門前',
-    title: '怎麼去學校',
-    text: '比較 557 和其他公車，算幾點出門。',
-    buttons: [['現在最快的車', '幫我比較路線'], ['排出門時間', '出門時間'], ['557 到站', '557 去學校'], ['557 回家', '557 回家'], ['557 在哪裡搭', '557 在哪裡搭']],
+    name: '出門前提醒',
+    hint: '怎麼去最快、幾點出門、會不會下雨',
+    buttons: [['現在最快的車', '幫我比較路線'], ['排出門時間', '出門時間'], ['557 到站', '557 去學校'], ['557 回家', '557 回家'],
+      ['明天會下雨嗎', '明天會下雨嗎'], ['557 在哪裡搭', '557 在哪裡搭'], ['開啟提醒', '訂閱提醒'], ['關閉提醒', '取消提醒']],
   },
   {
-    badge: '557 以外',
-    title: '換個方式到校',
-    text: '557 太擠的時候，還有這些選擇。',
+    name: '557 以外的選擇',
+    hint: '共乘、YouBike、雨傘、包車',
     buttons: [['計程車共乘', '共乘'], ['YouBike 車數', 'YouBike'], ['共享雨傘', '共享雨傘'], ['包車意願調查', '包車']],
   },
   {
-    badge: '積分',
-    title: '我的通勤紀錄',
-    text: '走路、騎車、共乘、早到都能拿分。',
-    buttons: [['到校打卡', '打卡'], ['我的紀錄', '我的紀錄'], ['全校減碳', '全校減碳'], ['騎車到校', '騎車到校']],
+    name: '新生與排隊',
+    hint: '第一次搭 557 看這裡',
+    buttons: [['新生教學', '新生教學'], ['新生測驗', '新生測驗'], ['排隊禮儀', '排隊禮儀'], ['557 在哪裡搭', '557 在哪裡搭']],
   },
   {
-    badge: '提醒與新生',
-    title: '天氣、提醒、新生教學',
-    text: '下雨和考試週的前一晚可以提醒你。',
-    buttons: [['明天會下雨嗎', '明天會下雨嗎'], ['開啟提醒', '訂閱提醒'], ['關閉提醒', '取消提醒'], ['新生教學', '新生教學'], ['排隊禮儀', '排隊禮儀']],
+    name: '積分與打卡',
+    hint: '走路、騎車、共乘、早到都能拿分',
+    buttons: [['到校打卡', '打卡'], ['我的紀錄', '我的紀錄'], ['全校減碳', '全校減碳'], ['騎車到校', '騎車到校']],
   },
 ];
 
-// 快速回覆一次最多 13 顆按鈕：節次放 13 個（中午的第 E 節很少排課，要用打的）
+// 一則訊息裡的按鈕排成兩欄，節次放 13 個（中午的第 E 節很少排課，要用打的）
 const MENU_PERIODS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D'];
-// 有教室的大樓 12 棟，加上「不指定」剛好 13 顆
+// 有教室的大樓 12 棟，加上「不指定」
 const MENU_BUILDINGS = ['B', 'D', 'R', 'H', 'G', 'F', 'C', 'N', 'M', 'P', 'Q', 'L'];
 
+/** 「選單」：四個分類。按了分類，Bot 再傳那一類的功能按鈕 */
 function menuCard_() {
-  const alt = '全部功能（往左滑還有更多）\n' + MENU_CARDS.map(c => '【' + c.title + '】' + c.buttons.map(b => b[0]).join('、')).join('\n');
-  return cards_(MENU_CARDS.map(c => ({ // 卡片.gs
-    badge: c.badge,
-    title: c.title,
-    notes: [c.text],
-    buttons: c.buttons.map(([label, text]) => ({ label: label, text: text })),
-  })), alt);
+  return choices_('想做什麼？先選一類，我再把按鈕傳給你。', // 卡片.gs
+    MENU.map(c => [c.name, c.name]),
+    { title: '東吳通勤達人', badge: '選單', primary: false, menu: false });
+}
+
+/** 按了分類：把這一類的功能按鈕傳到聊天室。不是分類名稱就回傳 null */
+function menuCategory_(name) {
+  const c = MENU.filter(x => x.name === name)[0];
+  if (!c) return null;
+  return choices_(c.hint, c.buttons, { title: c.name, badge: '選單', primary: false });
 }
 
 /** 加好友時 */
 function menuWelcome_() {
-  return ['嗨！我是東吳通勤達人。\n每個功能都有按鈕，點下面的卡片就能用，往左滑還有更多 👇', menuCard_()];
+  return ['嗨！我是東吳通勤達人。\n每個功能都有按鈕，不用打字。先從下面選一類 👇', menuCard_()];
 }
 
 /** 看不懂的句子：不要讓人卡住，直接給按鈕 */
 function menuUnknown_() {
-  return ['我看不懂這句話 🙏\n點下面的按鈕試試，往左滑還有更多功能 👇', menuCard_()];
+  return ['我看不懂這句話 🙏\n從下面選一類，我把按鈕傳給你 👇', menuCard_()];
 }
 
 /**
@@ -71,17 +75,17 @@ function menuFlow_(text) {
   const now = new Date();
 
   if (day !== '今天' && day !== '明天') {
-    return cpQuick_('要排哪一天的出門時間？', [['今天', '出門時間 今天'], ['明天', '出門時間 明天']]); // 共乘.gs
+    return choices_('要排哪一天的出門時間？', [['今天', '出門時間 今天'], ['明天', '出門時間 明天']], { title: '排出門時間', badge: '第 1 步', primary: false });
   }
   if (!/^\d{2}:\d{2}$/.test(time || '')) {
     // 今天只列還沒開始的節次
     const periods = MENU_PERIODS.filter(k => day === '明天' || timeOn_(now, PERIODS[k]) > now);
-    if (!periods.length) return cpQuick_('今天的課都開始了，要排明天的嗎？', [['排明天的', '出門時間 明天']]);
-    return cpQuick_(day + '第幾節上課？', periods.map(k => ['第 ' + k + ' 節 ' + PERIODS[k], '出門時間 ' + day + ' ' + PERIODS[k]]));
+    if (!periods.length) return choices_('今天的課都開始了，要排明天的嗎？', [['排明天的', '出門時間 明天']]);
+    return choices_(day + '第幾節上課？', periods.map(k => ['第 ' + k + ' 節 ' + PERIODS[k], '出門時間 ' + day + ' ' + PERIODS[k]]), { title: '排出門時間', badge: '第 2 步' });
   }
   if (!BUILDINGS[building] && building !== '不指定') {
     const items = MENU_BUILDINGS.map(k => [k + ' ' + menuBuildingName_(k), '出門時間 ' + day + ' ' + time + ' ' + k]);
-    return cpQuick_(day + ' ' + time + ' 上課，在哪一棟？', items.concat([['不指定', '出門時間 ' + day + ' ' + time + ' 不指定']]));
+    return choices_(day + ' ' + time + ' 上課，在哪一棟？', items.concat([['不指定', '出門時間 ' + day + ' ' + time + ' 不指定']]), { title: '排出門時間', badge: '第 3 步' });
   }
   return compareQuery_({ // 比較器.gs
     intent: '去學校',

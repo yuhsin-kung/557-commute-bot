@@ -32,9 +32,9 @@ function 檢查站位變更() {
     return;
   }
 
-  const message = '📢 557 站位／搭車資訊有更新\n\n' + diff
-    + '\n\n詳細：' + STATION_PAGE_URL + '\n\n（傳「557 在哪裡搭」可以看最新的上車地點）';
-  sendToSubscribers_({ message: message, reason: '站位變更' }, '站位變更'); // 晚上提醒.gs
+  const message = diff;
+  sendToSubscribers_({ title: '557 上車資訊有更新', message: message, reason: '站位變更',
+    buttons: [{ label: '看德育中心公告', uri: STATION_PAGE_URL }, ['最新的上車地點', '557 在哪裡搭']] }, '站位變更'); // 晚上提醒.gs
   saveStation_(sheet, now, hash, summary, '已推播', diff);
 }
 

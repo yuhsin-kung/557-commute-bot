@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const { loadBot } = require('./gas-env');
+const { textOf, buttonsOf } = require('./helpers');
 
 const ALL = fs.readdirSync(path.join(__dirname, '..', 'bot')).filter(f => f.endsWith('.gs')).sort((a, b) => (a === 'Code.gs' ? -1 : b === 'Code.gs' ? 1 : 0));
 const MON_0700 = '2026-10-12T07:00:00+08:00';
@@ -18,10 +19,6 @@ function start(now = MON_0900) {
   env.setNow(now);
   return env;
 }
-function textOf(answer) {
-  return (Array.isArray(answer) ? answer : [answer])
-    .map(m => (typeof m === 'string' ? m : m.text || (m.template && m.template.text) || '')).join('\n');
-}
 const say = (env, uid, text) => env.call('memberReply_', uid, text);
 const user = (env, uid) => env.call('cpUser_', uid);
 const checkin = (env, uid, at, accuracy = 20) => env.call('ptCheckin', user(env, uid).token, at[0], at[1], accuracy);
@@ -32,7 +29,8 @@ const rows = (env, name) => env.sheets[name].rows.slice(1);
 test('「打卡」回一個按鈕，網址帶這個人的代碼', () => {
   const env = start();
   const button = say(env, 'A', '打卡');
-  assert.match(button.template.actions[0].uri, /\?page=checkin&t=[0-9a-f-]{36}$/);
+  assert.equal(buttonsOf(button)[0][0], '打開打卡頁');
+  assert.match(buttonsOf(button)[0][1], /\?page=checkin&t=[0-9a-f-]{36}$/);
 });
 
 test('錢穆故居站打卡 → 走到校內再打一次：步行 +10 分、記減碳量', () => {
@@ -159,7 +157,7 @@ test('雨傘：借一把、不能借第二把、還了加 3 分並解鎖雨天�
   const env = start();
   env.call('建立雨傘清單');
   assert.equal(rows(env, '雨傘').length, 6);
-  assert.deepEqual(JSON.parse(JSON.stringify(say(env, 'A', '借傘').quickReply.items.map(i => i.action.text))), ['借傘 錢穆故居站', '借傘 校門口']);
+  assert.deepEqual(buttonsOf(say(env, 'A', '借傘')).map(b => b[1]), ['借傘 錢穆故居站', '借傘 校門口']);
   assert.match(textOf(say(env, 'A', '借傘 錢穆故居站')), /借到 U01/);
   assert.match(textOf(say(env, 'A', '借傘 校門口')), /已經借了 U01/);
   const back = say(env, 'A', '還傘 校門口');

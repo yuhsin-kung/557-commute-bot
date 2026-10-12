@@ -55,11 +55,13 @@ function buildReminder_(day) {
   }
   lines.push('');
   lines.push('💡 士林站有 13 條公車跟 557 走一樣的路到錢穆故居站，不一定要等 557。');
-  lines.push('想知道幾點出門？傳「明天早八 D棟」這樣的句子給我 👇');
-  lines.push('');
-  lines.push('（不想收提醒，傳「取消提醒」）');
 
-  return { message: lines.join('\n'), pop: pop, event: isExam ? event[3] : '', reason: isRain && isExam ? '下雨＋考試週' : isRain ? '下雨' : '考試週' };
+  return {
+    title: '明天（' + dateText + '）上學提醒',
+    message: lines.slice(2).join('\n'),
+    buttons: [['排明天的出門時間', '出門時間 明天'], ['預約共乘', '共乘 去學校 預約'], ['不想收提醒', '取消提醒']],
+    pop: pop, event: isExam ? event[3] : '', reason: isRain && isExam ? '下雨＋考試週' : isRain ? '下雨' : '考試週',
+  };
 }
 
 // ===== 訂閱 =====
@@ -117,7 +119,7 @@ function sendToSubscribers_(result, kind) {
       headers: { Authorization: 'Bearer ' + PROPS.getProperty('LINE_CHANNEL_ACCESS_TOKEN') },
       payload: JSON.stringify({
         to: to.slice(i, i + 500),
-        messages: [{ type: 'text', text: result.message, quickReply: QUICK_REPLY }],
+        messages: [choices_(result.message, result.buttons || [['全部功能', '選單']], { title: result.title, menu: false })], // 卡片.gs
       }),
     });
   }

@@ -11,7 +11,7 @@
  * 會用到推播的只有：預約有人加入／取消的回報、出發前 5 分鐘的提醒。
  *
  * 第一次使用：部署新版本後，在編輯器執行一次「設定共乘排程」。
- * 用到 Code.gs 的 PROPS、TZ。
+ * 用到 Code.gs 的 PROPS、TZ，卡片.gs 的 choices_（訊息裡的按鈕）。
  */
 const CP = {
   FARE: 160,              // 士林捷運站 ↔ 外雙溪校區的參考車資（學校公告）
@@ -69,12 +69,12 @@ function cpPostback_(uid, postback) {
 }
 
 function cpAskDir_() {
-  return cpQuick_('🚕 計程車共乘\n\n湊 2～4 個同學一起搭，車資平分：2 人各 ' + cpShare_(2) + '、3 人各 ' + cpShare_(3) + '、4 人各 ' + cpShare_(4) + ' 元。\n\n要往哪個方向？',
+  return choices_('🚕 計程車共乘\n\n湊 2～4 個同學一起搭，車資平分：2 人各 ' + cpShare_(2) + '、3 人各 ' + cpShare_(3) + '、4 人各 ' + cpShare_(4) + ' 元。\n\n要往哪個方向？',
     Object.keys(CP_DIRS).map(d => [CP_DIRS[d].label, '共乘 ' + d]).concat([['我的共乘', '我的共乘']]));
 }
 
 function cpAskMode_(dir) {
-  return cpQuick_('🚕 ' + CP_DIRS[dir].label + '\n\n現在就要走，還是先預約？',
+  return choices_('🚕 ' + CP_DIRS[dir].label + '\n\n現在就要走，還是先預約？',
     [['🔔 現在走', '共乘 ' + dir + ' 現在走'], ['📅 預約', '共乘 ' + dir + ' 預約']]);
 }
 
@@ -88,13 +88,13 @@ function cpLiveStatus_(uid, dir) {
 
   const g = cpJoinable_(groups, dir, now);
   if (!g) {
-    return cpQuick_('🔔 ' + CP_DIRS[dir].label + '\n\n現在沒有人在等，你是第一個。\n我幫你開鈴，最多等 ' + CP.LIVE_WAIT_MIN + ' 分鐘。\n\n'
+    return choices_('🔔 ' + CP_DIRS[dir].label + '\n\n現在沒有人在等，你是第一個。\n我幫你開鈴，最多等 ' + CP.LIVE_WAIT_MIN + ' 分鐘。\n\n'
       + '一個人 ' + CP.FARE + ' 元；2 人各 ' + cpShare_(2) + '、3 人各 ' + cpShare_(3) + '、4 人各 ' + cpShare_(4) + ' 元。\n時間到還是沒人，送你 ' + CP.SOLO_POINTS + ' 分。',
       [['開鈴', '共乘 ' + dir + ' 加入'], ['改成預約', '共乘 ' + dir + ' 預約']]);
   }
   const n = g.members.length;
   const left = Math.max(1, Math.ceil((g.depart - now) / 60000));
-  return cpQuick_('🔔 ' + CP_DIRS[dir].label + '\n\n現在有 ' + n + ' 個人在等，' + (g.type === '預約' ? cpWhen_(g.depart, now) + ' 出發' : '還剩 ' + left + ' 分鐘') + '。\n'
+  return choices_('🔔 ' + CP_DIRS[dir].label + '\n\n現在有 ' + n + ' 個人在等，' + (g.type === '預約' ? cpWhen_(g.depart, now) + ' 出發' : '還剩 ' + left + ' 分鐘') + '。\n'
     + '你加入就 ' + (n + 1) + ' 人，一人約 ' + cpShare_(n + 1) + ' 元（現在 ' + cpShare_(n) + ' 元）。\n集合點：' + CP_DIRS[dir].meet,
     [['加入', '共乘 ' + dir + ' 加入']]);
 }
@@ -133,15 +133,15 @@ function cpAskTime_(dir) {
       const today = cpParseTime_(day(0), hm) - now > CP.OPEN_BEFORE_MIN * 60000;
       return [(today ? '今天 ' : '明天 ') + label, day(today ? 0 : 1) + ' ' + hm];
     });
-  const items = presets.map(([label, when]) => ({ type: 'action', action: { type: 'message', label: label, text: '共乘 ' + dir + ' 預約 ' + when } }));
   const iso = d => Utilities.formatDate(d, TZ, "yyyy-MM-dd'T'HH:mm");
-  items.push({ type: 'action', action: {
-    type: 'datetimepicker', label: '自己選時間', data: 'cp=預約&dir=' + dir, mode: 'datetime',
+  const items = presets.map(([label, when]) => [label, '共乘 ' + dir + ' 預約 ' + when]);
+  items.push({ label: '自己選時間', picker: {
+    data: 'cp=預約&dir=' + dir, mode: 'datetime',
     initial: iso(cpRound_(new Date(now.getTime() + 30 * 60000))),
     min: iso(new Date(now.getTime() + (CP.OPEN_BEFORE_MIN + 1) * 60000)),
     max: iso(new Date(now.getTime() + CP.RESERVE_DAYS * 86400000)),
   } });
-  return { type: 'text', text: '📅 預約 ' + CP_DIRS[dir].label + '\n\n要幾點出發？（' + CP.SLOT_MIN + ' 分鐘一班）', quickReply: { items: items } };
+  return choices_('📅 預約 ' + CP_DIRS[dir].label + '\n\n要幾點出發？（' + CP.SLOT_MIN + ' 分鐘一班）', items); // 卡片.gs
 }
 
 function cpSlotStatus_(uid, dir, when) {
@@ -151,12 +151,12 @@ function cpSlotStatus_(uid, dir, when) {
   const g = cpSlotGroup_(cpLoadGroups_(), dir, when);
   const title = '📅 ' + cpWhen_(when, now) + ' ' + CP_DIRS[dir].label + '\n\n';
   if (g && g.members.some(m => m.id === uid)) {
-    return cpQuick_(title + '你已經預約這班了，目前 ' + g.members.length + ' 人，一人約 ' + cpShare_(g.members.length) + ' 元。', [['我的共乘', '我的共乘'], ['取消共乘', '取消共乘 ' + g.id]]);
+    return choices_(title + '你已經預約這班了，目前 ' + g.members.length + ' 人，一人約 ' + cpShare_(g.members.length) + ' 元。', [['我的共乘', '我的共乘'], ['取消共乘', '取消共乘 ' + g.id]]);
   }
   const n = g ? g.members.length : 0;
-  if (n >= CP.SEATS) return cpQuick_(title + '這班已經滿 ' + CP.SEATS + ' 人了，換個時間吧。', [['換時間', '共乘 ' + dir + ' 預約']]);
+  if (n >= CP.SEATS) return choices_(title + '這班已經滿 ' + CP.SEATS + ' 人了，換個時間吧。', [['換時間', '共乘 ' + dir + ' 預約']]);
   const iso = Utilities.formatDate(when, TZ, 'yyyy-MM-dd HH:mm');
-  return cpQuick_(title + (n ? '這個時段目前 ' + n + ' 人。你加入後 ' + (n + 1) + ' 人，一人約 ' + cpShare_(n + 1) + ' 元。' : '這個時段還沒有人，你是第一個。有人加入我會通知你。')
+  return choices_(title + (n ? '這個時段目前 ' + n + ' 人。你加入後 ' + (n + 1) + ' 人，一人約 ' + cpShare_(n + 1) + ' 元。' : '這個時段還沒有人，你是第一個。有人加入我會通知你。')
     + '\n集合點：' + CP_DIRS[dir].meet, [['預約', '共乘 ' + dir + ' 確認 ' + iso], ['換時間', '共乘 ' + dir + ' 預約']]);
 }
 
@@ -166,7 +166,7 @@ function cpReserve_(uid, dir, when) {
   if (bad) return bad;
   const user = cpUser_(uid);
   if (user.credit < CP.MIN_CREDIT) {
-    return cpQuick_('你的信用分是 ' + user.credit + ' 分，低於 ' + CP.MIN_CREDIT + ' 分暫時不能預約。\n用「現在走」完成共乘，每次可以加回 ' + CP.RIDE_BONUS + ' 分。', [['🔔 現在走', '共乘 ' + dir + ' 現在走']]);
+    return choices_('你的信用分是 ' + user.credit + ' 分，低於 ' + CP.MIN_CREDIT + ' 分暫時不能預約。\n用「現在走」完成共乘，每次可以加回 ' + CP.RIDE_BONUS + ' 分。', [['🔔 現在走', '共乘 ' + dir + ' 現在走']]);
   }
   let g = cpSlotGroup_(cpLoadGroups_(), dir, when);
   if (g && g.members.some(m => m.id === uid)) return cpSlotStatus_(uid, dir, when);
@@ -184,7 +184,7 @@ function cpReserve_(uid, dir, when) {
   const what = cpWhen_(when, now) + ' ' + CP_DIRS[dir].label;
   cpPush_(others, '🔔 ' + what + '，又有 1 人加入\n現在 ' + n + ' 人，一人約 ' + cpShare_(n) + ' 元（原本 ' + cpShare_(before) + ' 元）');
 
-  return cpQuick_('✅ 已預約 ' + what + '\n目前 ' + n + ' 人，一人約 ' + cpShare_(n) + ' 元\n集合點：' + CP_DIRS[dir].meet + '\n\n'
+  return choices_('✅ 已預約 ' + what + '\n目前 ' + n + ' 人，一人約 ' + cpShare_(n) + ' 元\n集合點：' + CP_DIRS[dir].meet + '\n\n'
     + '・有人加入或取消，我會通知你\n・出發前 ' + CP.OPEN_BEFORE_MIN + ' 分鐘到集合點，傳「我的共乘」打開等車室按「我到了」\n'
     + '・出發 ' + CP.OPEN_BEFORE_MIN + ' 分鐘前可以免費取消；沒出現扣信用分 ' + CP.NO_SHOW_PENALTY + ' 分',
     [['我的共乘', '我的共乘'], ['取消共乘', '取消共乘 ' + g.id]]);
@@ -192,9 +192,9 @@ function cpReserve_(uid, dir, when) {
 
 function cpCheckSlot_(when, now, dir) {
   const again = [['重新選時間', '共乘 ' + dir + ' 預約']];
-  if (!when || isNaN(when)) return cpQuick_('我看不懂這個時間，重新選一次吧。', again);
-  if (when - now <= CP.OPEN_BEFORE_MIN * 60000) return cpQuick_('這個時間太近了，' + CP.OPEN_BEFORE_MIN + ' 分鐘內要走請用「現在走」。', [['🔔 現在走', '共乘 ' + dir + ' 現在走']].concat(again));
-  if (when - now > CP.RESERVE_DAYS * 86400000) return cpQuick_('最遠只能預約 ' + CP.RESERVE_DAYS + ' 天內的時間。', again);
+  if (!when || isNaN(when)) return choices_('我看不懂這個時間，重新選一次吧。', again);
+  if (when - now <= CP.OPEN_BEFORE_MIN * 60000) return choices_('這個時間太近了，' + CP.OPEN_BEFORE_MIN + ' 分鐘內要走請用「現在走」。', [['🔔 現在走', '共乘 ' + dir + ' 現在走']].concat(again));
+  if (when - now > CP.RESERVE_DAYS * 86400000) return choices_('最遠只能預約 ' + CP.RESERVE_DAYS + ' 天內的時間。', again);
   return null;
 }
 
@@ -206,7 +206,7 @@ function cpMine_(uid) {
     .sort((a, b) => a.depart - b.depart);
   const user = cpUser_(uid);
   const me = '信用分 ' + user.credit + '・積分 ' + user.points;
-  if (!mine.length) return cpQuick_('你目前沒有共乘。\n' + me, [['🚕 共乘', '共乘']]);
+  if (!mine.length) return choices_('你目前沒有共乘。\n' + me, [['🚕 共乘', '共乘']]);
   const lines = mine.map(g => '・' + cpWhen_(g.depart, now) + ' ' + CP_DIRS[g.dir].label + '（' + g.status + '，' + g.members.length + ' 人，一人約 ' + cpShare_(g.members.length) + ' 元）');
   return cpRoomButton_(uid, '🚕 我的共乘\n' + lines.join('\n') + '\n\n' + me, [['取消共乘', '取消共乘']]);
 }
@@ -215,13 +215,13 @@ function cpCancel_(uid, groupId) {
   const now = cpNow_();
   const mine = cpLoadGroups_().filter(g => CP_ACTIVE.indexOf(g.status) >= 0 && g.members.some(m => m.id === uid && !m.boarded))
     .sort((a, b) => a.depart - b.depart);
-  if (!mine.length) return cpQuick_('你目前沒有可以取消的共乘。', [['🚕 共乘', '共乘']]);
+  if (!mine.length) return choices_('你目前沒有可以取消的共乘。', [['🚕 共乘', '共乘']]);
   let g = groupId ? mine.filter(x => x.id === groupId)[0] : (mine.length === 1 ? mine[0] : null);
   if (!g) {
-    return cpQuick_('要取消哪一班？', mine.map(x => [cpWhen_(x.depart, now) + ' ' + (x.dir === '去學校' ? '往東吳' : '往士林'), '取消共乘 ' + x.id]));
+    return choices_('要取消哪一班？', mine.map(x => [cpWhen_(x.depart, now) + ' ' + (x.dir === '去學校' ? '往東吳' : '往士林'), '取消共乘 ' + x.id]));
   }
   const penalty = cpLeave_(g, uid, now);
-  return cpQuick_('已取消 ' + cpWhen_(g.depart, now) + ' ' + CP_DIRS[g.dir].label + '。'
+  return choices_('已取消 ' + cpWhen_(g.depart, now) + ' ' + CP_DIRS[g.dir].label + '。'
     + (penalty ? '\n因為已經成團或快出發了，信用分扣 ' + penalty + ' 分。' : ''), [['🚕 共乘', '共乘']]);
 }
 
@@ -531,7 +531,7 @@ function cpPush_(uids, text) {
       method: 'post',
       contentType: 'application/json',
       headers: { Authorization: 'Bearer ' + PROPS.getProperty('LINE_CHANNEL_ACCESS_TOKEN') },
-      payload: JSON.stringify({ to: uids, messages: [cpQuick_(text, [['我的共乘', '我的共乘'], ['取消共乘', '取消共乘']])] }),
+      payload: JSON.stringify({ to: uids, messages: [choices_(text, [['我的共乘', '我的共乘'], ['取消共乘', '取消共乘']])] }),
     });
     return true;
   } catch (err) {
@@ -548,20 +548,10 @@ function cpQuotaLeft_() {
   return quota.type === 'none' ? Infinity : quota.value - get('quota/consumption').totalUsage;
 }
 
-/** items：[[按鈕上的字, 按下去傳出的字], …] */
-function cpQuick_(text, items) {
-  return {
-    type: 'text',
-    text: text,
-    quickReply: { items: items.map(([label, send]) => ({ type: 'action', action: { type: 'message', label: label.slice(0, 20), text: send } })) },
-  };
-}
-
+/** 回一段話加「打開等車室」的按鈕；items 是另外要放的按鈕 */
 function cpRoomButton_(uid, text, items) {
   const url = cpWebAppUrl_() + '?page=room&t=' + cpUser_(uid).token;
-  const button = { type: 'template', altText: '打開等車室', template: { type: 'buttons', text: '人數、倒數、每人金額都在等車室', actions: [{ type: 'uri', label: '打開等車室', uri: url }] } };
-  if (items) button.quickReply = cpQuick_('', items).quickReply;
-  return [{ type: 'text', text: text }, button];
+  return choices_(text, [{ label: '打開等車室', uri: url }].concat(items || [])); // 卡片.gs
 }
 
 /** 等車室的網址就是 Bot 的部署網址；抓不到時可以在指令碼屬性設 WEBAPP_URL */

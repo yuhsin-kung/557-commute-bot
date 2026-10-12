@@ -10,22 +10,6 @@
 const PROPS = PropertiesService.getScriptProperties();
 const TZ = 'Asia/Taipei';
 
-// 每則回覆下面的一排小按鈕（回覆自己有按鈕時不放）。「選單」放第一個，隨時可以回到全部功能
-const QUICK_REPLY = {
-  items: [
-    '選單',
-    '幫我比較路線',
-    '出門時間',
-    '557 去學校',
-    '共乘',
-    '打卡',
-    '我的紀錄',
-  ].map(label => ({
-    type: 'action',
-    action: { type: 'message', label: label, text: label },
-  })),
-};
-
 const STOP_STATUS = { 1: '尚未發車', 2: '交管不停靠', 3: '末班車已過', 4: '今日未營運' };
 
 // ===== LINE 進來的訊息 =====
@@ -58,7 +42,9 @@ function handleEvent_(ev) {
     if (/^(共乘|我的共乘|取消共乘)(\s|$)/.test(text)) {
       answer = cpText_(ev.source.userId, text); // 共乘.gs
     } else if (/^(選單|主選單|功能|全部功能|更多功能|使用說明|說明|menu|help)$/i.test(text)) {
-      answer = menuCard_(); // 選單.gs
+      answer = menuCard_(); // 選單.gs：四個分類
+    } else if (menuCategory_(text)) {
+      answer = menuCategory_(text); // 選單.gs：按了分類，傳那一類的功能按鈕
     } else if (/^出門時間(\s|$)/.test(text)) {
       answer = menuFlow_(text); // 選單.gs：用點的排出門時間
     } else if (text === '定位測試') {
@@ -207,12 +193,13 @@ function rainReply_() {
 
 // ===== LINE 回覆、紀錄 =====
 
-/** answer 可以是一段文字、一個 LINE 訊息物件，或是它們的陣列（最多 5 則） */
+/**
+ * answer 可以是一段文字、一個 LINE 訊息物件，或是它們的陣列（最多 5 則）。
+ * 不放輸入框上面那排「快速回覆」：按鈕都做在訊息裡（卡片.gs 的 card_、choices_），會留在聊天室。
+ */
 function reply_(replyToken, answer) {
   const messages = (Array.isArray(answer) ? answer : [answer])
     .map(m => (typeof m === 'string' ? { type: 'text', text: m } : m));
-  const last = messages[messages.length - 1];
-  if (!last.quickReply) last.quickReply = QUICK_REPLY; // 沒有自己的按鈕時，放預設的那一排
   const send = list => UrlFetchApp.fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'post',
     contentType: 'application/json',
@@ -224,7 +211,7 @@ function reply_(replyToken, answer) {
   if (res.getResponseCode() === 200) return;
   // 卡片的格式只要有一點不對，LINE 就整則不收。這時改用純文字再回一次，Bot 才不會沒反應
   console.error('LINE 不接受這則回覆：' + res.getResponseCode() + ' ' + res.getContentText().slice(0, 300));
-  send([{ type: 'text', text: plain_(answer).slice(0, 4900) || '抱歉，剛剛出了點問題，請再試一次。', quickReply: QUICK_REPLY }]);
+  send([{ type: 'text', text: plain_(answer).slice(0, 4900) || '抱歉，剛剛出了點問題，請再試一次。' }]);
 }
 
 function log_(ev, userText, botText) {

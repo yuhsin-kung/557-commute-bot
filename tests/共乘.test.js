@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadBot } = require('./gas-env');
+const { textOf, saidOf, buttonsOf, hasQuickReply } = require('./helpers');
 
 const FILES = ['Code.gs', '卡片.gs', '選單.gs', '共乘.gs', '等車室.gs'];
 const MON_0730 = '2026-10-12T07:30:00+08:00'; // 週一早上
@@ -12,11 +13,6 @@ function start(now = MON_0730) {
   return env;
 }
 
-/** 把回覆（文字、訊息物件或陣列）接成一段文字，方便比對 */
-function textOf(answer) {
-  return (Array.isArray(answer) ? answer : [answer])
-    .map(m => (typeof m === 'string' ? m : m.text || (m.template && m.template.text) || '')).join('\n');
-}
 /** Bot 環境裡產生的物件和這裡的不是同一種，比對內容前先轉一次 */
 const same = (actual, expected, message) => assert.deepEqual(JSON.parse(JSON.stringify(actual)), expected, message);
 const say = (env, uid, text) => env.call('cpText_', uid, text);
@@ -35,9 +31,10 @@ test('車資平分，進位到 5 元', () => {
 test('傳「共乘」先問方向，再問現在走或預約', () => {
   const env = start();
   const dirs = say(env, 'A', '共乘');
-  same(dirs.quickReply.items.map(i => i.action.text), ['共乘 去學校', '共乘 回士林', '我的共乘']);
+  same(buttonsOf(dirs).map(b => b[1]), ['共乘 去學校', '共乘 回士林', '我的共乘']);
   const modes = say(env, 'A', '共乘 去學校');
-  same(modes.quickReply.items.map(i => i.action.text), ['共乘 去學校 現在走', '共乘 去學校 預約']);
+  same(buttonsOf(modes).map(b => b[1]), ['共乘 去學校 現在走', '共乘 去學校 預約']);
+  assert.equal(hasQuickReply([dirs, modes]), false, '按鈕在訊息裡，不用輸入框上面那排');
 });
 
 test('現在走：開鈴 → 第二個人加入 → 5 分鐘到成團 → 叫車 → 上車', () => {
@@ -45,7 +42,8 @@ test('現在走：開鈴 → 第二個人加入 → 5 分鐘到成團 → 叫車
   assert.match(textOf(say(env, 'A', '共乘 去學校 現在走')), /現在沒有人在等，你是第一個/);
   const opened = say(env, 'A', '共乘 去學校 加入');
   assert.match(textOf(opened), /已開鈴！你是第一個，也是團主/);
-  assert.match(opened[1].template.actions[0].uri, /\?page=room&t=[0-9a-f-]{36}$/);
+  assert.equal(buttonsOf(opened)[0][0], '打開等車室');
+  assert.match(buttonsOf(opened)[0][1], /\?page=room&t=[0-9a-f-]{36}$/);
 
   env.addMinutes(2);
   const status = textOf(say(env, 'B', '共乘 去學校 現在走'));
@@ -128,22 +126,22 @@ test('預約：有人加入會通知已經預約的人，金額跟著變', () =>
   assert.match(textOf(say(env, 'B', '共乘 去學校 預約 2026-10-13 07:40')), /這個時段目前 1 人。你加入後 2 人，一人約 80 元/);
   say(env, 'B', '共乘 去學校 確認 2026-10-13 07:40');
   same(env.pushes()[0].body.to, ['A']);
-  assert.equal(env.pushes()[0].body.messages[0].text, '🔔 明天 07:40 士林站 → 東吳，又有 1 人加入\n現在 2 人，一人約 80 元（原本 160 元）');
+  assert.equal(saidOf(env.pushes()[0].body.messages[0]), '🔔 明天 07:40 士林站 → 東吳，又有 1 人加入\n現在 2 人，一人約 80 元（原本 160 元）');
 
   say(env, 'C', '共乘 去學校 確認 2026-10-13 07:40');
   same(env.pushes()[1].body.to, ['A', 'B']);
-  assert.match(env.pushes()[1].body.messages[0].text, /現在 3 人，一人約 55 元（原本 80 元）/);
+  assert.match(saidOf(env.pushes()[1].body.messages[0]), /現在 3 人，一人約 55 元（原本 80 元）/);
 });
 
 test('預約：提早取消不扣分，其他人會收到通知', () => {
   const env = start();
   ['A', 'B', 'C'].forEach(u => say(env, u, '共乘 去學校 確認 2026-10-13 07:40'));
   const before = env.pushes().length;
-  assert.match(textOf(say(env, 'B', '取消共乘')), /已取消 明天 07:40 士林站 → 東吳。$/);
+  assert.match(saidOf(say(env, 'B', '取消共乘')), /已取消 明天 07:40 士林站 → 東吳。$/);
   assert.equal(user(env, 'B').credit, 100);
   const push = env.pushes()[before];
   same(push.body.to, ['A', 'C']);
-  assert.equal(push.body.messages[0].text, '明天 07:40 士林站 → 東吳 那班有 1 人取消，現在 2 人，一人約 80 元');
+  assert.equal(saidOf(push.body.messages[0]), '明天 07:40 士林站 → 東吳 那班有 1 人取消，現在 2 人，一人約 80 元');
 });
 
 test('預約：同一班不能預約兩次；滿 4 人就不能再加', () => {
@@ -180,7 +178,7 @@ test('預約：出發前 5 分鐘提醒一次，現場的人可以加入，到�
   env.call('共乘每分鐘檢查');
   env.call('共乘每分鐘檢查');
   assert.equal(env.pushes().length, before + 1, '只提醒一次');
-  assert.match(env.pushes()[before].body.messages[0].text, /你預約的 今天 07:40 士林站 → 東吳 快出發了\n現在 2 人，一人約 80 元/);
+  assert.match(saidOf(env.pushes()[before].body.messages[0]), /你預約的 今天 07:40 士林站 → 東吳 快出發了\n現在 2 人，一人約 80 元/);
 
   assert.match(textOf(say(env, 'D', '共乘 去學校 現在走')), /現在有 2 個人在等，今天 07:40 出發。\n你加入就 3 人，一人約 55 元/);
   say(env, 'D', '共乘 去學校 加入');
@@ -266,8 +264,8 @@ test('「我的共乘」列出我的班次和信用分、積分', () => {
   assert.match(mine, /明天 07:40 士林站 → 東吳（等待中，1 人，一人約 160 元）/);
   assert.match(mine, /明天 17:10 東吳 → 士林站/);
   const which = say(env, 'A', '取消共乘');
-  assert.equal(which.text, '要取消哪一班？');
-  assert.equal(which.quickReply.items.length, 2);
+  assert.match(which.altText, /^要取消哪一班？/);
+  assert.equal(buttonsOf(which).length, 2);
 });
 
 test('等車室：連結失效、沒有共乘、等待中的畫面資料', () => {
@@ -313,15 +311,15 @@ test('Code.gs：共乘的訊息會轉給共乘.gs，回覆帶自己的按鈕', (
   const send = ev => { env.call('handleEvent_', Object.assign({ replyToken: 'r', source: { userId: 'A' } }, ev)); return env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body; };
 
   const dirs = send({ type: 'message', message: { type: 'text', text: '共乘' } });
-  same(dirs.messages[0].quickReply.items.map(i => i.action.label), ['士林站 → 東吳', '東吳 → 士林站', '我的共乘']);
+  same(buttonsOf(dirs.messages[0]).map(b => b[0]), ['士林站 → 東吳', '東吳 → 士林站', '我的共乘']);
 
   const joined = send({ type: 'message', message: { type: 'text', text: '共乘 去學校 加入' } });
-  assert.equal(joined.messages.length, 2);
-  assert.equal(joined.messages[1].template.actions[0].label, '打開等車室');
-  assert.equal(joined.messages[1].quickReply.items[0].action.label, '選單', '沒有自己的按鈕時放預設的那一排，第一顆是選單');
+  assert.equal(joined.messages.length, 1);
+  assert.equal(buttonsOf(joined.messages[0])[0][0], '打開等車室');
+  assert.equal(hasQuickReply(joined.messages), false, '不放輸入框上面那排按鈕');
 
   const picked = send({ type: 'postback', postback: { data: 'cp=預約&dir=回士林', params: { datetime: '2026-10-12T17:12' } } });
-  assert.match(picked.messages[0].text, /今天 17:10 東吳 → 士林站/);
+  assert.match(picked.messages[0].altText, /今天 17:10 東吳 → 士林站/);
 
   const log = env.sheets['訊息紀錄'].rows;
   assert.equal(log.length, 4);
@@ -330,15 +328,16 @@ test('Code.gs：共乘的訊息會轉給共乘.gs，回覆帶自己的按鈕', (
 
 test('預約的時間選項：去學校是明天早上，回士林看現在幾點', () => {
   const env = start('2026-10-12T17:30:00+08:00');
-  const toSchool = say(env, 'A', '共乘 去學校 預約').quickReply.items;
-  same(toSchool.slice(0, 2).map(i => i.action.text), ['共乘 去學校 預約 2026-10-13 07:40', '共乘 去學校 預約 2026-10-13 08:40']);
-  assert.equal(toSchool[2].action.type, 'datetimepicker');
-  assert.equal(toSchool[2].action.min, '2026-10-12T17:36');
-  assert.equal(toSchool[2].action.initial, '2026-10-12T18:00');
-  assert.ok(toSchool.every(i => i.action.label.length <= 20));
+  const toSchool = buttonsOf(say(env, 'A', '共乘 去學校 預約'));
+  same(toSchool.slice(0, 2).map(b => b[1]), ['共乘 去學校 預約 2026-10-13 07:40', '共乘 去學校 預約 2026-10-13 08:40']);
+  assert.equal(toSchool[2][0], '自己選時間');
+  assert.equal(toSchool[2][1].picker.type, 'datetimepicker');
+  assert.equal(toSchool[2][1].picker.min, '2026-10-12T17:36');
+  assert.equal(toSchool[2][1].picker.initial, '2026-10-12T18:00');
+  assert.ok(toSchool.every(b => b[0].length <= 20));
 
-  const toShilin = say(env, 'A', '共乘 回士林 預約').quickReply.items;
-  same(toShilin.slice(0, 2).map(i => i.action.label), ['明天 17:10（第 8 節下課）', '今天 18:30（第 9 節下課）']);
+  const toShilin = buttonsOf(say(env, 'A', '共乘 回士林 預約'));
+  same(toShilin.slice(0, 2).map(b => b[0]), ['明天 17:10（第 8 節下課）', '今天 18:30（第 9 節下課）']);
 });
 
 test('設定共乘排程：重複執行也只會有一個排程', () => {

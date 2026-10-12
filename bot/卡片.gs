@@ -13,7 +13,12 @@
  *   warns     要注意的事（琥珀色字）
  *   footer    最下面的小字（資料來源、時間）
  *   buttons   按鈕：{ label, text } 按了替使用者傳出 text；{ label, uri } 按了打開網頁
- *   size      卡片寬度，預設 mega；cards_ 的一排卡片預設用小一點的 kilo
+ *   menu      false 就不放最下面的「回選單」
+ *
+ * 按鈕一律做在訊息裡，不用輸入框上面那排「快速回覆」：那排按鈕傳了新訊息就消失，也不好看。
+ * 做在訊息裡的按鈕會留在聊天室，往回滑還能按。
+ *   card_({ … buttons })      資料卡片，下面帶幾顆按鈕
+ *   choices_(問題, 按鈕)       問一個問題、給幾顆按鈕讓人選（共乘、雨傘、測驗、出門時間都用這個）
  *
  * 每張卡片都帶一份純文字版（altText）：通知預覽、訊息紀錄、LINE 不接受卡片時的備用回覆都用它。
  */
@@ -34,15 +39,6 @@ function card_(spec) {
   return { type: 'flex', altText: cardText_(spec).slice(0, 400), contents: cardBubble_(spec) };
 }
 
-/** 一排可以左右滑的卡片（最多 12 張）。altText 是通知預覽和訊息紀錄看到的字 */
-function cards_(specs, altText) {
-  return {
-    type: 'flex',
-    altText: String(altText).slice(0, 400),
-    contents: { type: 'carousel', contents: specs.map(spec => cardBubble_(Object.assign({ size: 'kilo' }, spec))) },
-  };
-}
-
 function cardBubble_(spec) {
   const body = [];
   (spec.rows || []).forEach((row, i) => {
@@ -61,7 +57,6 @@ function cardBubble_(spec) {
 
   const bubble = {
     type: 'bubble',
-    size: spec.size || 'mega', // 一排卡片用小一點的 kilo，一次看得到下一張的邊
     header: { type: 'box', layout: 'vertical', backgroundColor: UI.brand, paddingAll: '16px', spacing: 'xs', contents: header },
     body: { type: 'box', layout: 'vertical', backgroundColor: UI.paper, paddingAll: '16px', spacing: 'md', contents: body },
   };
@@ -69,7 +64,61 @@ function cardBubble_(spec) {
   if (buttons.length) {
     bubble.footer = { type: 'box', layout: 'vertical', backgroundColor: UI.paper, paddingAll: '12px', paddingTop: '0px', spacing: 'sm', contents: buttons };
   }
+  if (spec.menu !== false) {
+    if (!bubble.footer) bubble.footer = { type: 'box', layout: 'vertical', backgroundColor: UI.paper, paddingAll: '12px', paddingTop: '0px', spacing: 'sm', contents: [] };
+    bubble.footer.contents.push(menuLink_());
+  }
   return bubble;
+}
+
+/** 每張卡片最下面的小字「回選單」：沒有輸入框上面那排按鈕之後，靠它回到全部功能 */
+function menuLink_() {
+  return { type: 'text', text: '回選單 ›', size: 'xs', color: UI.muted, align: 'end', action: { type: 'message', label: '回選單', text: '選單' } };
+}
+
+/**
+ * 問一個問題、給幾顆按鈕讓人選。按鈕在訊息裡，會留在聊天室。
+ *   text     問題或說明（可以好幾行）
+ *   items    [按鈕上的字, 按了傳出的字]，或 { label, uri }（打開網頁）、{ label, picker }（選日期時間）
+ *   options  { title: 加一條標題列, badge: 標題上面的小字, primary: false 就沒有主要按鈕, menu: false 就不放「回選單」 }
+ * 4 顆以內直排、第一顆是主要按鈕；超過 4 顆排成兩欄。
+ */
+function choices_(text, items, options) {
+  const o = options || {};
+  const chips = items.map((item, i) => choiceChip_(item, i === 0 && o.primary !== false && items.length <= 4));
+  const body = [];
+  if (text) body.push({ type: 'text', text: String(text), size: 'md', color: UI.ink, wrap: true });
+  if (chips.length <= 4) {
+    chips.forEach(chip => body.push(chip));
+  } else {
+    for (let i = 0; i < chips.length; i += 2) {
+      // 單數顆的最後一列放一個空格，按鈕才不會變成整列寬
+      body.push({ type: 'box', layout: 'horizontal', spacing: 'sm', contents: [chips[i], chips[i + 1] || { type: 'filler' }] });
+    }
+  }
+  if (o.menu !== false) body.push(menuLink_());
+
+  const bubble = { type: 'bubble', body: { type: 'box', layout: 'vertical', backgroundColor: UI.paper, paddingAll: '16px', spacing: 'sm', contents: body } };
+  if (o.title) {
+    const header = [];
+    if (o.badge) header.push({ type: 'text', text: o.badge, size: 'xs', color: UI.onBrandSoft });
+    header.push({ type: 'text', text: o.title, size: 'lg', weight: 'bold', color: UI.onBrand, wrap: true });
+    bubble.header = { type: 'box', layout: 'vertical', backgroundColor: UI.brand, paddingAll: '16px', spacing: 'xs', contents: header };
+  }
+  const labels = items.map(item => '［' + (Array.isArray(item) ? item[0] : item.label) + '］').join('');
+  return { type: 'flex', altText: ((o.title ? o.title + '\n' : '') + (text || '') + '\n' + labels).trim().slice(0, 400), contents: bubble };
+}
+
+function choiceChip_(item, primary) {
+  const label = Array.isArray(item) ? item[0] : item.label;
+  let action;
+  if (Array.isArray(item)) action = { type: 'message', label: label.slice(0, 20), text: item[1] };
+  else if (item.uri) action = { type: 'uri', label: label.slice(0, 20), uri: item.uri };
+  else action = Object.assign({ type: 'datetimepicker', label: label.slice(0, 20) }, item.picker);
+  return {
+    type: 'box', layout: 'vertical', flex: 1, backgroundColor: primary ? UI.brand : UI.soft, cornerRadius: '8px', paddingAll: '12px', action: action,
+    contents: [{ type: 'text', text: label, size: 'sm', weight: 'bold', color: primary ? UI.onBrand : UI.brandDark, align: 'center', wrap: true }],
+  };
 }
 
 function cardRow_(row) {

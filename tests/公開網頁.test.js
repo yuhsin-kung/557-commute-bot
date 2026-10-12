@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const { loadBot } = require('./gas-env');
+const { buttonsOf } = require('./helpers');
 
 const ALL = fs.readdirSync(path.join(__dirname, '..', 'bot')).filter(f => f.endsWith('.gs')).sort((a, b) => (a === 'Code.gs' ? -1 : b === 'Code.gs' ? 1 : 0));
 const same = (actual, expected) => assert.deepEqual(JSON.parse(JSON.stringify(actual)), expected);
@@ -111,5 +112,5 @@ test('傳「定位測試」會拿到打開測試頁的按鈕', () => {
   const env = loadBot(ALL);
   env.call('handleEvent_', { type: 'message', replyToken: 'r', source: { userId: 'A' }, message: { type: 'text', text: '定位測試' } });
   const reply = env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body;
-  assert.equal(reply.messages[0].template.actions[0].uri, 'https://script.google.com/macros/s/TEST/exec?page=geo');
+  assert.equal(buttonsOf(reply.messages[0])[0][1], 'https://script.google.com/macros/s/TEST/exec?page=geo');
 });

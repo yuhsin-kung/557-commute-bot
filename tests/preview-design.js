@@ -12,10 +12,11 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 function render(node, inRow) {
   if (node.type === 'text') {
     const style = [`font-size:${SIZE[node.size] || 16}px`, `color:${node.color || '#111'}`, `font-weight:${node.weight === 'bold' ? 700 : 400}`,
-      `text-align:${node.align === 'end' ? 'right' : 'left'}`, !inRow ? '' : node.flex === 0 ? 'flex:0 0 auto;max-width:55%' : 'flex:1 1 0;min-width:0', // 只有橫排的文字要分寬度
+      `text-align:${node.align === 'end' ? 'right' : node.align === 'center' ? 'center' : 'left'}`, !inRow ? '' : node.flex === 0 ? 'flex:0 0 auto;max-width:55%' : 'flex:1 1 0;min-width:0', // 只有橫排的文字要分寬度
       node.wrap ? 'white-space:pre-wrap;overflow-wrap:anywhere' : 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis'];
     return `<div style="${style.join(';')}">${esc(node.text)}</div>`;
   }
+  if (node.type === 'filler') return '<div style="flex:1 1 0"></div>';
   if (node.type === 'separator') return `<div style="height:1px;background:${node.color || '#ddd'};flex:0 0 1px"></div>`;
   if (node.type === 'button') {
     const primary = node.style === 'primary';
@@ -28,6 +29,7 @@ function render(node, inRow) {
     if (node.paddingAll) style.push(`padding:${pad(node.paddingAll)}`);
     if (node.paddingTop) style.push(`padding-top:${pad(node.paddingTop)}`);
     if (node.cornerRadius) style.push(`border-radius:${node.cornerRadius}`);
+    if (inRow && node.flex === 1) style.push('flex:1 1 0', 'min-width:0'); // 兩欄的按鈕一樣寬
     return `<div style="${style.join(';')}">${node.contents.map(c => render(c, node.layout === 'horizontal')).join('')}</div>`;
   }
   return '';
@@ -49,14 +51,13 @@ function cardsPage() {
 <div class="wrap" id="cards">${items}</div>`;
 }
 
-// 圖文選單：上排左到右、下排左到右。text 是按了以後替使用者傳出去的字，要跟 LINE 後台設定的一樣
+// 圖文選單：四個分類（跟 bot/選單.gs 的 MENU 一樣），按了 Bot 會把那一類的功能按鈕傳到聊天室。
+// 上排左到右、下排左到右。text 是按了以後替使用者傳出去的字，要跟 LINE 後台設定的一樣
 const MENU = [
-  { icon: 'route', label: '最快的車', hint: '現在怎麼去學校', text: '幫我比較路線', primary: true },
-  { icon: 'clock', label: '出門時間', hint: '幾點要出門', text: '出門時間' },
-  { icon: 'bus', label: '557 到站', hint: '士林站下一班', text: '557 去學校' },
-  { icon: 'car', label: '共乘', hint: '一起搭計程車', text: '共乘' },
-  { icon: 'map-pin', label: '打卡', hint: '走路拿積分', text: '打卡' },
-  { icon: 'layout-grid', label: '全部功能', hint: '所有按鈕在這裡', text: '選單' },
+  { icon: 'route', label: '出門前提醒', hint: '怎麼去・幾點出門・天氣', text: '出門前提醒', primary: true },
+  { icon: 'car', label: '557 以外的選擇', hint: '共乘・YouBike・雨傘', text: '557 以外的選擇' },
+  { icon: 'school', label: '新生與排隊', hint: '第一次搭 557 看這裡', text: '新生與排隊' },
+  { icon: 'award', label: '積分與打卡', hint: '走路・騎車・早到拿分', text: '積分與打卡' },
 ];
 
 function menuPage() {
@@ -67,7 +68,8 @@ function menuPage() {
 <script>
 var MENU = ${JSON.stringify(MENU)};
 var UI = { brand: '#A63A2B', brandDark: '#7A2A1F', paper: '#FBF7F0', line: '#E6D9C8', muted: '#6B6257', soft: '#F7DCD5' };
-var W = 2500, H = 1686, CW = W / 3, CH = H / 2;
+var COLS = MENU.length === 4 ? 2 : 3;
+var W = 2500, H = 1686, CW = W / COLS, CH = H / 2;
 var canvas = document.getElementById('c'), ctx = canvas.getContext('2d');
 
 // 圖示用 Tabler Icons（MIT 授權）。抓 SVG 回來把線條換成指定的顏色，再畫到畫布上
@@ -89,7 +91,7 @@ function icon(name, color) {
 Promise.all(MENU.map(function (m) { return icon(m.icon, m.primary ? '#FFFFFF' : UI.brand); })).then(function (icons) {
   ctx.fillStyle = UI.paper; ctx.fillRect(0, 0, W, H);
   MENU.forEach(function (m, i) {
-    var x = (i % 3) * CW, y = Math.floor(i / 3) * CH;
+    var x = (i % COLS) * CW, y = Math.floor(i / COLS) * CH;
     if (m.primary) { ctx.fillStyle = UI.brand; ctx.fillRect(x, y, CW, CH); }
     var s = 300;
     ctx.drawImage(icons[i], x + (CW - s) / 2, y + 190, s, s);
@@ -102,7 +104,8 @@ Promise.all(MENU.map(function (m) { return icon(m.icon, m.primary ? '#FFFFFF' : 
     ctx.fillText(m.hint, x + CW / 2, y + 745);
   });
   ctx.fillStyle = UI.line;
-  ctx.fillRect(CW - 3, 0, 6, H); ctx.fillRect(2 * CW - 3, 0, 6, H); ctx.fillRect(0, CH - 3, W, 6);
+  for (var c = 1; c < COLS; c++) ctx.fillRect(c * CW - 3, 0, 6, H);
+  ctx.fillRect(0, CH - 3, W, 6);
   document.getElementById('status').textContent = '畫好了';
   document.getElementById('save').disabled = false;
   window.__ready = true;
