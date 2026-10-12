@@ -34,6 +34,19 @@ function handleEvent_(ev) {
     }
     return;
   }
+  if (ev.type === 'message' && ev.message.type === 'image') {
+    // 照片只有借還雨傘會用到（雨傘.gs）
+    let photoAnswer;
+    try {
+      photoAnswer = umPhoto_(ev.source.userId, ev.message.id);
+    } catch (err) {
+      console.error(err);
+      photoAnswer = '抱歉，照片處理失敗，請再傳一次 🙏';
+    }
+    reply_(ev.replyToken, photoAnswer);
+    log_(ev, '（傳照片）', photoAnswer);
+    return;
+  }
   if (ev.type !== 'message' || ev.message.type !== 'text') return;
 
   const text = ev.message.text.trim();

@@ -40,7 +40,7 @@ function buildReport_(day) {
   const compares = onDay('比較器紀錄', 0);
   const carpool = onDay('共乘紀錄', 0);
   const trips = onDay('通勤紀錄', 0);
-  const umbrellas = onDay('雨傘', 4);
+  const umbrellas = onDay('雨傘紀錄', 0).filter(r => r[2] === '借出'); // 每一次借出都算，不是只看每把傘最後一次
   const subs = onDay('訂閱', 2).filter(r => r[1] === '訂閱中');
 
   const count = (rows, col, value) => rows.filter(r => r[col] === value).length;

@@ -78,25 +78,31 @@ function formatDate(date, timeZone, pattern) {
  * env.respond['網址的一部分'] = 資料：假裝那個網址回這份資料（例如 YouBike 開放資料）
  * env.mails：MailApp.sendEmail 寄出的信
  * env.onFetch = (url, options) => ({ code, body })：假裝某個網址的回應
+ * env.files：存進假雲端硬碟的檔案（雨傘照片）；env.driveFails = true 假裝雲端硬碟壞掉
  */
 function loadBot(files, props = {}) {
   const sheets = {};
   const store = Object.assign({ LINE_CHANNEL_ACCESS_TOKEN: 'test-token' }, props);
   const cache = {};
-  const env = { sheets, fetches: [], quotaLeft: 200, triggers: [], names: {}, forms: [], props: store, respond: {}, mails: [] };
+  const env = { sheets, fetches: [], quotaLeft: 200, triggers: [], names: {}, forms: [], props: store, respond: {}, mails: [], files: [], driveFails: false };
+
+  // 網路回應也可以當成檔案拿（LINE 的照片）
+  const blobOf = url => { const b = { name: '', bytes: [1, 2, 3], url, setName(n) { b.name = n; return b; }, getBytes: () => b.bytes, getContentType: () => 'image/jpeg' }; return b; };
 
   const fetch = (url, options = {}) => {
     env.fetches.push({ url, options, body: options.payload && typeof options.payload === 'string' ? JSON.parse(options.payload) : options.payload });
     // env.onFetch 可以假裝某個網址回什麼：回傳 { code, body }，不處理就回傳 undefined
     const custom = env.onFetch && env.onFetch(url, options);
-    if (custom) return { getResponseCode: () => custom.code || 200, getContentText: () => (typeof custom.body === 'string' ? custom.body : JSON.stringify(custom.body || {})) };
+    if (custom) return { getResponseCode: () => custom.code || 200, getContentText: () => (typeof custom.body === 'string' ? custom.body : JSON.stringify(custom.body || {})), getBlob: () => blobOf(url) };
     let body = {};
     if (url.includes('/v2/bot/profile/')) body = { displayName: env.names[url.split('/').pop()] || '同學' + url.slice(-1) };
     else if (url.endsWith('/message/quota')) body = { type: 'limited', value: 200 };
     else if (url.endsWith('/message/quota/consumption')) body = { totalUsage: 200 - env.quotaLeft };
     Object.keys(env.respond).forEach(part => { if (url.includes(part)) body = env.respond[part]; });
-    return { getResponseCode: () => 200, getContentText: () => JSON.stringify(body) };
+    return { getResponseCode: () => 200, getContentText: () => JSON.stringify(body), getBlob: () => blobOf(url) };
   };
+
+  const folder = { getId: () => 'FOLDER-1', createFile: blob => { if (env.driveFails) throw new Error('Drive 壞了'); env.files.push(blob); return { getUrl: () => 'https://drive.example/' + env.files.length }; } };
 
   const clock = () => (typeof context.__now === 'number' ? context.__now : Date.now());
 
@@ -112,6 +118,7 @@ function loadBot(files, props = {}) {
       remove: k => { delete cache[k]; },
     }) },
     MailApp: { sendEmail: mail => { env.mails.push(mail); } },
+    DriveApp: { createFolder: () => folder, getFolderById: () => folder },
     LockService: { getScriptLock: () => ({ waitLock() {}, tryLock: () => true, releaseLock() {} }) },
     SpreadsheetApp: { getActiveSpreadsheet: () => ({ getId: () => 'TEST-SHEET', getSheetByName: n => sheets[n] || null, insertSheet: n => (sheets[n] = makeSheet()) }) },
     ScriptApp: {
@@ -129,6 +136,7 @@ function loadBot(files, props = {}) {
       formatDate,
       getUuid: () => crypto.randomUUID(),
       base64EncodeWebSafe: s => Buffer.from(s).toString('base64url'),
+      base64Encode: bytes => Buffer.from(bytes).toString('base64'),
       DigestAlgorithm: { MD5: 'md5' },
       Charset: { UTF_8: 'utf8' },
       computeDigest: (algorithm, text) => [...crypto.createHash(algorithm).update(text, 'utf8').digest()].map(b => (b > 127 ? b - 256 : b)),
