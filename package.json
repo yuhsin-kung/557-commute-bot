@@ -5,7 +5,8 @@
   "scripts": {
     "test": "node --test \"tests/*.test.js\"",
     "preview": "node tests/preview-room.js",
-    "validate:line": "node tests/validate-line.js"
+    "validate:line": "node tests/validate-line.js",
+    "bundle": "node tests/bundle.js"
   },
   "engines": {
     "node": ">=20"
