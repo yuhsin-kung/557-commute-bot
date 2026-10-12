@@ -88,9 +88,16 @@ test('全部的回覆都不用輸入框上面那排按鈕（快速回覆）', ()
   const env = start();
   env.call('建立雨傘清單');
   const texts = ['選單', '今天好累', '共乘', '共乘 去學校', '共乘 去學校 現在走', '共乘 去學校 加入', '共乘 回士林 預約', '我的共乘', '取消共乘',
-    '出門時間', '出門時間 明天', '出門時間 明天 08:10', '出門時間 明天 08:10 D', '打卡', '我的紀錄', '全校減碳', '共享雨傘', '借傘', '借傘 校門口',
+    '出門時間', '出門時間 明天', '出門時間 明天 08:10', '出門時間 明天 08:10 D', '打卡', '我的紀錄', '全校減碳', '共享雨傘', '借傘',
     '新生教學', '新生測驗', '答 1', '排隊禮儀', '包車', '訂閱提醒', '定位測試', '557', '明天會下雨嗎'].concat(CATEGORIES);
   texts.forEach(text => assert.equal(hasQuickReply(send(env, text)), false, '「' + text + '」的回覆用了快速回覆'));
+});
+
+test('唯一的例外：請同學拍雨傘照片時，那一排只放「開相機」「從相簿選」（LINE 規定開相機只能放那裡）', () => {
+  const env = start();
+  env.call('建立雨傘清單');
+  const quick = [].concat(send(env, '借傘 校門口')).filter(m => m.quickReply).map(m => m.quickReply.items.map(i => i.action.type));
+  assert.deepEqual(plain(quick), [['camera', 'cameraRoll']]);
 });
 
 test('每一則有按鈕的訊息最下面都有「回選單」；選單自己和測驗題目沒有', () => {

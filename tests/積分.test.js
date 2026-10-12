@@ -1,4 +1,4 @@
-// 積分、打卡、成就、YouBike、雨傘、新生測驗、包車、每日報表的測試。執行：npm test
+// 積分、打卡、成就、YouBike、新生測驗、包車、每日報表的測試（雨傘在 雨傘.test.js）。執行：npm test
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -151,45 +151,7 @@ test('YouBike：列出士林站可借、東吳附近可還；抓不到資料會�
   assert.doesNotMatch(reply, /很遠的站/);
 });
 
-// ===== 共享雨傘 =====
-
-test('雨傘：借一把、不能借第二把、還了加 3 分並解鎖雨天英雄', () => {
-  const env = start();
-  env.call('建立雨傘清單');
-  assert.equal(rows(env, '雨傘').length, 6);
-  assert.deepEqual(buttonsOf(say(env, 'A', '借傘')).map(b => b[1]), ['借傘 錢穆故居站', '借傘 校門口']);
-  assert.match(textOf(say(env, 'A', '借傘 錢穆故居站')), /借到 U01/);
-  assert.match(textOf(say(env, 'A', '借傘 校門口')), /已經借了 U01/);
-  const back = say(env, 'A', '還傘 校門口');
-  assert.match(back, /已歸還 U01.*\+3 分/);
-  assert.match(back, /雨天英雄/);
-  assert.equal(rows(env, '雨傘')[0][3], '校門口', '傘現在在校門口');
-  assert.match(say(env, 'A', '還傘 校門口'), /沒有借傘/);
-});
-
-test('雨傘：重複借還不能一直加分，還傘的積分一天只給一次', () => {
-  const env = start();
-  env.call('建立雨傘清單');
-  say(env, 'A', '借傘 錢穆故居站');
-  assert.match(say(env, 'A', '還傘 校門口'), /\+3 分/);
-  say(env, 'A', '借傘 校門口');
-  const again = say(env, 'A', '還傘 錢穆故居站');
-  assert.match(again, /已歸還 .*今天的還傘積分已經領過了/);
-  assert.equal(env.call('cpUser_', 'A').points, 3);
-  assert.equal(rows(env, '雨傘').filter(r => r[1] === '借出').length, 0, '傘還是有還回去');
-
-  env.addMinutes(24 * 60);
-  say(env, 'A', '借傘 錢穆故居站');
-  assert.match(say(env, 'A', '還傘 校門口'), /\+3 分/, '隔天可以再拿');
-  assert.equal(env.call('cpUser_', 'A').points, 6);
-});
-
-test('雨傘：那個點借完了會說沒有', () => {
-  const env = start();
-  env.call('建立雨傘清單');
-  ['A', 'B', 'C'].forEach(u => say(env, u, '借傘 校門口'));
-  assert.match(say(env, 'D', '借傘 校門口'), /沒有傘可以借了/);
-});
+// 共享雨傘的測試搬到 tests/雨傘.test.js（借還要拍照）
 
 // ===== 新生測驗、排隊禮儀、包車 =====
 
