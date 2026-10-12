@@ -72,7 +72,7 @@ test('兩份問卷都匿名，答案存進試算表，送出後的訊息正確',
   assert.equal(a.settings.collectEmail, false);
   assert.equal(a.settings.destination, 'TEST-SHEET');
   assert.match(a.settings.confirmation, /https:\/\/line\.me\/R\/ti\/p\/%40311zktcn$/);
-  assert.match(a.settings.description, /問卷匿名，不會收集姓名或學號/);
+  assert.match(a.settings.description, /採匿名方式進行，不會收集姓名或學號等可識別個人身分的資訊/);
 
   const b = build('建立回饋問卷').form;
   assert.equal(b.settings.collectEmail, false);
