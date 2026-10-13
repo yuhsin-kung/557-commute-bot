@@ -2,3 +2,4 @@ keys.env
 *.env
 .claude/settings.local.json
 node_modules/
+tools/課表進度.json

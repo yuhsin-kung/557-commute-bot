@@ -174,6 +174,7 @@ function planReply_(originName, building, classAt, isTomorrow) {
     title: (isTomorrow ? '明天 ' : '今天 ') + fmt_(classAt) + ' 上課',
     subtitle: building ? building + ' 棟 ' + BUILDINGS[building][0] : '',
     rows: rows,
+    notes: planHeatNote_(classAt),
     warns: extra.reasons.length ? [extra.reasons.join('、') + '，已多算 ' + extra.min + ' 分鐘。'] : [],
     footer: '依預估車程推算，出門前按「現在最快的車」可以看即時到站',
     buttons: [{ label: '預約共乘', text: originName === '士林站' ? '共乘 去學校 預約' : '共乘' }]
@@ -184,6 +185,14 @@ function planReply_(originName, building, classAt, isTomorrow) {
       })))
       .concat([{ label: '換一個時間', text: '出門時間' }, { label: '現在最快的車', text: '幫我比較路線' }]),
   });
+}
+
+/** 出門建議加一句課表熱度（課表熱度.gs）：這一節有多少人開始上課。沒有熱度資料就不加 */
+function planHeatNote_(classAt) {
+  if (typeof HEAT_DATA === 'undefined') return [];
+  const h = heatAt_(classAt);
+  if (!h) return [];
+  return ['第 ' + h.period + ' 節外雙溪約有 ' + h.count + ' 人開始上課（' + h.level + '）。' + (h.level === '很擠' ? '這個時段的 557 最難擠，早一點出門或改搭其他車比較穩。' : '')];
 }
 
 // ===== 解析學生的問題 =====
