@@ -3,3 +3,6 @@ keys.env
 .claude/settings.local.json
 node_modules/
 tools/課表進度.json
+tools/選課人數_*.csv
+tools/公開課表.json
+bot/課表.csv

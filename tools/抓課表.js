@@ -12,6 +12,12 @@
 //       node tools/抓課表.js 115 1 --limit 5   只抓前 5 個班級，試跑用（不存檔）
 //       node tools/抓課表.js 115 1 --delay 8   每次間隔 8 秒（最少 3 秒）
 //       node tools/抓課表.js --heat            不重抓，只用現有的 bot/課表.csv 重算熱度
+//       node tools/抓課表.js 115 1 --import tools/公開課表.json   用在瀏覽器裡抓好的課表（程式直接抓被擋時）
+//
+// 人數：公開課表上的「人數」是上限。實際選課人數要登入才看得到，用 tools/抓選課人數.console.js
+// 在自己的瀏覽器抓成 tools/選課人數_學年_學期.csv，這支程式看到那個檔案就會用選課編號併進來。
+// bot/課表.csv、選課人數的 CSV 都不進 git（個別課程的選課人數是登入後才看得到的資料），
+// 進 git 的只有加總後的 bot/課表熱度.csv 和 bot/課表熱度資料.gs。
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
@@ -21,7 +27,7 @@ const OUT = path.join(__dirname, '..', 'bot', '課表.csv');
 const HEAT = path.join(__dirname, '..', 'bot', '課表熱度.csv');
 const HEAT_GS = path.join(__dirname, '..', 'bot', '課表熱度資料.gs');
 const PROGRESS = path.join(__dirname, '課表進度.json');
-const HEAD = ['部別', '開課班級', '選課編號', '科目代碼', '科目名稱', '組別', '人數', '星期', '節次', '週別', '教室', '校區', '大樓'];
+const HEAD = ['部別', '開課班級', '選課編號', '科目代碼', '科目名稱', '組別', '人數上限', '星期', '節次', '週別', '教室', '校區', '大樓', '選課人數'];
 const DAYS = ['一', '二', '三', '四', '五', '六', '日'];
 // 節次和上課時間（bot/節次.csv）
 const PERIODS = { 1: '08:10', 2: '09:10', 3: '10:10', 4: '11:10', E: '12:10', 5: '13:10', 6: '14:10', 7: '15:10', 8: '16:10', 9: '17:10', A: '18:25', B: '19:20', C: '20:20', D: '21:15' };
@@ -110,41 +116,76 @@ function parseCsv(text) {
  */
 function heat(rows) {
   const seen = new Set();
-  const table = {};
+  const starts = {}, inClass = {};
   let used = 0;
   rows.forEach(r => {
-    const [, , selno, code, , , count, day, section, week, room, campus] = r;
-    const n = Number(count);
+    const [, , selno, code, , , cap, day, section, week, room, campus] = r;
+    // 有併入實際選課人數（第 14 欄）就用它；沒有那一欄才退而用人數上限
+    const n = Number(r.length > 13 ? r[13] : cap) * (week ? 0.5 : 1);
     if (campus !== '外雙溪' || !n || !DAYS.includes(day)) return;
     const key = [selno || code, day, section, room].join('|');
     if (seen.has(key)) return;
     seen.add(key);
-    const first = String(section)[0].toUpperCase();
-    if (!PERIODS[first]) return;
-    table[day + first] = (table[day + first] || 0) + n * (week ? 0.5 : 1);
+    const periods = String(section).toUpperCase().split('').filter(p => PERIODS[p]);
+    if (!periods.length) return;
+    starts[day + periods[0]] = (starts[day + periods[0]] || 0) + n;
+    periods.forEach(p => { inClass[day + p] = (inClass[day + p] || 0) + n; });
     used += 1;
   });
-  const out = [['星期', '節次', '上課時間', '這一節開始上課的人數']];
-  DAYS.forEach(d => Object.keys(PERIODS).sort((a, b) => PERIODS[a].localeCompare(PERIODS[b])).forEach(p => {
-    if (table[d + p]) out.push([d, p, PERIODS[p], Math.round(table[d + p])]);
+  // 至少到校 = 這一節在上課的人比上一節多出來的；至少離校 = 這一節上完後，下一節少掉的。
+  // 學生的個別課表我們不知道，所以只能算「至少」：有人早八上完就走、同時有人十點才來，兩邊會互相抵掉。
+  const order = Object.keys(PERIODS).sort((a, b) => PERIODS[a].localeCompare(PERIODS[b]));
+  const out = [['星期', '節次', '上課時間', '開始上課的人數', '上課中的人數', '至少到校', '下課後至少離校']];
+  DAYS.forEach(d => order.forEach((p, i) => {
+    const now = inClass[d + p] || 0;
+    if (!now && !starts[d + p]) return;
+    const at = k => (k >= 0 && k < order.length ? inClass[d + order[k]] || 0 : 0);
+    // 中午（第 E 節）很少排課，但大家是在學校吃飯、不是離校：
+    // 第 5 節跟「第 4 節或中午」比，第 4 節跟「中午或第 5 節」比，才不會把午休算成一大群人離校又到校
+    const before = order[i - 1] === 'E' ? Math.max(at(i - 1), at(i - 2)) : at(i - 1);
+    const after = order[i + 1] === 'E' ? Math.max(at(i + 1), at(i + 2)) : at(i + 1);
+    out.push([d, p, PERIODS[p], Math.round(starts[d + p] || 0), Math.round(now), Math.round(Math.max(0, now - before)), Math.round(Math.max(0, now - after))]);
   }));
   return { out, used };
+}
+
+/**
+ * 把實際選課人數併進課表：公開課表上的「人數」是上限，實際選課人數要登入後才看得到
+ * （差很多，例如上限 60、實際 33）。用 tools/抓選課人數.console.js 在自己的瀏覽器抓成
+ * tools/選課人數_學年_學期.csv，這裡用選課編號對起來。
+ * 對不到的（沒有選課編號的佔位課程，例如「通識課程（一）」）人數留空，熱度不算它。
+ */
+function mergeEnroll(rows, enrollRows) {
+  const byNo = {};
+  enrollRows.forEach(r => { byNo[String(r[0]).trim()] = String(r[3]).trim(); });
+  let matched = 0, missing = 0;
+  const out = rows.map(r => {
+    const got = byNo[String(r[2]).trim()];
+    if (got === undefined) missing += 1; else matched += 1;
+    return r.slice(0, 13).concat([got === undefined ? '' : got]);
+  });
+  return { rows: out, matched, missing };
 }
 
 /** Bot 用的資料檔（bot/課表熱度資料.gs）：熱度只有幾十格，直接寫成程式裡的常數，不用另外匯入試算表 */
 function heatGs(table, meta) {
   const data = {};
-  table.slice(1).forEach(([day, period, , count]) => { (data[day] = data[day] || {})[period] = Number(count); });
+  // 每一格：[至少到校, 開始上課, 上課中, 下課後至少離校]
+  table.slice(1).forEach(([day, period, , start, now, arrive, leave]) => { (data[day] = data[day] || {})[period] = [arrive, start, now, leave].map(Number); });
   const today = new Date().toISOString().slice(0, 10);
   return [
     '/**',
     ' * 課表熱度的資料（8）。這個檔案是 tools/抓課表.js 產生的，不要手動改；換學期時重跑那支程式。',
-    ' * 每一格是外雙溪校區「星期 × 節次」這一節開始上課的人數，來源是公開的全校課表（人數欄）。',
+    ' * 外雙溪校區每個「星期 × 節次」：[至少到校, 開始上課, 上課中, 下課後至少離校]（人）。',
+    ' * 「至少到校」是這一節上課中的人比上一節多出來的；「至少離校」是下一節少掉的。時間和教室來自公開的全校課表，',
+    ' * 人數是' + (meta.enroll ? '實際選課人數（登入後的「科目資料（學系）」）。' : '「人數上限」（還沒併入實際選課人數，會高估）。'),
     ' */',
-    'const HEAT_SOURCE = ' + JSON.stringify({ year: Number(meta.year), term: Number(meta.term), updated: today, meetings: meta.meetings }) + ';',
-    'const HEAT_DATA = ' + JSON.stringify(data, null, 2) + ';',
-    '',
-  ].join('\n');
+    'const HEAT_SOURCE = ' + JSON.stringify({ year: Number(meta.year), term: Number(meta.term), updated: today, meetings: meta.meetings, count: meta.enroll ? '實際選課人數' : '人數上限' }) + ';',
+    'const HEAT_DATA = {',
+  ].concat(
+    Object.keys(data).map(d => '  ' + d + ': ' + JSON.stringify(data[d]).replace(/"(\w)":/g, '$1: ').replace(/\],/g, '], ') + ','),
+    ['};', ''],
+  ).join('\n');
 }
 
 async function main() {
@@ -154,10 +195,13 @@ async function main() {
   const limit = flag('--limit') ? Number(args[args.indexOf('--limit') + 1]) : Infinity;
   let rows;
 
+  const year = numbers[0] || 115, term = numbers[1] || 1;
   if (flag('--heat')) {
     rows = parseCsv(fs.readFileSync(OUT, 'utf8')).slice(1);
+  } else if (flag('--import')) {
+    // 在瀏覽器裡抓的（學校系統擋掉程式直接送的請求時用）：每列 11 欄，補上校區和大樓
+    rows = JSON.parse(fs.readFileSync(args[args.indexOf('--import') + 1], 'utf8')).rows.map(r => r.slice(0, 11).concat(place(r[10])));
   } else {
-    const year = numbers[0] || 115, term = numbers[1] || 1;
     const delay = Math.max(3, flag('--delay') ? Number(args[args.indexOf('--delay') + 1]) || 5 : 5) * 1000;
     const full = limit === Infinity;
     const all = await listClasses();
@@ -190,17 +234,28 @@ async function main() {
       if (i + 1 < todo.length) await sleep(delay);
     }
     rows = progress.rows;
-    if (full) fs.writeFileSync(OUT, csv([HEAD].concat(rows)));
-    else console.log(rows.slice(0, 10).map(r => r.join(' | ')).join('\n'));
+    if (!full) console.log(rows.slice(0, 10).map(r => r.join(' | ')).join('\n'));
+  }
+
+  // 有實際選課人數的檔案就併進來
+  const enrollFile = path.join(__dirname, '選課人數_' + year + '_' + term + '.csv');
+  const hasEnroll = fs.existsSync(enrollFile);
+  if (hasEnroll) {
+    const m = mergeEnroll(rows, parseCsv(fs.readFileSync(enrollFile, 'utf8')).slice(1));
+    rows = m.rows;
+    console.log('併入實際選課人數：對到 ' + m.matched + ' 列，對不到 ' + m.missing + ' 列');
+  } else {
+    console.log('⚠️ 沒有 ' + path.basename(enrollFile) + '，人數先用「人數上限」，會高估。見 tools/抓選課人數.console.js');
   }
 
   const h = heat(rows);
   if (limit === Infinity) {
+    fs.writeFileSync(OUT, csv([HEAD].concat(rows)));
     fs.writeFileSync(HEAT, csv(h.out));
-    fs.writeFileSync(HEAT_GS, heatGs(h.out, { year: numbers[0] || 115, term: numbers[1] || 1, meetings: h.used }));
+    fs.writeFileSync(HEAT_GS, heatGs(h.out, { year, term, meetings: h.used, enroll: hasEnroll }));
   }
   console.log('課表 ' + rows.length + ' 列；外雙溪有人數的上課時段 ' + h.used + ' 個；熱度 ' + (h.out.length - 1) + ' 格');
 }
 
 if (require.main === module) main().catch(err => { console.error(err); process.exit(1); });
-module.exports = { heat, place, parseCsv, csv, isWall };
+module.exports = { heat, place, parseCsv, csv, isWall, mergeEnroll };

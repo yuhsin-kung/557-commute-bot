@@ -187,12 +187,12 @@ function planReply_(originName, building, classAt, isTomorrow) {
   });
 }
 
-/** 出門建議加一句課表熱度（課表熱度.gs）：這一節有多少人開始上課。沒有熱度資料就不加 */
+/** 出門建議加一句課表熱度（課表熱度.gs）：這一節前至少多少人要到校。沒有熱度資料就不加 */
 function planHeatNote_(classAt) {
   if (typeof HEAT_DATA === 'undefined') return [];
   const h = heatAt_(classAt);
   if (!h) return [];
-  return ['第 ' + h.period + ' 節外雙溪約有 ' + h.count + ' 人開始上課（' + h.level + '）。' + (h.level === '很擠' ? '這個時段的 557 最難擠，早一點出門或改搭其他車比較穩。' : '')];
+  return ['第 ' + h.period + ' 節前至少有 ' + h.arrive + ' 人要到外雙溪（' + h.level + '）。' + (h.level === '很擠' ? '這個時段的 557 最難擠，早一點出門或改搭其他車比較穩。' : '')];
 }
 
 // ===== 解析學生的問題 =====
