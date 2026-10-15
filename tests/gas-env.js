@@ -83,7 +83,7 @@ function loadBot(files, props = {}) {
   const sheets = {};
   const store = Object.assign({ LINE_CHANNEL_ACCESS_TOKEN: 'test-token' }, props);
   const cache = {};
-  const env = { sheets, fetches: [], quotaLeft: 200, triggers: [], names: {}, forms: [], props: store, respond: {}, mails: [] };
+  const env = { sheets, fetches: [], quotaLeft: 200, triggers: [], names: {}, forms: [], props: store, respond: {}, mails: [], surveys: {} };
 
   const fetch = (url, options = {}) => {
     env.fetches.push({ url, options, body: options.payload && typeof options.payload === 'string' ? JSON.parse(options.payload) : options.payload });
@@ -138,6 +138,27 @@ function loadBot(files, props = {}) {
       DestinationType: { SPREADSHEET: 'SPREADSHEET' },
       createTextValidation: () => { const v = { setHelpText: () => v, requireNumberGreaterThanOrEqualTo: () => v, build: () => v }; return v; },
       create: title => fakeForm(env, title),
+      // 已經存在的表單：env.surveys[id] = { title, grades: [...], answers: ['大二', …] }（每一份回覆填的年級）
+      openById: id => {
+        const s = env.surveys[id];
+        if (!s) throw new Error('找不到表單 ' + id);
+        const gradeItem = {
+          getTitle: () => '年級',
+          asMultipleChoiceItem: () => ({
+            getChoices: () => s.grades.map(g => ({ getValue: () => g })),
+            createResponse: value => ({ value }),
+          }),
+        };
+        return {
+          getTitle: () => s.title,
+          getItems: () => [{ getTitle: () => '一週有幾天要到外雙溪校區？' }, gradeItem],
+          getResponses: () => s.answers.map(g => ({ getItemResponses: () => [{ getItem: () => gradeItem, getResponse: () => g }] })),
+          createResponse: () => {
+            const r = { withItemResponse: ir => { r.value = ir.value; return r; }, toPrefilledUrl: () => 'https://docs.google.com/forms/d/e/' + id + '/viewform?entry.1=' + encodeURIComponent(r.value) };
+            return r;
+          },
+        };
+      },
     },
     ContentService: { createTextOutput: text => ({ text }) },
   };
