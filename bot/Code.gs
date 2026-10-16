@@ -78,6 +78,7 @@ function memberReply_(uid, text) {
   if (text === '新生測驗' || /^答\s*[1-3]$/.test(text)) return nbQuiz_(uid, text);
   if (text === '排隊禮儀') return nbEtiquette_();
   if (/^包車(\s|$)/.test(text)) return charterText_(uid, text);
+  if (/^(幾點最擠|課表熱度)(\s|$)/.test(text)) return heatReply_(text); // 課表熱度.gs
   return null;
 }
 
