@@ -98,7 +98,7 @@ function choices_(text, items, options) {
   }
   if (o.menu !== false) body.push(menuLink_());
 
-  const bubble = { type: 'bubble', body: { type: 'box', layout: 'vertical', backgroundColor: UI.paper, paddingAll: '16px', spacing: 'sm', contents: body } };
+  const bubble = { type: 'bubble', body: { type: 'box', layout: 'vertical', backgroundColor: UI.paper, paddingAll: '16px', spacing: chips.length <= 6 ? 'md' : 'sm', contents: body } };
   if (o.title) {
     const header = [];
     if (o.badge) header.push({ type: 'text', text: o.badge, size: 'xs', color: UI.onBrandSoft });
