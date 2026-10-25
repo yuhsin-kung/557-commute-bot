@@ -25,7 +25,7 @@ function send(env, text, uid = 'A') {
   env.call('handleEvent_', { type: 'message', replyToken: 'r', source: { userId: uid }, message: { type: 'text', text } });
   return env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body.messages;
 }
-const isUnknown = messages => typeof messages[0].text === 'string' && messages[0].text.startsWith('我看不懂這句話');
+const isUnknown = messages => typeof messages[0].text === 'string' && messages[0].text.startsWith('這個問題我看不太懂');
 const titleOf = message => message.contents.header.contents[message.contents.header.contents.length - 1].text;
 
 test('選單：一則訊息，四個分類的按鈕', () => {
@@ -116,8 +116,17 @@ test('看不懂的句子：先說看不懂，再給選單，不會讓人卡住',
   const env = start();
   const reply = send(env, '今天好累');
   assert.equal(reply.length, 2);
-  assert.match(reply[0].text, /^我看不懂這句話/);
+  assert.match(reply[0].text, /^這個問題我看不太懂/);
   assert.deepEqual(buttonsOf(reply[1]).map(b => b[0]), CATEGORIES);
+});
+
+test('看不懂時教的兩種問法，Bot 真的看得懂', () => {
+  const env = start();
+  const examples = send(env, '今天好累')[0].text.split('\n').filter(l => l.startsWith('・')).map(l => l.slice(1));
+  assert.deepEqual(examples, ['我明天 8 點在 D 棟上課', '我想找 557 以外的通勤方式']);
+  examples.forEach(text => assert.equal(isUnknown(send(env, text)), false, '「' + text + '」Bot 看不懂'));
+  assert.equal(titleOf(send(env, '我想找 557 以外的通勤方式')[0]), '557 以外的選擇');
+  assert.equal(titleOf(send(env, '有沒有替代路線')[0]), '557 以外的選擇');
 });
 
 test('加好友：歡迎的話、新生須知、選單', () => {

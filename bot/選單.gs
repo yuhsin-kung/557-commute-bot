@@ -63,7 +63,7 @@ function menuWelcome_() {
 
 /** 看不懂的句子：不要讓人卡住，直接給按鈕 */
 function menuUnknown_() {
-  return ['我看不懂這句話 🙏\n從下面選一類，我把按鈕傳給你 👇', menuCard_()];
+  return ['這個問題我看不太懂 😅\n\n你可以試試這樣問：\n・我明天 8 點在 D 棟上課\n・我想找 557 以外的通勤方式\n\n也可以直接點下方選單，快速找到需要的功能！👇', menuCard_()];
 }
 
 /**
