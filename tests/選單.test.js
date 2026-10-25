@@ -143,17 +143,17 @@ test('加好友：歡迎的話、新生須知、選單', () => {
 test('出門時間：點哪一天 → 點第幾節 → 點哪一棟，全程不用打字', () => {
   const env = start();
   const step1 = send(env, '出門時間')[0];
-  assert.equal(saidOf(step1), '出門時間建議\n要排哪一天的出門時間？');
+  assert.equal(saidOf(step1), '出門時間建議\n哪一天要去學校？');
   assert.deepEqual(buttonsOf(step1), [['今天', '出門時間 今天'], ['明天', '出門時間 明天']]);
 
   const step2 = send(env, '出門時間 明天')[0];
-  assert.equal(saidOf(step2), '出門時間建議\n明天第幾節上課？');
+  assert.equal(saidOf(step2), '出門時間建議\n你明天第幾節有課？\n\n例如：第一節、第二節');
   assert.equal(buttonsOf(step2).length, 13);
   assert.deepEqual(buttonsOf(step2)[0], ['第 1 節 08:10', '出門時間 明天 08:10']);
   assert.deepEqual(buttonsOf(step2)[12], ['第 D 節 21:15', '出門時間 明天 21:15']);
 
   const step3 = send(env, '出門時間 明天 08:10')[0];
-  assert.equal(saidOf(step3), '出門時間建議\n明天 08:10 上課，在哪一棟？');
+  assert.equal(saidOf(step3), '出門時間建議\n你在哪一棟上課？\n\n我會幫你估算從下車地點走到教室需要的時間。');
   assert.equal(buttonsOf(step3).length, 13);
   assert.deepEqual(buttonsOf(step3).slice(0, 3), [['B 綜大', '出門時間 明天 08:10 B'], ['D 二教', '出門時間 明天 08:10 D'], ['R 一教', '出門時間 明天 08:10 R']]);
   assert.deepEqual(buttonsOf(step3)[12], ['不指定', '出門時間 明天 08:10 不指定']);
@@ -205,9 +205,9 @@ test('出門時間選今天：只列還沒開始的節次；快上課的走即�
 
 test('出門時間亂傳也不會壞：格式不對就從那一步重新問', () => {
   const env = start();
-  assert.match(saidOf(send(env, '出門時間 後天')[0]), /要排哪一天的出門時間？$/);
-  assert.match(saidOf(send(env, '出門時間 明天 八點')[0]), /明天第幾節上課？$/);
-  assert.match(saidOf(send(env, '出門時間 明天 08:10 Z')[0]), /明天 08:10 上課，在哪一棟？$/);
+  assert.match(saidOf(send(env, '出門時間 後天')[0]), /哪一天要去學校？$/);
+  assert.match(saidOf(send(env, '出門時間 明天 八點')[0]), /你明天第幾節有課？/);
+  assert.match(saidOf(send(env, '出門時間 明天 08:10 Z')[0]), /你在哪一棟上課？/);
   assert.equal(send(env, '出門時間 明天 08:10 D 火星')[0].contents.header.contents[1].text, '明天 08:10 上課', '沒看過的出發站當成士林站');
 });
 

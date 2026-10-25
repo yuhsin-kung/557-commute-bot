@@ -76,17 +76,17 @@ function menuFlow_(text) {
   const now = new Date();
 
   if (day !== '今天' && day !== '明天') {
-    return choices_('要排哪一天的出門時間？', [['今天', '出門時間 今天'], ['明天', '出門時間 明天']], { title: '出門時間建議', badge: '第 1 步', primary: false });
+    return choices_('哪一天要去學校？', [['今天', '出門時間 今天'], ['明天', '出門時間 明天']], { title: '出門時間建議', badge: '第 1 步', primary: false });
   }
   if (!/^\d{2}:\d{2}$/.test(time || '')) {
     // 今天只列還沒開始的節次
     const periods = MENU_PERIODS.filter(k => day === '明天' || timeOn_(now, PERIODS[k]) > now);
-    if (!periods.length) return choices_('今天的課都開始了，要排明天的嗎？', [['排明天的', '出門時間 明天']]);
-    return choices_(day + '第幾節上課？', periods.map(k => ['第 ' + k + ' 節 ' + PERIODS[k], '出門時間 ' + day + ' ' + PERIODS[k]]), { title: '出門時間建議', badge: '第 2 步' });
+    if (!periods.length) return choices_('今天的課都已經開始了，要改看明天的上課時間嗎？', [['看明天的', '出門時間 明天']]);
+    return choices_('你' + day + '第幾節有課？\n\n例如：第一節、第二節', periods.map(k => ['第 ' + k + ' 節 ' + PERIODS[k], '出門時間 ' + day + ' ' + PERIODS[k]]), { title: '出門時間建議', badge: '第 2 步' });
   }
   if (!BUILDINGS[building] && building !== '不指定') {
     const items = MENU_BUILDINGS.map(k => [k + ' ' + menuBuildingName_(k), '出門時間 ' + day + ' ' + time + ' ' + k]);
-    return choices_(day + ' ' + time + ' 上課，在哪一棟？', items.concat([['不指定', '出門時間 ' + day + ' ' + time + ' 不指定']]), { title: '出門時間建議', badge: '第 3 步' });
+    return choices_('你在哪一棟上課？\n\n我會幫你估算從下車地點走到教室需要的時間。', items.concat([['不指定', '出門時間 ' + day + ' ' + time + ' 不指定']]), { title: '出門時間建議', badge: '第 3 步' });
   }
   return compareQuery_({ // 比較器.gs
     intent: '去學校',
