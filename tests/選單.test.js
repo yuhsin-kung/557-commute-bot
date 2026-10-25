@@ -34,7 +34,7 @@ test('選單：一則訊息，四個分類的按鈕', () => {
   assert.equal(menu.length, 1);
   assert.equal(menu[0].type, 'flex');
   assert.deepEqual(buttonsOf(menu[0]), CATEGORIES.map(c => [c, c]));
-  assert.equal(saidOf(menu[0]), '東吳通勤達人\n想做什麼？先選一類，我再把按鈕傳給你。');
+  assert.equal(saidOf(menu[0]), '東吳通勤達人\n今天要怎麼去學校？\n\n查出門時間、找其他交通方式，或看看怎麼避開 557 尖峰人潮。👇');
 });
 
 test('按分類，Bot 把那一類的功能按鈕傳到聊天室', () => {

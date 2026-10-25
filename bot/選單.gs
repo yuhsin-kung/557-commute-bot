@@ -44,7 +44,7 @@ const MENU_BUILDINGS = ['B', 'D', 'R', 'H', 'G', 'F', 'C', 'N', 'M', 'P', 'Q', '
 
 /** 「選單」：四個分類。按了分類，Bot 再傳那一類的功能按鈕 */
 function menuCard_() {
-  return choices_('想做什麼？先選一類，我再把按鈕傳給你。', // 卡片.gs
+  return choices_('今天要怎麼去學校？\n\n查出門時間、找其他交通方式，或看看怎麼避開 557 尖峰人潮。👇', // 卡片.gs
     MENU.map(c => [c.name, c.name]),
     { title: '東吳通勤達人', badge: '選單', primary: false, menu: false });
 }
