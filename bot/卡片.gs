@@ -88,7 +88,7 @@ function choices_(text, items, options) {
   const chips = items.map((item, i) => choiceChip_(item, i === 0 && o.primary !== false && items.length <= 4));
   const body = [];
   if (text) body.push({ type: 'text', text: String(text), size: 'md', color: UI.ink, wrap: true });
-  if (chips.length <= 4) {
+  if (chips.length <= 6) { // 6 顆以內排一欄：按鈕整行寬，長的名稱不會斷行、高度一致
     chips.forEach(chip => body.push(chip));
   } else {
     for (let i = 0; i < chips.length; i += 2) {
