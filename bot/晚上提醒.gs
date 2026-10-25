@@ -47,7 +47,7 @@ function buildReminder_(day) {
   const lines = ['🔔 明天（' + dateText + '）上學提醒', ''];
   if (isRain) {
     lines.push('☔ 早上降雨機率 ' + pop + '%');
-    lines.push('下雨天 557 會比平常擠，建議早 10 分鐘出門、記得帶傘。');
+    lines.push('下雨天 557 會比平常擠，建議早 20 分鐘出門、記得帶傘。');
   }
   if (isExam) {
     if (isRain) lines.push('');

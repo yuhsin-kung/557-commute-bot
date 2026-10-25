@@ -1,11 +1,12 @@
 /**
- * 積分帳本（模組四）：步行積分（11）、早到早餐券（4）、碳足跡看板（51）、通勤成就（35）
+ * 積分帳本（模組四）：步行積分（11）、早到獎勵（4）、碳足跡看板（51）、通勤成就（35）
+ * 步行、騎車、早到一次都是 1 點；集滿 3 點換一張 30 元學餐折價券（傳「兌換折價券」）。
  *
  * 打卡不用 QR code（會被拍照外流），改用手機定位：
  *   在 LINE 傳「打卡」→ 打開打卡頁 → 手機回報位置 → 伺服器算離哪個打卡點最近。
  *   - 在錢穆故居站打卡：開始計時
  *   - 25 分鐘內走到校內再打一次：步行完成，加分、記減碳量
- *   - 7:30 前在校內打卡：早到早餐券（一天一次）
+ *   - 7:30 前在校內打卡：早到 1 點（一天一次）
  * 只記打卡點名稱、距離和誤差，不記經緯度。
  *
  * 積分跟共乘共用「共乘用戶」分頁的「積分」欄；每一筆加分記在「通勤紀錄」。
@@ -13,11 +14,13 @@
  * 用到 Code.gs 的 PROPS、TZ，共乘.gs 的 cpUser_、cpSheet_、cpLocked_、cpNow_，定位測試.gs 的 GEO_POINTS。
  */
 const PT = {
-  WALK: 10,             // 錢穆故居站走進學校
-  BIKE: 8,              // 騎 YouBike 到校
-  EARLY: 5,             // 7:30 前到校
-  QUIZ: 5,              // 新生測驗全對
-  UMBRELLA: 3,          // 借傘後歸還
+  WALK: 1,              // 錢穆故居站走進學校
+  BIKE: 1,              // 騎 YouBike 到校
+  EARLY: 1,             // 7:30 前到校
+  QUIZ: 1,              // 新生測驗全對
+  UMBRELLA: 1,          // 借傘後歸還
+  COUPON_POINTS: 3,     // 幾點換一張學餐折價券
+  COUPON_VALUE: 30,     // 折價券面額（元）
   WALK_MAX_MIN: 25,     // 起點打卡後幾分鐘內到校才算步行
   EARLY_BEFORE: '07:30',
   NEAR_M: 150,          // 離錢穆故居站多近算「在站牌」
@@ -89,7 +92,7 @@ function ptBadgeText_(fresh) {
 
 /** 「打卡」：給一個按鈕打開打卡頁 */
 function ptCheckinButton_(uid) {
-  return choices_('在錢穆故居站先打一次，走進學校再打一次，就有步行積分。7:30 前到校還有早餐券。', // 卡片.gs
+  return choices_('早到：7:30 前在學校打卡。\n步行：在錢穆故居站先打一次，走進學校再打一次。\n一次 1 點，集滿 ' + PT.COUPON_POINTS + ' 點換 ' + PT.COUPON_VALUE + ' 元學餐折價券。', // 卡片.gs
     [{ label: '打開打卡頁', uri: cpWebAppUrl_() + '?page=checkin&t=' + cpUser_(uid).token }, ['我的紀錄', '我的紀錄']],
     { title: '到校打卡', badge: '積分' });
 }
@@ -100,15 +103,36 @@ function ptMine_(uid) {
   const s = ptStats_(uid);
   const have = ptBadges_(s);
   const badges = PT_BADGES.map(b => (have.indexOf(b[0]) >= 0 ? '🏅 ' + b[0] : '▫️ ' + b[0] + '（' + b[1] + '）'));
-  return [
+  const coupons = Math.floor(user.points / PT.COUPON_POINTS);
+  const text = [
     '📒 我的通勤紀錄',
     '',
-    '積分：' + user.points + ' 分　信用分：' + user.credit,
+    '積分：' + user.points + ' 點　信用分：' + user.credit,
+    coupons ? '可以兌換 ' + coupons + ' 張 ' + PT.COUPON_VALUE + ' 元學餐折價券 🎫' : '再 ' + (PT.COUPON_POINTS - user.points % PT.COUPON_POINTS) + ' 點就能換一張 ' + PT.COUPON_VALUE + ' 元學餐折價券',
     '步行 ' + s.步行 + ' 次・騎車 ' + s.騎車 + ' 次・共乘 ' + s.共乘 + ' 次・早到 ' + s.早到 + ' 次',
     '累積少排放：' + (s.減碳 / 1000).toFixed(2) + ' 公斤 CO₂',
     '',
     '成就：',
-  ].concat(badges).concat(['', '傳「打卡」開始累積，傳「全校減碳」看大家的成果。']).join('\n');
+  ].concat(badges).join('\n');
+  return choices_(text, (coupons ? [['兌換學餐折價券', '兌換折價券']] : []).concat([['到校打卡', '打卡'], ['全校減碳', '全校減碳']]), { primary: coupons > 0 });
+}
+
+/** 「兌換折價券」：扣 3 點，給一張 30 元學餐折價券。券號記在「學餐折價券」分頁，學餐對號核銷 */
+function ptRedeem_(uid) {
+  return cpLocked_(() => { // 共乘.gs
+    const user = cpUser_(uid);
+    if (user.points < PT.COUPON_POINTS) {
+      return choices_('目前 ' + user.points + ' 點，集滿 ' + PT.COUPON_POINTS + ' 點才能換一張 ' + PT.COUPON_VALUE + ' 元學餐折價券。\n早到、步行、騎車到校，一次都是 1 點。', [['到校打卡', '打卡'], ['騎車到校', '騎車到校']]);
+    }
+    user.points -= PT.COUPON_POINTS;
+    cpSaveUser_(user);
+    const now = cpNow_();
+    const sheet = cpSheet_('學餐折價券', ['時間', '使用者 ID', '券號', '面額', '狀態']);
+    const code = 'SC' + Utilities.formatDate(now, TZ, 'MMdd') + '-' + ('000' + sheet.getLastRow()).slice(-4);
+    sheet.appendRow([now, uid, code, PT.COUPON_VALUE, '未使用']);
+    cpSheet_('通勤紀錄', PT_LOG_HEAD).appendRow([now, uid, '兌換', -PT.COUPON_POINTS, 0, code]);
+    return '🎫 兌換成功！\n' + PT.COUPON_VALUE + ' 元學餐折價券　券號 ' + code + '\n結帳時出示這則訊息給學餐，一張用一次。\n\n剩下 ' + user.points + ' 點。';
+  });
 }
 
 /** 「全校減碳」（51）：全部人的加總，對應 SDG 11、SDG 13 */
@@ -140,7 +164,7 @@ function ptBike_(uid) {
     if (!onCampus) return ['請先在學校打卡，確認你到校了，再傳一次「騎車到校」。', ptCheckinButton_(uid)];
     const co2 = PT.BIKE_KM * PT.BUS_G_PER_KM;
     const fresh = ptAdd_(uid, '騎車', PT.BIKE, co2, 'YouBike');
-    return '🚲 騎車到校 +' + PT.BIKE + ' 分\n少排放 ' + Math.round(co2) + ' 公克 CO₂' + ptBadgeText_(fresh);
+    return '🚲 騎車到校 +' + PT.BIKE + ' 點\n少排放 ' + Math.round(co2) + ' 公克 CO₂' + ptBadgeText_(fresh);
   });
 }
 
@@ -180,7 +204,7 @@ function ptCheckinAt_(uid, here, accuracy) {
 
   if (dStart <= PT.NEAR_M) {
     record(PT_START, dStart, '起點');
-    return { ok: true, title: '錢穆故居站打卡成功', lines: ['開始計時！' + PT.WALK_MAX_MIN + ' 分鐘內走進學校再打一次卡，就有 ' + PT.WALK + ' 分。'] };
+    return { ok: true, title: '錢穆故居站打卡成功', lines: ['開始計時！' + PT.WALK_MAX_MIN + ' 分鐘內走進學校再打一次卡，就有 ' + PT.WALK + ' 點。'] };
   }
   if (dCampus > PT.CAMPUS_M) {
     const nearer = dStart < dCampus ? [PT_START, dStart] : ['學校', dCampus];
@@ -197,19 +221,17 @@ function ptCheckinAt_(uid, here, accuracy) {
     const minutes = Math.max(1, Math.round((now - new Date(started[0])) / 60000));
     const co2 = PT.WALK_KM * PT.BUS_G_PER_KM;
     fresh = fresh.concat(ptAdd_(uid, '步行', PT.WALK, co2, minutes + ' 分鐘'));
-    lines.push('🚶 走了 ' + minutes + ' 分鐘，步行 +' + PT.WALK + ' 分');
+    lines.push('🚶 走了 ' + minutes + ' 分鐘，步行 +' + PT.WALK + ' 點');
     lines.push('少排放 ' + Math.round(co2) + ' 公克 CO₂');
   }
   const hhmm = Utilities.formatDate(now, TZ, 'HH:mm');
   if (hhmm < PT.EARLY_BEFORE && !ptDoneToday_(uid, '早到')) {
     fresh = fresh.concat(ptAdd_(uid, '早到', PT.EARLY, 0, hhmm));
-    lines.push('🌅 ' + hhmm + ' 到校，早到 +' + PT.EARLY + ' 分');
-    lines.push('🎫 早餐券 EB-' + Utilities.formatDate(now, TZ, 'MMdd') + '-' + cpUser_(uid).row + '（今天 10:00 前有效，合作店家洽談中）');
-  }
-  if (!lines.length) lines.push('到校打卡成功。先在錢穆故居站打卡再走進來才有步行積分；7:30 前到校有早餐券。');
+    lines.push('🌅 ' + hhmm + ' 到校，早到 +' + PT.EARLY + ' 點');  }
+  if (!lines.length) lines.push('到校打卡成功。先在錢穆故居站打卡再走進來才有步行積分；7:30 前到校有早到積分。');
   if (fresh.length) lines.push('🏅 解鎖成就：' + fresh.join('、'));
   record(PT_CAMPUS, dCampus, lines.length > 1 || fresh.length ? '加分' : '到校');
-  return { ok: true, title: '到校打卡成功', lines: lines.concat(['目前積分：' + cpUser_(uid).points + ' 分']) };
+  return { ok: true, title: '到校打卡成功', lines: lines.concat(['目前積分：' + cpUser_(uid).points + ' 點（' + PT.COUPON_POINTS + ' 點換 ' + PT.COUPON_VALUE + ' 元學餐折價券）']) };
 }
 
 function ptMeters_(a, b) {

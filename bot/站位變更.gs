@@ -3,7 +3,7 @@
  *
  * 每 6 小時檢查一次德育中心的「557、300、通勤30等路線公車及劍南路站師生專車」頁面，
  * 內容有變就用 Gemini 寫兩三句摘要，推播給有訂閱提醒的人，並記到「站位變更紀錄」。
- * 學生問「557 在哪裡搭」時，回覆最新的摘要（回覆不用額度）。
+ * 學生按「557 站牌資訊」（或問「557 在哪裡搭」）時，回覆最新的摘要（回覆不用額度）。
  *
  * 第一次使用：在編輯器執行一次「設定站位檢查排程」，它也會先記下現在的頁面當作比對基準。
  */
@@ -34,7 +34,7 @@ function 檢查站位變更() {
 
   const message = diff;
   sendToSubscribers_({ title: '557 上車資訊有更新', message: message, reason: '站位變更',
-    buttons: [{ label: '看德育中心公告', uri: STATION_PAGE_URL }, ['最新的上車地點', '557 在哪裡搭']] }, '站位變更'); // 晚上提醒.gs
+    buttons: [{ label: '看德育中心公告', uri: STATION_PAGE_URL }, ['最新的上車地點', '557 站牌資訊']] }, '站位變更'); // 晚上提醒.gs
   saveStation_(sheet, now, hash, summary, '已推播', diff);
 }
 
@@ -81,13 +81,22 @@ function summarizeStation_(text) {
 }
 
 function gemini_(prompt) {
+  return geminiParts_([{ text: prompt }]);
+}
+
+/** 看圖回答（雨傘.gs 讀傘號用）。data 是 base64 */
+function geminiImage_(prompt, mimeType, data) {
+  return geminiParts_([{ text: prompt }, { inline_data: { mime_type: mimeType, data: data } }]);
+}
+
+function geminiParts_(parts) {
   const key = PROPS.getProperty('GEMINI_API_KEY');
   if (!key) return '';
   const call = model => UrlFetchApp.fetch('https://generativelanguage.googleapis.com/v1beta/models/' + model + ':generateContent', {
     method: 'post',
     contentType: 'application/json',
     headers: { 'x-goog-api-key': key },
-    payload: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+    payload: JSON.stringify({ contents: [{ parts: parts }] }),
     muteHttpExceptions: true,
   });
   // 摘要要寫得好，先用 flash；免費版每分鐘只有 5 次，超過就換 lite
@@ -165,5 +174,5 @@ function 測試站位變更() {
   const fake = now.replace('中正路２０５號', '中正路２２１號').replace('大成安心購', '全家便利商店');
   console.log('【假裝 557 站牌搬到全家前】\n' + (diffSummary_(now, fake) || '（判斷為無實質變更）'));
   console.log('\n【只改排版】\n' + (diffSummary_(now, now.replace(/。/g, '.')) || '（判斷為無實質變更）'));
-  console.log('\n【學生問 557 在哪裡搭】\n' + stationReply_());
+  console.log('\n【學生按 557 站牌資訊】\n' + stationReply_());
 }

@@ -21,7 +21,7 @@ const CP = {
   NO_SHOW_GRACE_MIN: 3,   // 預約：出發時間過幾分鐘還沒按「我到了」算沒出現
   SLOT_MIN: 10,           // 預約幾分鐘一格
   RESERVE_DAYS: 7,        // 最遠可以預約幾天後
-  SOLO_POINTS: 20,        // 只有一個人的獎勵，一天一次
+  SOLO_POINTS: 1,         // 只有一個人的獎勵，一天一次（積分 3 點換 30 元學餐折價券）
   NO_SHOW_PENALTY: 5,
   LATE_CANCEL_PENALTY: 2,
   RIDE_BONUS: 1,          // 完成一次共乘加回的信用分
@@ -89,7 +89,7 @@ function cpLiveStatus_(uid, dir) {
   const g = cpJoinable_(groups, dir, now);
   if (!g) {
     return choices_('🔔 ' + CP_DIRS[dir].label + '\n\n現在沒有人在等，你是第一個。\n我幫你開鈴，最多等 ' + CP.LIVE_WAIT_MIN + ' 分鐘。\n\n'
-      + '一個人 ' + CP.FARE + ' 元；2 人各 ' + cpShare_(2) + '、3 人各 ' + cpShare_(3) + '、4 人各 ' + cpShare_(4) + ' 元。\n時間到還是沒人，送你 ' + CP.SOLO_POINTS + ' 分。',
+      + '一個人 ' + CP.FARE + ' 元；2 人各 ' + cpShare_(2) + '、3 人各 ' + cpShare_(3) + '、4 人各 ' + cpShare_(4) + ' 元。\n時間到還是沒人，送你 ' + CP.SOLO_POINTS + ' 點。',
       [['開鈴', '共乘 ' + dir + ' 加入'], ['改成預約', '共乘 ' + dir + ' 預約']]);
   }
   const n = g.members.length;

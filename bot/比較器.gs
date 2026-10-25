@@ -54,6 +54,7 @@ const JIANNAN_SHUTTLE = '07:50';
 
 const BUFFER_MIN = 5;      // 提早幾分鐘到教室
 const PEAK_EXTRA_MIN = 10; // 尖峰 557 可能擠不上，要多等一兩班
+const WEATHER_EXAM_EXTRA_MIN = 20; // 隔天降雨機率 60% 以上或考試週，出門時間再多留
 
 // ===== 主流程 =====
 
@@ -135,7 +136,7 @@ function liveReply_(originName, building, classAt) {
     notes: notes,
     warns: warns,
     footer: (classAt ? fmt_(classAt) + ' 上課・' : '') + 'TDX 即時資料・' + nowText_() + '・車程為估計值',
-    buttons: [{ label: '找人共乘', text: '共乘' }, { label: '算到教室的時間', text: '出門時間 今天' }, { label: '557 在哪裡搭', text: '557 在哪裡搭' }],
+    buttons: [{ label: '找人共乘', text: '共乘' }, { label: '算到教室的時間', text: '出門時間 今天' }, { label: '557 站牌資訊', text: '557 站牌資訊' }],
   }));
 }
 
@@ -175,14 +176,14 @@ function planReply_(originName, building, classAt, isTomorrow) {
     subtitle: building ? building + ' 棟 ' + BUILDINGS[building][0] : '',
     rows: rows,
     warns: extra.reasons.length ? [extra.reasons.join('、') + '，已多算 ' + extra.min + ' 分鐘。'] : [],
-    footer: '依預估車程推算，出門前按「現在最快的車」可以看即時到站',
+    footer: '依預估車程推算，出門前按「比較所有公車路線」可以看即時到站',
     buttons: [{ label: '預約共乘', text: originName === '士林站' ? '共乘 去學校 預約' : '共乘' }]
       // 換出發站、換時間都用按的（選單.gs 的「出門時間」流程）
       .concat(Object.keys(ORIGINS).filter(name => name !== originName).map(name => ({
         label: '改從' + name + '出發',
         text: ['出門時間', isTomorrow ? '明天' : '今天', fmt_(classAt), building || '不指定', name].join(' '),
       })))
-      .concat([{ label: '換一個時間', text: '出門時間' }, { label: '現在最快的車', text: '幫我比較路線' }]),
+      .concat([{ label: '換一個時間', text: '出門時間' }, { label: '比較所有公車路線', text: '比較所有公車路線' }]),
   });
 }
 
@@ -319,10 +320,11 @@ function crowdExtra_(when) {
   let min = 0;
   try {
     const rain = rainPop_(when);
-    if (rain >= 60) { reasons.push('降雨機率 ' + rain + '%'); min += 10; }
+    if (rain >= 60) reasons.push('降雨機率 ' + rain + '%');
   } catch (err) { console.error(err); }
   const event = calendarEvent_(when);
-  if (event && event[2] === '考試') { reasons.push(event[3]); min += 10; }
+  if (event && event[2] === '考試') reasons.push(event[3]);
+  if (reasons.length) min = WEATHER_EXAM_EXTRA_MIN; // 下雨、考試週其中一個成立就多留，兩個都成立也是一樣
   return { min: min, reasons: reasons };
 }
 

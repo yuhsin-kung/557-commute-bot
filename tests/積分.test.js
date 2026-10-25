@@ -33,16 +33,16 @@ test('「打卡」回一個按鈕，網址帶這個人的代碼', () => {
   assert.match(buttonsOf(button)[0][1], /\?page=checkin&t=[0-9a-f-]{36}$/);
 });
 
-test('錢穆故居站打卡 → 走到校內再打一次：步行 +10 分、記減碳量', () => {
+test('錢穆故居站打卡 → 走到校內再打一次：步行 +1 點、記減碳量', () => {
   const env = start();
   assert.match(checkin(env, 'A', QIANMU).title, /錢穆故居站打卡成功/);
   env.addMinutes(12);
   const done = checkin(env, 'A', CAMPUS);
   assert.equal(done.ok, true);
-  assert.match(done.lines.join('\n'), /走了 12 分鐘，步行 \+10 分/);
-  assert.equal(user(env, 'A').points, 10);
+  assert.match(done.lines.join('\n'), /走了 12 分鐘，步行 \+1 點/);
+  assert.equal(user(env, 'A').points, 1);
   const log = rows(env, '通勤紀錄')[0];
-  assert.deepEqual([log[1], log[2], log[3], log[4]], ['A', '步行', 10, 61]); // 0.8 公里 × 76.7 公克
+  assert.deepEqual([log[1], log[2], log[3], log[4]], ['A', '步行', 1, 61]); // 0.8 公里 × 76.7 公克
 });
 
 test('打卡只記打卡點和距離，不記經緯度', () => {
@@ -68,20 +68,21 @@ test('步行一天只算一次', () => {
     checkin(env, 'A', CAMPUS);
     env.addMinutes(10);
   }
-  assert.equal(user(env, 'A').points, 10);
+  assert.equal(user(env, 'A').points, 1);
 });
 
-test('7:30 前到校有早餐券，一天一次；7:30 以後沒有', () => {
+test('7:30 前到校早到 +1 點，一天一次；7:30 以後沒有；不再發早餐券', () => {
   const early = start(MON_0700);
   const first = checkin(early, 'A', CAMPUS).lines.join('\n');
-  assert.match(first, /早到 \+5 分/);
-  assert.match(first, /早餐券 EB-1012-/);
+  assert.match(first, /早到 \+1 點/);
+  assert.match(first, /3 點換 30 元學餐折價券/);
+  assert.doesNotMatch(first, /早餐/);
   early.addMinutes(5);
-  assert.doesNotMatch(checkin(early, 'A', CAMPUS).lines.join('\n'), /早餐券 EB-/);
-  assert.equal(user(early, 'A').points, 5);
+  assert.doesNotMatch(checkin(early, 'A', CAMPUS).lines.join('\n'), /早到 \+/);
+  assert.equal(user(early, 'A').points, 1);
 
   const late = start(MON_0900);
-  assert.doesNotMatch(checkin(late, 'B', CAMPUS).lines.join('\n'), /早餐券 EB-/);
+  assert.doesNotMatch(checkin(late, 'B', CAMPUS).lines.join('\n'), /早到 \+/);
 });
 
 test('不在打卡點、定位誤差太大、代碼不對、一分鐘內重複，都不會加分', () => {
@@ -102,9 +103,9 @@ test('騎車到校：要先在校內打卡，一天一次', () => {
   const env = start();
   assert.match(textOf(say(env, 'A', '騎車到校')), /請先在學校打卡/);
   checkin(env, 'A', CAMPUS);
-  assert.match(say(env, 'A', '騎車到校'), /騎車到校 \+8 分/);
+  assert.match(say(env, 'A', '騎車到校'), /騎車到校 \+1 點/);
   assert.match(say(env, 'A', '騎車到校'), /今天已經記過騎車到校了/);
-  assert.equal(user(env, 'A').points, 8);
+  assert.equal(user(env, 'A').points, 1);
 });
 
 // ===== 我的紀錄、成就、全校 =====
@@ -119,8 +120,9 @@ test('走 5 次解鎖「走路達人」；我的紀錄和全校減碳的數字�
     env.addMinutes(24 * 60 - 10);
   }
   assert.match(last.lines.join('\n'), /解鎖成就：走路達人/);
-  const mine = say(env, 'A', '我的紀錄');
-  assert.match(mine, /積分：50 分/);
+  const mine = textOf(say(env, 'A', '我的紀錄'));
+  assert.match(mine, /積分：5 點/);
+  assert.match(mine, /可以兌換 1 張 30 元學餐折價券/);
   assert.match(mine, /步行 5 次/);
   assert.match(mine, /🏅 走路達人/);
   assert.match(mine, /▫️ 早鳥/);
@@ -130,8 +132,25 @@ test('走 5 次解鎖「走路達人」；我的紀錄和全校減碳的數字�
 test('共乘上車、獨行都算進「共乘夥伴」', () => {
   const env = start();
   env.call('cpSheet_', '共乘紀錄', ['時間', '團號', '使用者 ID', '方向', '類型', '事件']).appendRow([new Date(), 'G1', 'A', '去學校', '即時', '上車']);
-  assert.match(say(env, 'A', '我的紀錄'), /共乘 1 次/);
-  assert.match(say(env, 'A', '我的紀錄'), /🏅 共乘夥伴/);
+  assert.match(textOf(say(env, 'A', '我的紀錄')), /共乘 1 次/);
+  assert.match(textOf(say(env, 'A', '我的紀錄')), /🏅 共乘夥伴/);
+});
+
+test('兌換學餐折價券：滿 3 點才能換，換一張扣 3 點、給券號', () => {
+  const env = start(MON_0700);
+  assert.match(textOf(say(env, 'A', '兌換折價券')), /目前 0 點，集滿 3 點/);
+  for (let day = 0; day < 3; day++) { // 三天都 7:30 前到校，一天 1 點
+    checkin(env, 'A', CAMPUS);
+    env.addMinutes(24 * 60);
+  }
+  assert.equal(user(env, 'A').points, 3);
+  assert.deepEqual(buttonsOf(say(env, 'A', '我的紀錄'))[0], ['兌換學餐折價券', '兌換折價券']);
+  const got = say(env, 'A', '兌換折價券');
+  assert.match(got, /30 元學餐折價券　券號 SC\d{4}-0001/);
+  assert.match(got, /剩下 0 點/);
+  assert.equal(user(env, 'A').points, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(rows(env, '學餐折價券')[0].slice(1))), ['A', 'SC1015-0001', 30, '未使用']);
+  assert.match(textOf(say(env, 'A', '兌換折價券')), /目前 0 點/, '換完就不能再換');
 });
 
 // ===== YouBike =====
@@ -151,66 +170,106 @@ test('YouBike：列出士林站可借、東吳附近可還；抓不到資料會�
   assert.doesNotMatch(reply, /很遠的站/);
 });
 
-// ===== 共享雨傘 =====
+// ===== 共享雨傘：借還都要拍傘號 =====
 
-test('雨傘：借一把、不能借第二把、還了加 3 分並解鎖雨天英雄', () => {
+/** 假裝同學傳了一張照片，AI 從照片讀出 seen（例如 'U01'、'看不到'） */
+function photo(env, uid, seen) {
+  env.props.GEMINI_API_KEY = 'test-key';
+  env.onFetch = url => {
+    if (url.includes('api-data.line.me')) return { body: 'fake-jpeg', type: 'image/jpeg' };
+    if (url.includes('generativelanguage')) return { body: { candidates: [{ content: { parts: [{ text: seen }] } }] } };
+    return undefined;
+  };
+  const answer = env.call('umPhoto_', uid, 'msg-' + Math.random());
+  env.onFetch = null;
+  return answer;
+}
+
+test('雨傘：選地點後要拍傘號，照片上的傘號在架上才借得到', () => {
   const env = start();
   env.call('建立雨傘清單');
   assert.equal(rows(env, '雨傘').length, 6);
   assert.deepEqual(buttonsOf(say(env, 'A', '借傘')).map(b => b[1]), ['借傘 錢穆故居站', '借傘 校門口']);
-  assert.match(textOf(say(env, 'A', '借傘 錢穆故居站')), /借到 U01/);
-  assert.match(textOf(say(env, 'A', '借傘 校門口')), /已經借了 U01/);
-  const back = say(env, 'A', '還傘 校門口');
-  assert.match(back, /已歸還 U01.*\+3 分/);
+  assert.equal(photo(env, 'A', 'U01'), null, '沒有在借還時傳照片，Bot 不回');
+  assert.match(say(env, 'A', '借傘 錢穆故居站'), /請拍下要借的那把傘上的傘號/);
+  assert.match(photo(env, 'A', '看不到'), /看不清楚傘號/);
+  assert.match(photo(env, 'A', 'U05'), /U05 現在不在錢穆故居站的傘架上/, 'U05 放在校門口');
+  assert.match(photo(env, 'A', 'U99'), /不是共享雨傘的傘號/);
+  assert.match(textOf(photo(env, 'A', 'u-2')), /借到 U02/, '小寫、有符號也讀得到');
+  assert.deepEqual(JSON.parse(JSON.stringify(rows(env, '雨傘')[1].slice(0, 4))), ['U02', '借出', 'A', '錢穆故居站']);
+  assert.match(textOf(say(env, 'A', '借傘 校門口')), /已經借了 U02/);
+});
+
+test('雨傘：還傘要拍到借的那一把，對了才加 1 點、解鎖雨天英雄', () => {
+  const env = start();
+  env.call('建立雨傘清單');
+  say(env, 'A', '借傘 錢穆故居站');
+  photo(env, 'A', 'U01');
+  assert.match(say(env, 'A', '還傘 校門口'), /請拍下你借的 U01 上的傘號/);
+  assert.match(photo(env, 'A', 'U02'), /照片上的傘號是 U02，你借的是 U01/);
+  assert.equal(rows(env, '雨傘')[0][1], '借出', '拍錯不算還');
+  const back = photo(env, 'A', 'U01');
+  assert.match(back, /已歸還 U01.*\+1 點/);
   assert.match(back, /雨天英雄/);
   assert.equal(rows(env, '雨傘')[0][3], '校門口', '傘現在在校門口');
   assert.match(say(env, 'A', '還傘 校門口'), /沒有借傘/);
 });
 
-test('雨傘：重複借還不能一直加分，還傘的積分一天只給一次', () => {
+test('雨傘：AI 不能用的時候不放行，請同學再傳一次', () => {
   const env = start();
   env.call('建立雨傘清單');
   say(env, 'A', '借傘 錢穆故居站');
-  assert.match(say(env, 'A', '還傘 校門口'), /\+3 分/);
-  say(env, 'A', '借傘 校門口');
-  const again = say(env, 'A', '還傘 錢穆故居站');
-  assert.match(again, /已歸還 .*今天的還傘積分已經領過了/);
-  assert.equal(env.call('cpUser_', 'A').points, 3);
-  assert.equal(rows(env, '雨傘').filter(r => r[1] === '借出').length, 0, '傘還是有還回去');
+  env.onFetch = url => (url.includes('api-data.line.me') ? { body: 'fake-jpeg' } : undefined);
+  assert.match(env.call('umPhoto_', 'A', 'm1'), /暫時沒辦法辨識照片/); // 沒有 Gemini 金鑰
+  assert.equal(rows(env, '雨傘').filter(r => r[1] === '借出').length, 0);
+});
+
+test('雨傘：重複借還不能一直加分，還傘的積分一天只給一次', () => {
+  const env = start();
+  env.call('建立雨傘清單');
+  say(env, 'A', '借傘 錢穆故居站'); photo(env, 'A', 'U01');
+  say(env, 'A', '還傘 校門口');
+  assert.match(photo(env, 'A', 'U01'), /\+1 點/);
+  say(env, 'A', '借傘 校門口'); photo(env, 'A', 'U01');
+  say(env, 'A', '還傘 錢穆故居站');
+  assert.match(photo(env, 'A', 'U01'), /已歸還 .*今天的還傘積分已經領過了/);
+  assert.equal(env.call('cpUser_', 'A').points, 1);
 
   env.addMinutes(24 * 60);
-  say(env, 'A', '借傘 錢穆故居站');
-  assert.match(say(env, 'A', '還傘 校門口'), /\+3 分/, '隔天可以再拿');
-  assert.equal(env.call('cpUser_', 'A').points, 6);
+  say(env, 'A', '借傘 錢穆故居站'); photo(env, 'A', 'U01');
+  say(env, 'A', '還傘 校門口');
+  assert.match(photo(env, 'A', 'U01'), /\+1 點/, '隔天可以再拿');
+  assert.equal(env.call('cpUser_', 'A').points, 2);
 });
 
 test('雨傘：那個點借完了會說沒有', () => {
   const env = start();
   env.call('建立雨傘清單');
-  ['A', 'B', 'C'].forEach(u => say(env, u, '借傘 校門口'));
+  ['A', 'B', 'C'].forEach((u, i) => { say(env, u, '借傘 校門口'); photo(env, u, 'U0' + (4 + i)); });
   assert.match(say(env, 'D', '借傘 校門口'), /沒有傘可以借了/);
 });
 
 // ===== 新生測驗、排隊禮儀、包車 =====
 
-test('新生測驗：全對 +5 分、解鎖新生上路，再考一次不重複給分', () => {
+test('新生須知、新生測驗：全對 +1 點、解鎖新生上路，再考一次不重複給分', () => {
   const env = start();
-  assert.match(textOf(say(env, 'A', '新生教學')), /第一次搭 557/);
+  assert.match(textOf(say(env, 'A', '新生須知')), /新生須知：第一次搭 557/);
+  assert.match(textOf(say(env, 'A', '新生教學')), /新生須知/, '舊的關鍵字也還認得');
   assert.match(textOf(say(env, 'A', '新生測驗')), /第 1 題／共 3 題/);
   say(env, 'A', '答 2');
   say(env, 'A', '答 1');
   const done = say(env, 'A', '答 2');
-  assert.match(done, /全部答對！\+5 分/);
+  assert.match(done, /全部答對！\+1 點/);
   assert.match(done, /新生上路/);
   say(env, 'A', '新生測驗'); say(env, 'A', '答 2'); say(env, 'A', '答 1');
   assert.match(say(env, 'A', '答 2'), /積分之前領過了/);
-  assert.equal(user(env, 'A').points, 5);
+  assert.equal(user(env, 'A').points, 1);
 });
 
 test('新生測驗：答錯會告訴正確答案，沒全對不給分', () => {
   const env = start();
   say(env, 'A', '新生測驗');
-  assert.match(textOf(say(env, 'A', '答 1')), /正確答案是「傳「557 在哪裡搭」給我」/);
+  assert.match(textOf(say(env, 'A', '答 1')), /正確答案是「按「557 站牌資訊」問我」/);
   say(env, 'A', '答 1');
   assert.match(textOf(say(env, 'A', '答 2')), /答對 2\/3 題/);
   assert.equal(user(env, 'A').points, 0);

@@ -89,7 +89,11 @@ function loadBot(files, props = {}) {
     env.fetches.push({ url, options, body: options.payload && typeof options.payload === 'string' ? JSON.parse(options.payload) : options.payload });
     // env.onFetch 可以假裝某個網址回什麼：回傳 { code, body }，不處理就回傳 undefined
     const custom = env.onFetch && env.onFetch(url, options);
-    if (custom) return { getResponseCode: () => custom.code || 200, getContentText: () => (typeof custom.body === 'string' ? custom.body : JSON.stringify(custom.body || {})) };
+    if (custom) {
+      const text = typeof custom.body === 'string' ? custom.body : JSON.stringify(custom.body || {});
+      return { getResponseCode: () => custom.code || 200, getContentText: () => text,
+        getBlob: () => ({ getBytes: () => [...Buffer.from(text)], getContentType: () => custom.type || 'image/jpeg' }) };
+    }
     let body = {};
     if (url.includes('/v2/bot/profile/')) body = { displayName: env.names[url.split('/').pop()] || '同學' + url.slice(-1) };
     else if (url.endsWith('/message/quota')) body = { type: 'limited', value: 200 };
@@ -128,6 +132,7 @@ function loadBot(files, props = {}) {
     Utilities: {
       formatDate,
       getUuid: () => crypto.randomUUID(),
+      base64Encode: bytes => Buffer.from(bytes.map(x => x & 255)).toString('base64'),
       base64EncodeWebSafe: s => Buffer.from(s).toString('base64url'),
       DigestAlgorithm: { MD5: 'md5' },
       Charset: { UTF_8: 'utf8' },

@@ -91,14 +91,14 @@ test('等待中可以離開，不扣分；人走光那一團就取消', () => {
   assert.equal(user(env, 'A').credit, 100);
 });
 
-test('只有一個人也算成團，送 20 分，一天只送一次', () => {
+test('只有一個人也算成團，送 1 點，一天只送一次', () => {
   const env = start();
   say(env, 'A', '共乘 去學校 加入');
   env.addMinutes(5);
   let view = room(env, 'A');
   assert.equal(view.status, '獨行');
-  assert.equal(view.reward, 20);
-  assert.equal(user(env, 'A').points, 20);
+  assert.equal(view.reward, 1);
+  assert.equal(user(env, 'A').points, 1);
 
   env.addMinutes(30);
   say(env, 'A', '共乘 去學校 加入');
@@ -106,13 +106,13 @@ test('只有一個人也算成團，送 20 分，一天只送一次', () => {
   view = room(env, 'A');
   assert.equal(view.status, '獨行');
   assert.equal(view.reward, 0, '同一天第二次沒有獎勵');
-  assert.equal(user(env, 'A').points, 20);
+  assert.equal(user(env, 'A').points, 1);
 
   env.addMinutes(24 * 60);
   say(env, 'A', '共乘 去學校 加入');
   env.addMinutes(5);
-  assert.equal(room(env, 'A').reward, 20);
-  assert.equal(user(env, 'A').points, 40, '隔天可以再領');
+  assert.equal(room(env, 'A').reward, 1);
+  assert.equal(user(env, 'A').points, 2, '隔天可以再領');
 });
 
 test('預約：有人加入會通知已經預約的人，金額跟著變', () => {
@@ -204,7 +204,7 @@ test('預約沒出現：扣 5 分並移出這一團；到場的那個人拿獨�
   env.setNow('2026-10-13T07:43:00+08:00');
   const view = room(env, 'A');
   assert.equal(view.status, '獨行');
-  assert.equal(view.reward, 20);
+  assert.equal(view.reward, 1);
   assert.equal(user(env, 'B').credit, 95);
   assert.equal(user(env, 'A').credit, 100);
   assert.ok(events(env).includes('沒出現'));

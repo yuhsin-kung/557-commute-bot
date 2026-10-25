@@ -34,6 +34,14 @@ function handleEvent_(ev) {
     }
     return;
   }
+  if (ev.type === 'message' && ev.message.type === 'image') {
+    const photo = umPhoto_(ev.source.userId, ev.message.id); // 雨傘.gs：借傘、還傘要拍傘號；沒在借還就不回
+    if (photo) {
+      reply_(ev.replyToken, photo);
+      log_(ev, '（照片）', photo);
+    }
+    return;
+  }
   if (ev.type !== 'message' || ev.message.type !== 'text') return;
 
   const text = ev.message.text.trim();
@@ -51,6 +59,8 @@ function handleEvent_(ev) {
       answer = geoTestButton_(); // 定位測試.gs（暫時的）
     } else if (/^(訂閱提醒|取消提醒)$/.test(text)) {
       answer = subscribe_(ev.source.userId, text === '訂閱提醒'); // 晚上提醒.gs
+    } else if (/^(訂閱提醒設定|雨天與考試週訂閱提醒)$/.test(text)) {
+      answer = remindSettings_();
     } else {
       // 積分、打卡、YouBike、雨傘、新生、包車：要知道是誰傳的，所以排在 route_ 前面
       answer = memberReply_(ev.source.userId, text) || route_(text);
@@ -72,9 +82,10 @@ function memberReply_(uid, text) {
   if (/^(我的紀錄|我的積分|積分|成就|碳足跡)$/.test(text)) return ptMine_(uid);
   if (text === '全校減碳') return ptSchool_();
   if (text === '騎車到校') return ptBike_(uid);
+  if (/^(兌換折價券|兌換學餐折價券|兌換)$/.test(text)) return ptRedeem_(uid);
   if (/^(youbike|ubike|微笑單車|腳踏車)$/i.test(text)) return ybReply_(); // YouBike.gs
   if (/^(借傘|還傘|共享雨傘)(\s|$)/.test(text)) return umText_(uid, text); // 雨傘.gs
-  if (text === '新生教學' || text === '新生') return nbIntro_(); // 新生.gs
+  if (/^(新生須知|新生教學|新生)$/.test(text)) return nbIntro_(); // 新生.gs
   if (text === '新生測驗' || /^答\s*[1-3]$/.test(text)) return nbQuiz_(uid, text);
   if (text === '排隊禮儀') return nbEtiquette_();
   if (/^包車(\s|$)/.test(text)) return charterText_(uid, text);
@@ -82,6 +93,9 @@ function memberReply_(uid, text) {
 }
 
 function route_(text) {
+  if (/^(557|557 即時動態|557 到站|557 去學校|557 回家|公車)$/.test(text)) {
+    return bus557Reply_(); // 往東吳、往捷運站一起顯示
+  }
   if (/回家|回程|下課/.test(text)) {
     return busReply_(1, ['東吳大學(錢穆故居)'], '557 東吳 → 士林');
   }
@@ -89,18 +103,41 @@ function route_(text) {
     return rainReply_();
   }
   if (/站牌|站位|上車(地點|處)|候車|排隊|哪(裡|邊|兒)?(搭|排|上車|等)/.test(text)) {
-    return stationReply_(); // 站位變更.gs
+    return stationReply_(); // 站位變更.gs：「557 站牌資訊」「557 在哪裡搭」都會到這裡
   }
-  if (text === '幫我比較路線') {
+  if (/^(比較所有公車路線|幫我比較路線|現在最快的車)$/.test(text)) {
     return liveReply_('士林站', '', null); // 比較器.gs：士林站現在最快的幾班車
-  }
-  if (/^(557|557 去學校|公車)$/.test(text)) {
-    return busReply_(0, ['捷運士林站(中正)', '士林國中'], '557 士林 → 東吳');
   }
   return compareReply_(text); // 其他問題交給比較器（比較器.gs）判斷
 }
 
+/** 「雨天與考試週訂閱提醒」：說明會提醒什麼，再給開啟、關閉兩顆按鈕 */
+function remindSettings_() {
+  return choices_([ // 卡片.gs
+    '🔔 雨天與考試週訂閱提醒',
+    '',
+    '訂閱後，隔天降雨機率 ' + RAIN_ALERT_POP + '% 以上或遇到考試週，每晚 9 點提醒你提早出門；557 上車地點有變動也會通知。', // 晚上提醒.gs
+    '週末、放假不會打擾你。',
+  ].join('\n'), [['開啟提醒', '訂閱提醒'], ['關閉提醒', '取消提醒']], { title: '訂閱提醒', badge: '出門前提醒', primary: false });
+}
+
 // ===== 557 即時到站（TDX） =====
+
+/** 「557 即時動態」：一次查兩個方向，往東吳看士林站、士林國中，往捷運站看東吳大學 */
+function bus557Reply_() {
+  const etas = tdx_('EstimatedTimeOfArrival/City/Taipei/557?$format=JSON&$filter=' + encodeURIComponent("RouteName/Zh_tw eq '557'"));
+  const rows = [[0, '捷運士林站(中正)', '往東吳'], [0, '士林國中', '往東吳'], [1, '東吳大學(錢穆故居)', '往捷運站']].map(([dir, name, to]) => {
+    const hits = etas.filter(e => e.Direction === dir && e.StopName.Zh_tw === name);
+    return { label: to + '｜' + name, value: hits.length ? hits.map(etaText_).join('、') : '沒有資料' };
+  });
+  return card_({ // 卡片.gs
+    badge: '557 即時動態',
+    title: '557 往東吳／往捷運站',
+    rows: rows,
+    footer: 'TDX 即時資料・' + nowText_(),
+    buttons: [{ label: '比較所有公車路線', text: '比較所有公車路線' }, { label: '557 站牌資訊', text: '557 站牌資訊' }],
+  });
+}
 
 function busReply_(direction, stopNames, title) {
   const filter = "RouteName/Zh_tw eq '557' and Direction eq " + direction;
@@ -114,7 +151,7 @@ function busReply_(direction, stopNames, title) {
     }),
     footer: 'TDX 即時資料・' + nowText_(),
     buttons: direction === 0
-      ? [{ label: '比較其他路線', text: '幫我比較路線' }, { label: '557 在哪裡搭', text: '557 在哪裡搭' }]
+      ? [{ label: '比較所有公車路線', text: '比較所有公車路線' }, { label: '557 站牌資訊', text: '557 站牌資訊' }]
       : [{ label: '找人共乘回士林', text: '共乘 回士林' }],
   });
 }
@@ -166,29 +203,44 @@ function rainReply_() {
   const data = JSON.parse(UrlFetchApp.fetch(url).getContentText());
   const times = data.records.Locations[0].Location[0].WeatherElement[0].Time;
 
-  // 早上 9 點前看「今天」上學時段，之後看「明天」
-  const now = new Date();
-  const isTomorrow = Number(Utilities.formatDate(now, TZ, 'H')) >= 9;
-  const target = new Date(now.getTime() + (isTomorrow ? 24 * 60 * 60 * 1000 : 0));
-  const day = Utilities.formatDate(target, TZ, 'yyyy-MM-dd');
-  const slot = times.find(t => t.StartTime.indexOf(day + 'T06') === 0) || times[0];
+  const target = rainTarget_(new Date());
+  const slot = times.find(t => t.StartTime.indexOf(target.day + 'T' + target.hour) === 0) || times[0];
   const pop = Number(slot.ElementValue[0].ProbabilityOfPrecipitation);
 
   let advice;
-  if (pop >= 60) advice = '很可能下雨。557 會比平常擠，建議早 10 分鐘出門、記得帶傘。';
+  if (pop >= 60) advice = target.morning ? '很可能下雨。557 會比平常擠，建議早 20 分鐘出門、記得帶傘。' : '很可能下雨，出門記得帶傘。';
   else if (pop >= 30) advice = '有機會下雨，帶把傘比較保險。';
   else advice = '應該不會下雨，可以考慮從錢穆故居站走進學校。';
 
   return card_({ // 卡片.gs
-    badge: '上學時段天氣',
-    title: (isTomorrow ? '明天' : '今天') + '早上 6–9 點',
+    badge: '降雨查詢',
+    title: target.title,
     subtitle: '士林區',
     rows: [{ label: '降雨機率', value: pop + '%', best: pop >= 60 }],
     notes: pop >= 60 ? [] : [advice],
     warns: pop >= 60 ? [advice] : [],
     footer: '中央氣象署・' + nowText_(),
-    buttons: [{ label: '下雨前一晚提醒我', text: '訂閱提醒' }],
+    buttons: [{ label: '雨天與考試週訂閱提醒', text: '訂閱提醒設定' }],
   });
+}
+
+/**
+ * 查哪一段的降雨機率（氣象署是 3 小時一段）：
+ *   晚上 7 點以後 → 明天早上 6–9 點（上學時段）
+ *   早上 9 點以前 → 今天早上 6–9 點
+ *   其他時間      → 今天現在這 3 小時
+ */
+function rainTarget_(now) {
+  const h = Number(Utilities.formatDate(now, TZ, 'H'));
+  const today = Utilities.formatDate(now, TZ, 'yyyy-MM-dd');
+  if (h >= 19) {
+    const tomorrow = Utilities.formatDate(new Date(now.getTime() + 24 * 60 * 60 * 1000), TZ, 'yyyy-MM-dd');
+    return { day: tomorrow, hour: '06', morning: true, title: '明天早上 6–9 點' };
+  }
+  if (h < 9) return { day: today, hour: '06', morning: true, title: '今天早上 6–9 點' };
+  const start = Math.floor(h / 3) * 3;
+  const pad = n => ('0' + n).slice(-2);
+  return { day: today, hour: pad(start), morning: false, title: '今天 ' + start + '–' + (start + 3) + ' 點' };
 }
 
 // ===== LINE 回覆、紀錄 =====

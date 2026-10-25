@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const { loadBot } = require('./gas-env');
 const { sampleCards } = require('./sample-cards');
 
-const FILES = ['Code.gs', '卡片.gs', '選單.gs', '比較器.gs', '晚上提醒.gs', '站位變更.gs', '共乘.gs', '等車室.gs', '定位測試.gs'];
+const FILES = ['Code.gs', '卡片.gs', '選單.gs', '比較器.gs', '晚上提醒.gs', '站位變更.gs', '共乘.gs', '等車室.gs', '定位測試.gs', '積分.gs', '新生.gs'];
 const plain = x => JSON.parse(JSON.stringify(x));
 
 /** 走過卡片裡每一個元件 */
@@ -133,5 +133,5 @@ test('訊息紀錄裡存的是卡片的純文字版', () => {
   const row = env.sheets['訊息紀錄'].rows[1];
   assert.equal(row[2], '（加入好友）');
   assert.equal(row[3].split('\n')[0], '嗨！我是東吳通勤達人。');
-  assert.ok(row[3].endsWith('想做什麼？先選一類，我再把按鈕傳給你。\n［出門前提醒］［557 以外的選擇］［新生與排隊］［積分與打卡］'), row[3]);
+  assert.ok(row[3].endsWith('想做什麼？先選一類，我再把按鈕傳給你。\n［出門前提醒］［557 以外的選擇］［公車站牌與排隊］［積分與打卡］'), row[3]);
 });
