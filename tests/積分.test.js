@@ -355,9 +355,21 @@ test('排隊禮儀、包車意願', () => {
   assert.equal(etiquette.contents.hero.action, undefined, '還沒有影片網址就不能點');
   env.props.ETIQUETTE_VIDEO_URL = 'https://youtu.be/example';
   assert.equal(say(env, 'A', '排隊禮儀').contents.hero.action.uri, 'https://youtu.be/example');
-  assert.match(textOf(say(env, 'A', '包車')), /規劃中/);
-  assert.match(say(env, 'A', '包車 我有興趣'), /意願記下來了/);
+  env.props.SURVEY1_URL = 'https://forms.example/1';
+  const charter = say(env, 'A', '包車');
+  assert.match(charter.altText, /規劃中/);
+  assert.match(charter.altText, /目前有興趣：0 人/);
+  assert.deepEqual(JSON.parse(JSON.stringify(charter.contents.footer.contents.filter(b => b.type === 'button').map(b => b.action.label))), ['我有興趣', '填寫包車需求問卷']);
+  assert.equal(charter.contents.footer.contents[1].action.uri, 'https://forms.example/1', '問卷是按鈕，不是貼在文字裡');
+  assert.doesNotMatch(JSON.stringify(charter), /訂閱提醒/);
+  const yes = say(env, 'A', '包車 我有興趣');
+  assert.match(yes.altText, /目前有興趣：1 人/);
+  assert.match(yes.altText, /意願記下來了/);
+  assert.deepEqual(JSON.parse(JSON.stringify(yes.contents.footer.contents.filter(b => b.type === 'button').map(b => b.action.label))), ['填寫包車需求問卷'], '登記過就不再顯示我有興趣');
+  assert.match(say(env, 'A', '包車 我有興趣').altText, /目前有興趣：1 人/, '重複按不會重複算');
+  assert.match(say(env, 'B', '包車 我有興趣').altText, /目前有興趣：2 人/);
   assert.deepEqual(JSON.parse(JSON.stringify(rows(env, '意願紀錄')[0].slice(1))), ['A', '包車', '有興趣']);
+  assert.equal(rows(env, '意願紀錄').length, 2);
 });
 
 test('不認得的指令回 null，交給原本的 route_；「傘」「排隊」開頭的新指令不會被當成問天氣、問站牌', () => {

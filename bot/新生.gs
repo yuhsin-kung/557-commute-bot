@@ -99,16 +99,25 @@ function nbAsk_(uid, i, score, feedback) {
 // ===== 學生自組包車（43）：還在調查需求 =====
 
 function charterText_(uid, text) {
-  if (text.trim() === '包車 我有興趣') {
-    cpSheet_('意願紀錄', ['時間', '使用者 ID', '項目', '內容']).appendRow([cpNow_(), uid, '包車', '有興趣']);
-    return '收到！你的意願記下來了，包車確定開辦時會通知有訂閱提醒的同學。';
+  const sheet = cpSheet_('意願紀錄', ['時間', '使用者 ID', '項目', '內容']); // 共乘.gs
+  const who = () => sheet.getDataRange().getValues().slice(1).filter(r => r[2] === '包車').map(r => r[1]);
+  let mine = who().indexOf(uid) >= 0;
+  let fresh = false;
+  if (text.trim() === '包車 我有興趣' && !mine) {
+    sheet.appendRow([cpNow_(), uid, '包車', '有興趣']);
+    mine = fresh = true;
   }
+  const count = Object.keys(who().reduce((set, id) => { set[id] = 1; return set; }, {})).length;
   const survey = PROPS.getProperty('SURVEY1_URL'); // 問卷表單.gs「建立通勤問卷」存的網址
-  return choices_([
-    '🚐 學生自組包車（規劃中）',
-    '',
-    '想法：固定在尖峰時段從士林站直達校園，用學期訂閱制。',
-    '目前在調查需求，還沒有發車。開辦前會先確認合法的業者和保險。',
-  ].concat(survey ? ['', '願意付多少、需要哪些時段，請填問卷：' + survey] : []).join('\n'),
-  [['我有興趣', '包車 我有興趣'], ['訂閱提醒', '訂閱提醒']]);
+  return card_({ // 卡片.gs
+    badge: '557 以外的選擇',
+    title: '🚐 學生自組包車（規劃中）',
+    rows: [{ label: '目前有興趣', value: count + ' 人', best: true }],
+    notes: [
+      fresh ? '✅ 收到！你的意願記下來了。' : mine ? '你已經登記過有興趣了，謝謝！' : '',
+      '固定在尖峰時段從士林站直達校園，用學期訂閱制。目前在調查需求，還沒有發車；開辦前會先確認合法的業者和保險。',
+    ],
+    buttons: (mine ? [] : [{ label: '我有興趣', text: '包車 我有興趣' }])
+      .concat(survey ? [{ label: '填寫包車需求問卷', uri: survey }] : []),
+  });
 }
