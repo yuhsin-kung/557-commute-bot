@@ -13,19 +13,25 @@ const YB_NEAR_CAMPUS_M = 700;
 
 function ybReply_() {
   const stations = ybStations_();
-  if (!stations.length) return '🚲 現在查不到 YouBike 即時資料，等一下再試一次 🙏';
+  if (!stations.length) {
+    return card_({ badge: '557 以外的選擇', title: '🚲 YouBike 即時車數', notes: ['現在查不到 YouBike 即時資料，等一下再試一次 🙏'] }); // 卡片.gs
+  }
   const mrt = stations.filter(s => s.toMrt <= YB_NEAR_MRT_M).sort((a, b) => a.toMrt - b.toMrt).slice(0, 3);
   const campus = stations.filter(s => s.toCampus <= YB_NEAR_CAMPUS_M).sort((a, b) => a.toCampus - b.toCampus).slice(0, 3);
-  const line = s => '・' + s.name + '：可借 ' + s.bikes + ' 台、可還 ' + s.docks + ' 格';
-  return [
-    '🚲 YouBike 2.0 即時車數',
-    '',
-    '📍 捷運士林站附近',
-  ].concat(mrt.length ? mrt.map(line) : ['・附近沒有站點資料'])
-    .concat(['', '📍 東吳附近'])
-    .concat(campus.length ? campus.map(line) : ['・附近沒有站點資料'])
-    .concat(['', '士林站到東吳大約 3.5 公里，有一段上坡，電輔車比較輕鬆。', '騎到學校後傳「打卡」，再傳「騎車到校」可以拿積分。', '', '（臺北市 YouBike 開放資料・' + nowText_() + '）'])
-    .join('\n');
+  const row = s => ({ label: s.name, value: '可借 ' + s.bikes + '・可還 ' + s.docks });
+  const none = [{ label: '附近沒有站點資料' }];
+  return card_({
+    badge: '557 以外的選擇',
+    title: '🚲 YouBike 即時車數',
+    subtitle: '士林站借車，騎到東吳還車',
+    rows: [{ label: '📍 士林站借車', best: true }]
+      .concat(mrt.length ? mrt.map(row) : none)
+      .concat([{ label: '📍 東吳還車', best: true }])
+      .concat(campus.length ? campus.map(row) : none),
+    notes: ['士林站到東吳約 3.5 公里，有一段上坡，電輔車比較輕鬆。還車後按「騎車到校」傳騎乘紀錄截圖，可以拿 1 點。'],
+    footer: '臺北市 YouBike 開放資料・' + nowText_(),
+    buttons: [{ label: '騎車到校', text: '騎車到校' }],
+  });
 }
 
 /** 抓全市站點太大（一千多站），只留士林站和東吳附近的，快取一分鐘 */
@@ -63,5 +69,5 @@ function ybMeters_(a, b) {
 
 function 測試YouBike() {
   if (tooSoon_('測試YouBike', 60)) return; // Code.gs：公開網頁也呼叫得到，一分鐘只跑一次
-  console.log(ybReply_());
+  console.log(plain_(ybReply_())); // 卡片.gs
 }

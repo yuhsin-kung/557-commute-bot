@@ -229,16 +229,18 @@ test('兌換學餐折價券：先顯示點數、問要不要換；按確認才�
 
 test('YouBike：列出士林站可借、東吳附近可還；抓不到資料會說明', () => {
   const env = start();
-  assert.match(say(env, 'A', 'YouBike'), /查不到 YouBike 即時資料/);
+  assert.match(say(env, 'A', 'YouBike').altText, /查不到 YouBike 即時資料/);
   env.addMinutes(2); // 等快取過期
   env.respond.youbike = [
     { sna: 'YouBike2.0_捷運士林站(1號出口)', available_rent_bikes: 7, available_return_bikes: 3, latitude: 25.0955, longitude: 121.5270 },
     { sna: 'YouBike2.0_東吳大學', available_rent_bikes: 2, available_return_bikes: 9, latitude: 25.0946, longitude: 121.5457 },
     { sna: 'YouBike2.0_很遠的站', available_rent_bikes: 5, available_return_bikes: 5, latitude: 25.03, longitude: 121.56 },
   ];
-  const reply = say(env, 'A', 'youbike');
-  assert.match(reply, /捷運士林站\(1號出口\)：可借 7 台、可還 3 格/);
-  assert.match(reply, /東吳大學：可借 2 台、可還 9 格/);
+  const card = say(env, 'A', 'youbike');
+  assert.equal(card.type, 'flex');
+  const reply = card.altText;
+  assert.match(reply, /捷運士林站\(1號出口\)：可借 7・可還 3/);
+  assert.match(reply, /東吳大學：可借 2・可還 9/);
   assert.doesNotMatch(reply, /很遠的站/);
 });
 
