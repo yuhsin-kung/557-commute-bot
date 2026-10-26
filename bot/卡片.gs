@@ -92,8 +92,8 @@ function choices_(text, items, options) {
     chips.forEach(chip => body.push(chip));
   } else {
     for (let i = 0; i < chips.length; i += 2) {
-      // 單數顆的最後一列放一個空格，按鈕才不會變成整列寬
-      body.push({ type: 'box', layout: 'horizontal', spacing: 'sm', contents: [chips[i], chips[i + 1] || { type: 'filler' }] });
+      // 單數顆的最後一顆自己一列、整列寬，不會只佔半邊看起來歪一邊
+      body.push(chips[i + 1] ? { type: 'box', layout: 'horizontal', spacing: 'sm', contents: [chips[i], chips[i + 1]] } : chips[i]);
     }
   }
   if (o.menu !== false) body.push(menuLink_());

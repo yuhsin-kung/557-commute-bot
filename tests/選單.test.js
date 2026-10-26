@@ -165,13 +165,16 @@ test('出門時間：點哪一天 → 點第幾節 → 點哪一棟，全程不�
   assert.match(card.altText, /★ 搭 557 進校園：\d\d:\d\d 前到士林站/);
 });
 
-test('超過 4 顆的按鈕排成兩欄，單數的最後一列補一個空格', () => {
+test('超過 6 顆的按鈕排成兩欄，單數的最後一顆自己一列、整列寬', () => {
   const env = start();
   const body = plain(send(env, '出門時間 明天')[0]).contents.body.contents;
   const rows = body.filter(c => c.type === 'box' && c.layout === 'horizontal');
-  assert.equal(rows.length, 7, '13 顆按鈕 = 7 列');
-  assert.ok(rows.slice(0, 6).every(r => r.contents.length === 2 && r.contents.every(c => c.action)));
-  assert.deepEqual(rows[6].contents.map(c => c.type), ['box', 'filler']);
+  assert.equal(rows.length, 6, '13 顆按鈕 = 6 列兩欄 + 最後一顆');
+  assert.ok(rows.every(r => r.contents.length === 2 && r.contents.every(c => c.action)));
+  const last = body[body.indexOf(rows[5]) + 1];
+  assert.equal(last.layout, 'vertical');
+  assert.ok(last.action, '最後一顆是按鈕本身，不是跟空格排在一起');
+  assert.ok(!JSON.stringify(body).includes('"filler"'));
 });
 
 test('出門建議的卡片：換出發站、換時間都有按鈕，按了會回對應的建議', () => {
