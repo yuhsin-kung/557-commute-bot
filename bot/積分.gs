@@ -172,15 +172,17 @@ function ptSchool_() {
   const total = rows.reduce((sum, r) => sum + (Number(r[4]) || 0), 0);
   const people = Object.keys(rows.reduce((set, r) => { set[r[1]] = 1; return set; }, {})).length;
   const board = PROPS.getProperty('LOOKER_URL');
-  return [
-    '🌱 全校減碳看板',
-    '',
-    '大家一起少排放了 ' + (total / 1000).toFixed(2) + ' 公斤 CO₂',
-    '參與人數：' + people + ' 人',
-    '步行 ' + count('步行') + ' 次・騎車 ' + count('騎車') + ' 次',
-    '',
-    '（少搭的公車距離 × 市區公車每人每公里 ' + PT.BUS_G_PER_KM + ' 公克 CO₂e，環境部產品碳足跡資訊網）',
-  ].concat(board ? ['', '完整看板：' + board] : []).join('\n');
+  return card_({ // 卡片.gs
+    badge: '🌱 全校減碳看板',
+    title: '大家一起少排放了 ' + (total / 1000).toFixed(2) + ' 公斤 CO₂',
+    rows: [
+      { label: '參與人數', value: people + ' 人', best: true },
+      { label: '步行到校', value: count('步行') + ' 次' },
+      { label: '騎車到校', value: count('騎車') + ' 次' },
+    ],
+    footer: '少搭的公車距離 × 市區公車每人每公里 ' + PT.BUS_G_PER_KM + ' 公克 CO₂e（環境部產品碳足跡資訊網）',
+    buttons: board ? [{ label: '看完整看板', uri: board }] : [],
+  });
 }
 
 /**

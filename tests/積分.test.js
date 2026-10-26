@@ -160,7 +160,7 @@ test('走 5 次解鎖「走路達人」；我的紀錄和全校減碳的數字�
   assert.match(mine, /步行 5 次/);
   assert.match(mine, /🏅 走路達人/);
   assert.match(mine, /▫️ 早鳥/);
-  assert.match(say(env, 'A', '全校減碳'), /少排放了 0\.3[01] 公斤/); // 5 × 61 公克
+  assert.match(say(env, 'A', '全校減碳').altText, /少排放了 0\.3[01] 公斤/); // 5 × 61 公克
 });
 
 test('共乘上車、獨行都算進「共乘夥伴」', () => {
