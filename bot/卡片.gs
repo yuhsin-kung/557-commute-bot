@@ -84,7 +84,18 @@ function menuLink_() {
  * 4 顆以內直排、第一顆是主要按鈕；超過 4 顆排成兩欄。
  */
 function choices_(text, items, options) {
-  const o = options || {};
+  const o = Object.assign({}, options || {});
+  // 每張卡片上面都有紅色標題列：沒給標題時，把第一行（後面空一行的那種）拿來當標題，不然用 Bot 的名字
+  if (!o.title) {
+    const lines = String(text || '').split('\n');
+    if (lines.length > 2 && lines[1] === '' && lines[0].length <= 24) {
+      o.title = lines[0];
+      text = lines.slice(2).join('\n');
+    } else {
+      o.title = '東吳通勤達人';
+      o.quietTitle = true; // 通知預覽不要以 Bot 名字開頭
+    }
+  }
   const chips = items.map((item, i) => choiceChip_(item, i === 0 && o.primary !== false && items.length <= 4));
   const body = [];
   if (text) body.push({ type: 'text', text: String(text), size: 'md', color: UI.ink, wrap: true });
@@ -106,7 +117,7 @@ function choices_(text, items, options) {
     bubble.header = { type: 'box', layout: 'vertical', backgroundColor: UI.brand, paddingAll: '16px', spacing: 'xs', contents: header };
   }
   const labels = items.map(item => '［' + (Array.isArray(item) ? item[0] : item.label) + '］').join('');
-  return { type: 'flex', altText: ((o.title ? o.title + '\n' : '') + (text || '') + '\n' + labels).trim().slice(0, 400), contents: bubble };
+  return { type: 'flex', altText: ((o.title && !o.quietTitle ? o.title + '\n' : '') + (text || '') + '\n' + labels).trim().slice(0, 400), contents: bubble };
 }
 
 function choiceChip_(item, primary) {
