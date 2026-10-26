@@ -70,7 +70,7 @@ function cpPostback_(uid, postback) {
 
 function cpAskDir_() {
   return choices_('🚕 計程車共乘\n\n湊 2～4 個同學一起搭，車資平分：2 人各 ' + cpShare_(2) + '、3 人各 ' + cpShare_(3) + '、4 人各 ' + cpShare_(4) + ' 元。\n\n要往哪個方向？',
-    Object.keys(CP_DIRS).map(d => [CP_DIRS[d].label, '共乘 ' + d]).concat([['我的共乘', '我的共乘']]));
+    Object.keys(CP_DIRS).map(d => [CP_DIRS[d].label, '共乘 ' + d]).concat([['我的共乘', '我的共乘']]), { primary: false }); // 兩個方向一樣重要，不特別標一個
 }
 
 function cpAskMode_(dir) {
