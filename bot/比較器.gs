@@ -136,7 +136,7 @@ function liveReply_(originName, building, classAt) {
     notes: notes,
     warns: warns,
     footer: (classAt ? fmt_(classAt) + ' 上課・' : '') + 'TDX 即時資料・' + nowText_() + '・車程為估計值',
-    buttons: [{ label: '找人共乘', text: '共乘' }, { label: '算到教室的時間', text: '出門時間 今天' }, { label: '557 站牌資訊', text: '557 站牌資訊' }],
+    buttons: [{ label: '找人共乘', text: '共乘' }, { label: '557 站牌資訊', text: '557 站牌資訊' }],
   }));
 }
 
