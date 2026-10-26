@@ -55,3 +55,15 @@ test('雨天與考試週訂閱提醒：說明會提醒什麼，給開啟、關�
   assert.match(saidOf(card), /降雨機率 60% 以上或遇到考試週，每晚 9 點提醒你提早出門/);
   assert.deepEqual(buttonsOf(card), [['開啟提醒', '訂閱提醒'], ['關閉提醒', '取消提醒']]);
 });
+
+test('比較所有公車路線：最快的車開進學校就說「抵達學校」，到錢穆故居站才說「步行進校」', () => {
+  const env = loadBot(ALL);
+  const eta = (route, dir, sec) => ({ RouteName: { Zh_tw: route }, Direction: dir, EstimateTime: sec });
+  env.context.__etas = [eta('557', 0, 60), eta('紅30', 1, 600)];
+  env.run('etaAtStop_ = () => __etas; isPeak_ = () => false;');
+  assert.match(env.call('liveReply_', '士林站', '', null).altText, /目前只要搭乘 557，便能最快速地抵達學校。/);
+  env.context.__etas = [eta('557', 0, 900), eta('紅30', 1, 60)];
+  const alt = env.call('liveReply_', '士林站', '', null).altText;
+  assert.match(alt, /目前只要搭乘 紅30，便能最快速地抵達錢穆故居站，再步行進校。/);
+  assert.doesNotMatch(alt, /走一樣的路/);
+});

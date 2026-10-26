@@ -78,7 +78,7 @@ test('即時比較：照到校時間排，最快的標成推薦，不會到東�
   assert.match(rows[0].contents[0].contents[1].text, /^即將進站・\d\d:\d\d 到$/);
   assert.equal(rows[0].contents[1].text, '錢穆故居站下車，走 5 分鐘');
   assert.equal(rows[3].contents[1].text, '直接進校園，走 2 分鐘');
-  assert.match(card.altText, /紅30 跟 557 走一樣的路/);
+  assert.match(card.altText, /目前只要搭乘 紅30，便能最快速地抵達錢穆故居站，再步行進校。/);
   assert.equal(card.contents.header.contents[1].text, '士林站 → B 棟');
 });
 

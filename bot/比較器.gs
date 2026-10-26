@@ -123,9 +123,12 @@ function liveReply_(originName, building, classAt) {
   const warns = [];
   const best = options[0];
   const bus557 = options.find(x => x.route === '557');
-  if (originName === '士林站' && best.route !== '557') {
-    notes.push(best.route + ' 跟 557 走一樣的路，到錢穆故居站下車就好，不用擠 557。');
-  } else if (originName === '士林站' && bus557 && isPeak_(now)) {
+  if (best.dest === CAMPUS) {
+    notes.push('目前只要搭乘 ' + best.route + '，便能最快速地抵達學校。');
+  } else {
+    notes.push('目前只要搭乘 ' + best.route + '，便能最快速地抵達錢穆故居站，再步行進校。');
+  }
+  if (originName === '士林站' && bus557 && best.route === '557' && isPeak_(now)) {
     warns.push('現在是尖峰，557 可能擠不上。其他車到錢穆故居站下車也一樣。');
   }
   if (classAt && best.arrive > classAt) warns.push(fmt_(classAt) + ' 上課，最快的車也會遲到。可以考慮共乘。');
