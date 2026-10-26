@@ -136,21 +136,34 @@ test('共乘上車、獨行都算進「共乘夥伴」', () => {
   assert.match(textOf(say(env, 'A', '我的紀錄')), /🏅 共乘夥伴/);
 });
 
-test('兌換學餐折價券：滿 3 點才能換，換一張扣 3 點、給券號', () => {
+test('兌換學餐折價券：先顯示點數、問要不要換；按確認才扣 3 點、給券號', () => {
   const env = start(MON_0700);
-  assert.match(textOf(say(env, 'A', '兌換折價券')), /目前 0 點，集滿 3 點/);
+  const none = say(env, 'A', '兌換折價券');
+  assert.match(none.altText, /目前積分：0 點/);
+  assert.match(none.altText, /還差：3 點/);
+  assert.match(textOf(say(env, 'A', '確認兌換折價券')), /還差：3 點/, '不夠點數按確認也不會扣');
   for (let day = 0; day < 3; day++) { // 三天都 7:30 前到校，一天 1 點
     checkin(env, 'A', CAMPUS);
     env.addMinutes(24 * 60);
   }
   assert.equal(user(env, 'A').points, 3);
   assert.deepEqual(buttonsOf(say(env, 'A', '我的紀錄'))[0], ['兌換學餐折價券', '兌換折價券']);
-  const got = say(env, 'A', '兌換折價券');
-  assert.match(got, /30 元學餐折價券　券號 SC\d{4}-0001/);
-  assert.match(got, /剩下 0 點/);
+  const ask = say(env, 'A', '兌換折價券');
+  assert.equal(ask.type, 'flex', '是卡片，不是純文字');
+  assert.match(ask.altText, /目前積分：3 點/);
+  assert.match(ask.altText, /可以兌換：1 張/);
+  assert.match(ask.altText, /兌換後剩下 0 點。要兌換嗎？/);
+  assert.deepEqual(buttonsOf(ask), [['確認兌換', '確認兌換折價券'], ['先不要', '我的紀錄']]);
+  assert.equal(user(env, 'A').points, 3, '還沒按確認，不扣點');
+
+  const got = say(env, 'A', '確認兌換折價券');
+  assert.equal(got.type, 'flex');
+  assert.match(got.altText, /30 元學餐折價券/);
+  assert.match(got.altText, /券號：SC\d{4}-0001/);
+  assert.match(got.altText, /剩下積分：0 點/);
   assert.equal(user(env, 'A').points, 0);
   assert.deepEqual(JSON.parse(JSON.stringify(rows(env, '學餐折價券')[0].slice(1))), ['A', 'SC1015-0001', 30, '未使用']);
-  assert.match(textOf(say(env, 'A', '兌換折價券')), /目前 0 點/, '換完就不能再換');
+  assert.match(textOf(say(env, 'A', '確認兌換折價券')), /還差：3 點/, '換完再按確認也不能再換');
 });
 
 // ===== YouBike =====

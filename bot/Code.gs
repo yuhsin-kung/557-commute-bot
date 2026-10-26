@@ -84,7 +84,8 @@ function memberReply_(uid, text) {
   if (/^(我的紀錄|我的積分|積分|成就|碳足跡)$/.test(text)) return ptMine_(uid);
   if (text === '全校減碳') return ptSchool_();
   if (text === '騎車到校') return ptBike_(uid);
-  if (/^(兌換折價券|兌換學餐折價券|兌換)$/.test(text)) return ptRedeem_(uid);
+  if (/^(兌換折價券|兌換學餐折價券|兌換)$/.test(text)) return ptRedeemAsk_(uid);
+  if (text === '確認兌換折價券') return ptRedeem_(uid);
   if (/^(youbike|ubike|微笑單車|腳踏車)$/i.test(text)) return ybReply_(); // YouBike.gs
   if (/^(借傘|還傘|共享雨傘)(\s|$)/.test(text)) return umText_(uid, text); // 雨傘.gs
   if (/^(新生須知|新生教學|新生)$/.test(text)) return nbIntro_(); // 新生.gs

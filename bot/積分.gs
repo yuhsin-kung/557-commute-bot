@@ -117,13 +117,37 @@ function ptMine_(uid) {
   return choices_(text, (coupons ? [['兌換學餐折價券', '兌換折價券']] : []).concat([['到校打卡', '打卡'], ['全校減碳', '全校減碳']]), { primary: coupons > 0 });
 }
 
-/** 「兌換折價券」：扣 3 點，給一張 30 元學餐折價券。券號記在「學餐折價券」分頁，學餐對號核銷 */
+/** 「兌換折價券」：先告訴同學有幾點、可以換幾張，按「確認兌換」才真的扣點 */
+function ptRedeemAsk_(uid) {
+  const user = cpUser_(uid);
+  const can = Math.floor(user.points / PT.COUPON_POINTS);
+  if (!can) {
+    return card_({ // 卡片.gs
+      badge: '積分與打卡',
+      title: '兌換學餐折價券',
+      rows: [{ label: '目前積分', value: user.points + ' 點' }, { label: '還差', value: (PT.COUPON_POINTS - user.points) + ' 點', best: true }],
+      notes: ['集滿 ' + PT.COUPON_POINTS + ' 點換一張 ' + PT.COUPON_VALUE + ' 元學餐折價券。早到、步行、騎車到校，一次都是 1 點。'],
+      buttons: [{ label: '到校打卡', text: '打卡' }, { label: '騎車到校', text: '騎車到校' }],
+    });
+  }
+  return card_({
+    badge: '積分與打卡',
+    title: '兌換學餐折價券',
+    rows: [
+      { label: '目前積分', value: user.points + ' 點' },
+      { label: '可以兌換', value: can + ' 張', best: true },
+      { label: '這次兌換', value: '1 張 ' + PT.COUPON_VALUE + ' 元，扣 ' + PT.COUPON_POINTS + ' 點' },
+    ],
+    notes: ['兌換後剩下 ' + (user.points - PT.COUPON_POINTS) + ' 點。要兌換嗎？'],
+    buttons: [{ label: '確認兌換', text: '確認兌換折價券' }, { label: '先不要', text: '我的紀錄' }],
+  });
+}
+
+/** 「確認兌換折價券」：扣 3 點，給一張 30 元學餐折價券。券號記在「學餐折價券」分頁，學餐對號核銷 */
 function ptRedeem_(uid) {
   return cpLocked_(() => { // 共乘.gs
     const user = cpUser_(uid);
-    if (user.points < PT.COUPON_POINTS) {
-      return choices_('目前 ' + user.points + ' 點，集滿 ' + PT.COUPON_POINTS + ' 點才能換一張 ' + PT.COUPON_VALUE + ' 元學餐折價券。\n早到、步行、騎車到校，一次都是 1 點。', [['到校打卡', '打卡'], ['騎車到校', '騎車到校']]);
-    }
+    if (user.points < PT.COUPON_POINTS) return ptRedeemAsk_(uid);
     user.points -= PT.COUPON_POINTS;
     cpSaveUser_(user);
     const now = cpNow_();
@@ -131,7 +155,13 @@ function ptRedeem_(uid) {
     const code = 'SC' + Utilities.formatDate(now, TZ, 'MMdd') + '-' + ('000' + sheet.getLastRow()).slice(-4);
     sheet.appendRow([now, uid, code, PT.COUPON_VALUE, '未使用']);
     cpSheet_('通勤紀錄', PT_LOG_HEAD).appendRow([now, uid, '兌換', -PT.COUPON_POINTS, 0, code]);
-    return '🎫 兌換成功！\n' + PT.COUPON_VALUE + ' 元學餐折價券　券號 ' + code + '\n結帳時出示這則訊息給學餐，一張用一次。\n\n剩下 ' + user.points + ' 點。';
+    return card_({
+      badge: '🎫 兌換成功',
+      title: PT.COUPON_VALUE + ' 元學餐折價券',
+      rows: [{ label: '券號', value: code, best: true }, { label: '兌換時間', value: Utilities.formatDate(now, TZ, 'M/d HH:mm') }, { label: '剩下積分', value: user.points + ' 點' }],
+      notes: ['結帳時出示這張券給學餐，一張用一次。'],
+      buttons: [{ label: '我的紀錄', text: '我的紀錄' }],
+    });
   });
 }
 
