@@ -60,6 +60,15 @@ function sampleCards() {
   keep('打卡', env.call('ptCheckinButton_', 'A'));
   keep('新生測驗', env.call('nbQuiz_', 'A', '新生測驗'));
   keep('新生教學', env.call('nbIntro_'));
+  // 學餐折價券：一張的卡片、兩張以上左右滑
+  env.setNow('2026-10-26T08:00:00+08:00');
+  const coupon = env.call('cpSheet_', '學餐折價券', ['時間', '使用者 ID', '券號', '面額', '狀態', '到期日']);
+  coupon.appendRow([new Date('2026-10-26T08:00:00+08:00'), 'A', 'SC1026-0001', 30, '未使用', '2026/11/25']);
+  keep('折價券', env.call('ptMyCoupons_', 'A'));
+  coupon.appendRow([new Date('2026-10-26T08:00:00+08:00'), 'A', 'SC1026-0002', 30, '未使用', '2026/11/25']);
+  keep('折價券兩張', env.call('ptMyCoupons_', 'A'));
+  keep('兌換確認', env.call('ptRedeemAsk_', 'B'));
+  keep('全校減碳', env.call('ptSchool_'));
   env.run('rainPop_ = () => 80');
   const reminder = env.call('buildReminder_', new Date('2026-10-13T12:00:00+08:00'));
   keep('推播：雨天提醒', env.call('choices_', reminder.message, reminder.buttons, { title: reminder.title, menu: false }));

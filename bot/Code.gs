@@ -87,6 +87,7 @@ function memberReply_(uid, text) {
   if (text === '騎車到校') return ptBike_(uid);
   if (/^(兌換折價券|兌換學餐折價券|兌換)$/.test(text)) return ptRedeemAsk_(uid);
   if (text === '確認兌換折價券') return ptRedeem_(uid);
+  if (/^(我的折價券|我的學餐折價券|折價券)$/.test(text)) return ptMyCoupons_(uid);
   if (/^(youbike|ubike|微笑單車|腳踏車)$/i.test(text)) return ybReply_(); // YouBike.gs
   if (/^(借傘|還傘|共享雨傘)(\s|$)/.test(text)) return umText_(uid, text); // 雨傘.gs
   if (/^(新生須知|新生教學|新生)$/.test(text)) return nbIntro_(); // 新生.gs

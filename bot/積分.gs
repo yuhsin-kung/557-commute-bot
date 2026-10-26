@@ -21,6 +21,7 @@ const PT = {
   UMBRELLA: 1,          // 借傘後歸還
   COUPON_POINTS: 3,     // 幾點換一張學餐折價券
   COUPON_VALUE: 30,     // 折價券面額（元）
+  COUPON_DAYS: 30,      // 兌換後幾天內要用
   WALK_MAX_MIN: 25,     // 起點打卡後幾分鐘內到校才算步行
   EARLY_BEFORE: '07:30',
   NEAR_M: 150,          // 離錢穆故居站多近算「在站牌」
@@ -35,6 +36,7 @@ const PT = {
 
 const PT_START = '錢穆故居站';
 const PT_CAMPUS = '校內 557 站';
+const PT_COUPON_HEAD = ['時間', '使用者 ID', '券號', '面額', '狀態', '到期日'];
 const PT_LOG_HEAD = ['時間', '使用者 ID', '方式', '積分', '少排放（公克）', '備註'];
 const PT_CHECKIN_HEAD = ['時間', '使用者 ID', '打卡點', '距離（公尺）', '誤差（公尺）', '結果'];
 
@@ -151,19 +153,129 @@ function ptRedeem_(uid) {
     user.points -= PT.COUPON_POINTS;
     cpSaveUser_(user);
     const now = cpNow_();
-    const sheet = cpSheet_('學餐折價券', ['時間', '使用者 ID', '券號', '面額', '狀態']);
+    const sheet = cpSheet_('學餐折價券', PT_COUPON_HEAD);
     const code = 'SC' + Utilities.formatDate(now, TZ, 'MMdd') + '-' + ('000' + sheet.getLastRow()).slice(-4);
-    sheet.appendRow([now, uid, code, PT.COUPON_VALUE, '未使用']);
+    const until = new Date(now.getTime() + PT.COUPON_DAYS * 24 * 60 * 60 * 1000);
+    sheet.appendRow([now, uid, code, PT.COUPON_VALUE, '未使用', Utilities.formatDate(until, TZ, 'yyyy/MM/dd')]);
     cpSheet_('通勤紀錄', PT_LOG_HEAD).appendRow([now, uid, '兌換', -PT.COUPON_POINTS, 0, code]);
-    return card_({
-      badge: '🎫 兌換成功',
-      title: PT.COUPON_VALUE + ' 元學餐折價券',
-      rows: [{ label: '券號', value: code, best: true }, { label: '兌換時間', value: Utilities.formatDate(now, TZ, 'M/d HH:mm') }, { label: '剩下積分', value: user.points + ' 點' }],
-      notes: ['結帳時出示這張券給學餐，一張用一次。'],
-      buttons: [{ label: '我的紀錄', text: '我的紀錄' }],
-    });
+    return ['🎫 兌換成功！剩下 ' + user.points + ' 點。', ptCouponCard_(user, ptCoupons_(uid).filter(c => c.code === code)[0])];
   });
 }
+
+// ===== 學餐折價券：聊天室裡的券卡片、我的折價券、點開後的券頁面 =====
+
+/** 這個人的折價券（新的在前）。expired：已過期 */
+function ptCoupons_(uid) {
+  const today = Utilities.formatDate(cpNow_(), TZ, 'yyyy/MM/dd');
+  return cpSheet_('學餐折價券', PT_COUPON_HEAD).getDataRange().getValues().slice(1)
+    .filter(r => r[1] === uid)
+    .map(r => {
+      const until = r[5] instanceof Date ? Utilities.formatDate(r[5], TZ, 'yyyy/MM/dd') : String(r[5] || '');
+      return { at: new Date(r[0]), code: r[2], value: r[3], status: r[4], until: until, expired: !!until && until < today };
+    })
+    .reverse();
+}
+
+function ptCouponUrl_(user, code) {
+  return cpWebAppUrl_() + '?page=coupon&t=' + user.token + '&c=' + encodeURIComponent(code); // 共乘.gs
+}
+
+/** 一張券的卡片：上面一塊磚紅色的「票面」，下面是到期日、優惠內容、查看此券 */
+function ptCouponCard_(user, c) {
+  const image = PROPS.getProperty('COUPON_IMAGE_URL'); // 有準備好的橫幅圖片（公開網址）就放在最上面
+  const face = {
+    type: 'box', layout: 'vertical', backgroundColor: UI.brand, paddingAll: '20px', spacing: 'xs',
+    contents: [
+      { type: 'text', text: '東吳通勤達人', size: 'xs', color: UI.onBrandSoft },
+      { type: 'text', text: c.value + ' 元', size: '3xl', weight: 'bold', color: UI.onBrand },
+      { type: 'text', text: '學餐折價券', size: 'lg', weight: 'bold', color: UI.onBrand },
+      { type: 'text', text: '🎫 通勤集點兌換', size: 'xs', color: UI.onBrandSoft },
+    ],
+  };
+  const line = (label, value) => ({ type: 'box', layout: 'horizontal', contents: [
+    { type: 'text', text: label, size: 'sm', color: UI.muted, flex: 2 },
+    { type: 'text', text: value, size: 'sm', color: UI.ink, flex: 5, wrap: true },
+  ] });
+  const bubble = {
+    type: 'bubble',
+    body: { type: 'box', layout: 'vertical', backgroundColor: UI.paper, paddingAll: '16px', spacing: 'md', contents: [
+      { type: 'text', text: c.value + ' 元學餐折價券', size: 'lg', weight: 'bold', color: UI.ink },
+      { type: 'text', text: c.until + ' 到期', size: 'sm', weight: 'bold', color: UI.muted },
+      { type: 'separator', color: UI.line },
+      line('優惠內容', '東吳學餐折抵 ' + c.value + ' 元'),
+      line('券號', c.code),
+    ] },
+    footer: { type: 'box', layout: 'vertical', backgroundColor: UI.paper, paddingAll: '12px', paddingTop: '0px', spacing: 'sm', contents: [
+      { type: 'button', style: 'primary', color: UI.brand, height: 'sm', action: { type: 'uri', label: '查看此券', uri: ptCouponUrl_(user, c.code) } },
+      { type: 'button', style: 'link', color: UI.brandDark, height: 'sm', action: { type: 'message', label: '我的折價券', text: '我的折價券' } },
+    ] },
+  };
+  if (image) bubble.hero = { type: 'image', url: image, size: 'full', aspectRatio: '20:9', aspectMode: 'cover' };
+  else bubble.header = face;
+  return { type: 'flex', altText: c.value + ' 元學餐折價券｜券號 ' + c.code + '｜' + c.until + ' 到期', contents: bubble };
+}
+
+/** 「我的折價券」：還能用的券，一張一張排成可以左右滑的卡片 */
+function ptMyCoupons_(uid) {
+  const user = cpUser_(uid);
+  const usable = ptCoupons_(uid).filter(c => c.status === '未使用' && !c.expired);
+  if (!usable.length) {
+    return card_({ // 卡片.gs
+      badge: '積分與打卡',
+      title: '我的折價券',
+      notes: ['目前沒有可以用的折價券。早到、步行、騎車到校一次 1 點，集滿 ' + PT.COUPON_POINTS + ' 點就能換一張 ' + PT.COUPON_VALUE + ' 元學餐折價券。'],
+      buttons: user.points >= PT.COUPON_POINTS ? [{ label: '兌換學餐折價券', text: '兌換折價券' }] : [],
+    });
+  }
+  const cards = usable.slice(0, 10).map(c => ptCouponCard_(user, c).contents);
+  return { type: 'flex', altText: '我的折價券：' + usable.length + ' 張可以用', contents: cards.length === 1 ? cards[0] : { type: 'carousel', contents: cards } };
+}
+
+/** 點「查看此券」打開的網頁。代碼和券號都要對得上這個人，才看得到 */
+function ptCouponPage_(token, code) {
+  const user = cpUserByToken_(token); // 共乘.gs
+  const c = user && ptCoupons_(user.id).filter(x => x.code === code)[0];
+  const esc = v => String(v).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  let body;
+  if (!c) {
+    body = '<div class="card alone"><h2>找不到這張券</h2><p>請回 LINE 傳「我的折價券」再打開一次。</p></div>';
+  } else {
+    const state = c.status !== '未使用' ? '已使用' : c.expired ? '已過期' : '可以使用';
+    body = '<div class="face"><small>東吳通勤達人</small><div class="big">' + esc(c.value) + '<span> 元</span></div><div>學餐折價券</div></div>'
+      + '<div class="card"><h2>' + esc(c.value) + ' 元學餐折價券</h2>'
+      + '<p class="date">' + esc(Utilities.formatDate(c.at, TZ, 'yyyy/MM/dd')) + ' ～ ' + esc(c.until) + '</p>'
+      + '<p class="state ' + (state === '可以使用' ? 'ok' : 'off') + '">' + state + '</p>'
+      + '<h3>券號</h3><p class="code">' + esc(c.code) + '</p>'
+      + '<h3>優惠內容</h3><p>✦ 東吳學餐折抵 ' + esc(c.value) + ' 元</p>'
+      + '<h3>使用方法</h3><ul>'
+      + '<li>結帳時出示此頁面給學餐人員。</li>'
+      + '<li>一張折價券限用一次。</li>'
+      + '<li>請於 ' + esc(c.until) + ' 前使用，逾期失效。</li>'
+      + '<li>本券為通勤集點兌換，不得兌換現金或找零。</li>'
+      + '</ul></div>';
+  }
+  return HtmlService.createHtmlOutput(PT_COUPON_HTML.replace('__BODY__', body))
+    .setTitle('學餐折價券')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+}
+
+const PT_COUPON_HTML = `<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><base target="_top">
+<style>
+  body { margin:0; padding:16px; background:#EFE7DB; color:#1B1D22; font:16px/1.6 -apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif; }
+  .face, .card { max-width:440px; margin:0 auto; box-sizing:border-box; }
+  .face { background:#A63A2B; color:#fff; border-radius:16px 16px 0 0; padding:22px; font-weight:700; font-size:20px; }
+  .face small { color:#F7DCD5; font-weight:400; font-size:13px; }
+  .face .big { font-size:48px; line-height:1.1; } .face .big span { font-size:22px; }
+  .card { background:#FBF7F0; border-radius:0 0 16px 16px; padding:20px 22px; }
+  .card.alone { border-radius:16px; }
+  h2 { margin:0; font-size:22px; } h3 { margin:18px 0 4px; font-size:15px; color:#6B6257; }
+  .date { margin:2px 0 0; color:#6B6257; } .code { font-size:20px; font-weight:700; letter-spacing:1px; margin:0; }
+  .state { display:inline-block; margin:10px 0 0; padding:2px 10px; border-radius:999px; font-size:14px; font-weight:700; }
+  .ok { background:#E7F1E4; color:#2E6B2A; } .off { background:#EDE6DD; color:#6B6257; }
+  ul { margin:0; padding-left:20px; } li { margin:2px 0; }
+</style></head>
+<body>__BODY__</body></html>`;
 
 /** 「全校減碳」（51）：全部人的加總，對應 SDG 11、SDG 13 */
 function ptSchool_() {

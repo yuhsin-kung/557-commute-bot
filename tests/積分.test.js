@@ -191,13 +191,38 @@ test('兌換學餐折價券：先顯示點數、問要不要換；按確認才�
   assert.equal(user(env, 'A').points, 3, '還沒按確認，不扣點');
 
   const got = say(env, 'A', '確認兌換折價券');
-  assert.equal(got.type, 'flex');
-  assert.match(got.altText, /30 元學餐折價券/);
-  assert.match(got.altText, /券號：SC\d{4}-0001/);
-  assert.match(got.altText, /剩下積分：0 點/);
+  assert.match(got[0], /兌換成功！剩下 0 點/);
+  const card = got[1];
+  assert.equal(card.type, 'flex');
+  assert.match(card.altText, /^30 元學餐折價券｜券號 SC1015-0001｜2026\/11\/14 到期$/);
+  const buttons = card.contents.footer.contents.map(b => [b.action.label, b.action.uri || b.action.text]);
+  assert.equal(buttons[0][0], '查看此券');
+  assert.match(buttons[0][1], /\?page=coupon&t=[0-9a-f-]{36}&c=SC1015-0001$/);
+  assert.deepEqual(buttons[1], ['我的折價券', '我的折價券']);
   assert.equal(user(env, 'A').points, 0);
-  assert.deepEqual(JSON.parse(JSON.stringify(rows(env, '學餐折價券')[0].slice(1))), ['A', 'SC1015-0001', 30, '未使用']);
+  assert.deepEqual(JSON.parse(JSON.stringify(rows(env, '學餐折價券')[0].slice(1))), ['A', 'SC1015-0001', 30, '未使用', '2026/11/14']);
   assert.match(textOf(say(env, 'A', '確認兌換折價券')), /還差：3 點/, '換完再按確認也不能再換');
+
+  // 我的折價券：列出還能用的券
+  const mine = say(env, 'A', '我的折價券');
+  assert.equal(mine.altText, '我的折價券：1 張可以用');
+  assert.match(JSON.stringify(mine.contents), /SC1015-0001/);
+  assert.match(say(env, 'B', '我的折價券').altText, /目前沒有可以用的折價券/);
+
+  // 查看此券：代碼和券號都要對得上
+  const page = env.call('doGet', { parameter: { page: 'coupon', t: user(env, 'A').token, c: 'SC1015-0001' } });
+  assert.equal(page.title, '學餐折價券');
+  assert.match(page.content, /30 元學餐折價券/);
+  assert.match(page.content, /2026\/11\/14/);
+  assert.match(page.content, /可以使用/);
+  assert.match(page.content, /結帳時出示此頁面給學餐人員/);
+  assert.match(env.call('doGet', { parameter: { page: 'coupon', t: user(env, 'B').token, c: 'SC1015-0001' } }).content, /找不到這張券/, '別人的代碼看不到這張券');
+  assert.equal(env.call('doGet', { parameter: { page: 'coupon', t: user(env, 'A').token, c: '<script>' } }).text, '東吳通勤達人', '券號格式不對就不給頁面');
+
+  // 30 天後過期
+  env.addMinutes(31 * 24 * 60);
+  assert.match(say(env, 'A', '我的折價券').altText, /目前沒有可以用的折價券/);
+  assert.match(env.call('doGet', { parameter: { page: 'coupon', t: user(env, 'A').token, c: 'SC1015-0001' } }).content, /已過期/);
 });
 
 // ===== YouBike =====
