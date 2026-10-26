@@ -35,7 +35,8 @@ function handleEvent_(ev) {
     return;
   }
   if (ev.type === 'message' && ev.message.type === 'image') {
-    const photo = umPhoto_(ev.source.userId, ev.message.id); // 雨傘.gs：借傘、還傘要拍傘號；沒在借還就不回
+    // 雨傘.gs：借傘、還傘要拍傘號；積分.gs：騎車到校要傳 YouBike 騎乘紀錄。都沒在等照片就不回
+    const photo = umPhoto_(ev.source.userId, ev.message.id) || ptBikePhoto_(ev.source.userId, ev.message.id);
     if (photo) {
       reply_(ev.replyToken, photo);
       log_(ev, '（照片）', photo);

@@ -99,13 +99,47 @@ test('不在打卡點、定位誤差太大、代碼不對、一分鐘內重複�
   assert.equal(user(env, 'A').points, 0);
 });
 
-test('騎車到校：要先在校內打卡，一天一次', () => {
-  const env = start();
-  assert.match(textOf(say(env, 'A', '騎車到校')), /請先在學校打卡/);
-  checkin(env, 'A', CAMPUS);
-  assert.match(say(env, 'A', '騎車到校'), /騎車到校 \+1 點/);
-  assert.match(say(env, 'A', '騎車到校'), /今天已經記過騎車到校了/);
+/** 假裝同學傳了 YouBike 騎乘紀錄截圖，AI 讀出 seen */
+function ride(env, uid, seen) {
+  env.props.GEMINI_API_KEY = 'test-key';
+  env.onFetch = url => {
+    if (url.includes('api-data.line.me')) return { body: 'fake-png', type: 'image/png' };
+    if (url.includes('generativelanguage')) return { body: { candidates: [{ content: { parts: [{ text: seen }] } }] } };
+    return undefined;
+  };
+  const answer = env.call('ptBikePhoto_', uid, 'msg');
+  env.onFetch = null;
+  return answer;
+}
+const RIDE = (date, to = 'YouBike2.0_東吳大學', time = '08:05') =>
+  '```json\n{"date":"' + date + '","time":"' + time + '","from":"YouBike2.0_捷運士林站(1號出口)","to":"' + to + '"}\n```';
+
+test('騎車到校：傳今天在學校附近還車的 YouBike 騎乘紀錄才加 1 點，一筆紀錄只能用一次', () => {
+  const env = start(); // 2026-10-12
+  assert.equal(ride(env, 'A', RIDE('2026-10-12')), null, '沒按騎車到校就傳圖，Bot 不回');
+  const ask = say(env, 'A', '騎車到校');
+  assert.match(ask.altText, /截圖這次的騎乘紀錄/);
+  assert.match(ride(env, 'A', '不是'), /看不出這是 YouBike 的騎乘紀錄/);
+  assert.match(ride(env, 'A', RIDE('2026-10-11')), /這筆紀錄是 2026-10-11 的/);
+  assert.match(ride(env, 'A', RIDE('2026-10-12', 'YouBike2.0_捷運劍潭站')), /還車站是「YouBike2.0_捷運劍潭站」/);
+  assert.equal(user(env, 'A').points, 0);
+  const ok = ride(env, 'A', RIDE('2026-10-12'));
+  assert.match(ok, /騎車到校 \+1 點/);
+  assert.match(ok, /捷運士林站\(1號出口\) → YouBike2\.0_東吳大學/);
   assert.equal(user(env, 'A').points, 1);
+  assert.match(say(env, 'A', '騎車到校'), /今天已經記過騎車到校了/);
+
+  say(env, 'B', '騎車到校');
+  assert.match(ride(env, 'B', RIDE('2026-10-12')), /這筆騎乘紀錄已經用過了/, '別人的同一張截圖不能用');
+  assert.equal(user(env, 'B').points, 0);
+});
+
+test('騎車到校：AI 不能用的時候不加分，請同學再傳', () => {
+  const env = start();
+  say(env, 'A', '騎車到校');
+  env.onFetch = url => (url.includes('api-data.line.me') ? { body: 'x' } : undefined);
+  assert.match(env.call('ptBikePhoto_', 'A', 'm'), /暫時沒辦法辨識截圖/);
+  assert.equal(user(env, 'A').points, 0);
 });
 
 // ===== 我的紀錄、成就、全校 =====

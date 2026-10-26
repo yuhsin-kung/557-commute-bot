@@ -183,19 +183,78 @@ function ptSchool_() {
   ].concat(board ? ['', '完整看板：' + board] : []).join('\n');
 }
 
-/** 「騎車到校」：30 分鐘內要先在校內打過卡，一天一次 */
+/**
+ * 「騎車到校」：還車後把 YouBike App 的騎乘紀錄（或還車成功畫面）截圖傳給 Bot。
+ * AI 讀出日期、借車站、還車站、還車時間：日期要是今天、還車站要在學校附近，
+ * 同一筆騎乘紀錄只能用一次，一天只算一次。GPS 打卡分不出是不是騎車，所以改看 YouBike 自己的紀錄。
+ */
+const PT_BIKE_WAIT_MIN = 10;
+const PT_BIKE_CAMPUS = /東吳|外雙溪|錢穆|故宮|至善|臨溪|雙溪/; // 學校附近的還車站名稱
+
 function ptBike_(uid) {
-  return cpLocked_(() => {
-    if (ptDoneToday_(uid, '騎車')) return '今天已經記過騎車到校了，明天繼續 🚲';
-    if (ptDoneToday_(uid, '步行')) return '今天已經記過步行到校了，一天記一種方式就好 🙂';
-    const now = cpNow_();
-    const onCampus = cpSheet_('打卡紀錄', PT_CHECKIN_HEAD).getDataRange().getValues().slice(1)
-      .some(r => r[1] === uid && r[2] === PT_CAMPUS && now - new Date(r[0]) < 30 * 60000);
-    if (!onCampus) return ['請先在學校打卡，確認你到校了，再傳一次「騎車到校」。', ptCheckinButton_(uid)];
-    const co2 = PT.BIKE_KM * PT.BUS_G_PER_KM;
-    const fresh = ptAdd_(uid, '騎車', PT.BIKE, co2, 'YouBike');
-    return '🚲 騎車到校 +' + PT.BIKE + ' 點\n少排放 ' + Math.round(co2) + ' 公克 CO₂' + ptBadgeText_(fresh);
+  if (ptDoneToday_(uid, '騎車')) return '今天已經記過騎車到校了，明天繼續 🚲';
+  if (ptDoneToday_(uid, '步行')) return '今天已經記過步行到校了，一天記一種方式就好 🙂';
+  CacheService.getScriptCache().put('bike_wait_' + uid, '1', PT_BIKE_WAIT_MIN * 60);
+  return card_({ // 卡片.gs
+    badge: '積分與打卡',
+    title: '騎車到校',
+    rows: [
+      { label: '1', value: '騎 YouBike 到學校，在學校附近的站還車' },
+      { label: '2', value: '打開 YouBike App，截圖這次的騎乘紀錄' },
+      { label: '3', value: '把截圖直接傳給我' },
+    ],
+    notes: ['我會確認是今天的紀錄、還車站在學校附近，就加 ' + PT.BIKE + ' 點。' + PT_BIKE_WAIT_MIN + ' 分鐘內傳就可以。'],
   });
+}
+
+/** 收到照片：有在等騎車截圖才處理，不然回傳 null */
+function ptBikePhoto_(uid, messageId) {
+  const cache = CacheService.getScriptCache();
+  if (!cache.get('bike_wait_' + uid)) return null;
+  const ride = ptReadRide_(messageId);
+  if (ride === null) return '🚲 暫時沒辦法辨識截圖，請過一分鐘再傳一次。';
+  if (!ride) return '🚲 看不出這是 YouBike 的騎乘紀錄，請截圖 App 裡這次騎乘的紀錄再傳一次。';
+  const today = Utilities.formatDate(cpNow_(), TZ, 'yyyy-MM-dd');
+  if (ride.date !== today) return '🚲 這筆紀錄是 ' + ride.date + ' 的，要用今天的騎乘紀錄喔。';
+  if (!PT_BIKE_CAMPUS.test(ride.to)) return '🚲 還車站是「' + ride.to + '」，要在學校附近還車才算騎車到校。';
+  const key = [ride.date, ride.time, ride.from, ride.to].join('｜');
+  return cpLocked_(() => { // 共乘.gs
+    if (ptDoneToday_(uid, '騎車')) { cache.remove('bike_wait_' + uid); return '今天已經記過騎車到校了，明天繼續 🚲'; }
+    const used = cpSheet_('通勤紀錄', PT_LOG_HEAD).getDataRange().getValues().slice(1).some(r => r[2] === '騎車' && r[5] === key);
+    if (used) return '🚲 這筆騎乘紀錄已經用過了，一筆紀錄只能領一次。';
+    cache.remove('bike_wait_' + uid);
+    const co2 = PT.BIKE_KM * PT.BUS_G_PER_KM;
+    const fresh = ptAdd_(uid, '騎車', PT.BIKE, co2, key);
+    return '🚲 騎車到校 +' + PT.BIKE + ' 點\n' + ride.from + ' → ' + ride.to + '\n少排放 ' + Math.round(co2) + ' 公克 CO₂' + ptBadgeText_(fresh);
+  });
+}
+
+/**
+ * 從 LINE 下載截圖，請 AI 讀出騎乘紀錄。回傳 { date, time, from, to }；
+ * 不是騎乘紀錄回傳空字串；AI 不能用回傳 null。
+ */
+function ptReadRide_(messageId) {
+  const res = UrlFetchApp.fetch('https://api-data.line.me/v2/bot/message/' + encodeURIComponent(messageId) + '/content', {
+    headers: { Authorization: 'Bearer ' + PROPS.getProperty('LINE_CHANNEL_ACCESS_TOKEN') },
+    muteHttpExceptions: true,
+  });
+  if (res.getResponseCode() !== 200) return null;
+  const blob = res.getBlob();
+  const answer = geminiImage_( // 站位變更.gs
+    '這是一張 YouBike App 的截圖。如果是一筆騎乘紀錄或還車成功的畫面，請只回一行 JSON：'
+    + '{"date":"YYYY-MM-DD","time":"還車時間 HH:MM","from":"借車站名","to":"還車站名"}。'
+    + '如果不是 YouBike 的騎乘紀錄，只回「不是」兩個字。',
+    blob.getContentType() || 'image/jpeg', Utilities.base64Encode(blob.getBytes()));
+  if (!answer) return null;
+  const m = answer.match(/\{[\s\S]*\}/);
+  if (!m) return '';
+  try {
+    const r = JSON.parse(m[0]);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(r.date || '') || !r.to) return '';
+    return { date: r.date, time: String(r.time || ''), from: String(r.from || ''), to: String(r.to) };
+  } catch (err) {
+    return '';
+  }
 }
 
 // ===== 打卡頁呼叫的函式（google.script.run） =====
