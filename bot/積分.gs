@@ -114,7 +114,7 @@ function ptMine_(uid) {
     '',
     '成就：',
   ].concat(badges).join('\n');
-  return choices_(text, (coupons ? [['兌換學餐折價券', '兌換折價券']] : []).concat([['到校打卡', '打卡'], ['全校減碳', '全校減碳']]), { primary: coupons > 0 });
+  return choices_(text, coupons ? [['兌換學餐折價券', '兌換折價券']] : [], { primary: coupons > 0 }); // 只有能兌換時才放按鈕
 }
 
 /** 「兌換折價券」：先告訴同學有幾點、可以換幾張，按「確認兌換」才真的扣點 */
