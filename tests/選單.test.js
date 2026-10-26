@@ -177,23 +177,24 @@ test('超過 6 顆的按鈕排成兩欄，單數的最後一顆自己一列、�
   assert.ok(!JSON.stringify(body).includes('"filler"'));
 });
 
-test('出門建議的卡片：換出發站、換時間都有按鈕，按了會回對應的建議', () => {
+test('出門建議的卡片：換時間是主要按鈕；換出發站先選站；共乘寫明是計程車', () => {
   const env = start();
   const card = send(env, '出門時間 明天 08:10 D')[0];
   assert.deepEqual(buttonsOf(card), [
-    ['預約共乘', '共乘 去學校 預約'],
-    ['改從劍南路站出發', '出門時間 明天 08:10 D 劍南路站'],
-    ['改從大直站出發', '出門時間 明天 08:10 D 大直站'],
     ['換一個時間', '出門時間'],
-    ['比較所有公車路線', '比較所有公車路線'],
+    ['改從其他捷運站出發', '出門時間 明天 08:10 D 選出發站'],
+    ['預約計程車共乘', '共乘 去學校 預約'],
   ]);
+  assert.equal(card.contents.footer.contents[0].style, 'primary', '換一個時間是紅色主按鈕');
+  const pick = send(env, '出門時間 明天 08:10 D 選出發站')[0];
+  assert.deepEqual(buttonsOf(pick).map(b => b[1]), ['出門時間 明天 08:10 D 士林站', '出門時間 明天 08:10 D 劍南路站', '出門時間 明天 08:10 D 大直站']);
   const jiannan = send(env, '出門時間 明天 08:10 D 劍南路站')[0];
   assert.match(jiannan.altText, /★ 捷運劍南路站：\d\d:\d\d 前到站/);
-  assert.ok(buttonsOf(jiannan).some(b => b[1] === '出門時間 明天 08:10 D 士林站'), '可以換回士林站');
+  assert.ok(buttonsOf(jiannan).some(b => b[1] === '出門時間 明天 08:10 D 選出發站'), '可以再換站');
 
   const any = send(env, '出門時間 明天 09:10 不指定')[0];
   assert.equal(any.contents.header.contents.length, 2, '不指定大樓就沒有副標');
-  assert.ok(buttonsOf(any).some(b => b[1] === '出門時間 明天 09:10 不指定 大直站'));
+  assert.ok(buttonsOf(any).some(b => b[1] === '出門時間 明天 09:10 不指定 選出發站'));
 });
 
 test('出門時間選今天：只列還沒開始的節次；快上課的走即時比較', () => {
@@ -231,6 +232,6 @@ test('推播（雨天提醒、站位變更）也是訊息裡的按鈕', () => {
   assert.equal(pushed.type, 'flex');
   assert.equal(hasQuickReply([pushed]), false);
   assert.equal(pushed.contents.header.contents[0].text, '明天（10/13）上學提醒');
-  assert.deepEqual(buttonsOf(pushed), [['排明天的出門時間', '出門時間 明天'], ['預約共乘', '共乘 去學校 預約'], ['不想收提醒', '取消提醒']]);
+  assert.deepEqual(buttonsOf(pushed), [['排明天的出門時間', '出門時間 明天'], ['預約計程車共乘', '共乘 去學校 預約'], ['不想收提醒', '取消提醒']]);
   assert.match(saidOf(pushed), /早上降雨機率 80%/);
 });

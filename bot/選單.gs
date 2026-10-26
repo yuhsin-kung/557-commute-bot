@@ -88,6 +88,10 @@ function menuFlow_(text) {
     const items = MENU_BUILDINGS.map(k => [k + ' ' + menuBuildingName_(k), '出門時間 ' + day + ' ' + time + ' ' + k]);
     return choices_('你在哪一棟上課？\n\n我會幫你估算從下車地點走到教室需要的時間。', items.concat([['不指定', '出門時間 ' + day + ' ' + time + ' 不指定']]), { title: '出門時間建議', badge: '第 3 步' });
   }
+  if (origin === '選出發站') {
+    const base = ['出門時間', day, time, building].join(' ');
+    return choices_('要從哪一個捷運站出發？', Object.keys(ORIGINS).map(name => [name, base + ' ' + name]), { title: '出門時間建議', badge: '換出發站', primary: false });
+  }
   return compareQuery_({ // 比較器.gs
     intent: '去學校',
     arriveTime: time,

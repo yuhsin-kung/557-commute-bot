@@ -59,7 +59,7 @@ function buildReminder_(day) {
   return {
     title: '明天（' + dateText + '）上學提醒',
     message: lines.slice(2).join('\n'),
-    buttons: [['排明天的出門時間', '出門時間 明天'], ['預約共乘', '共乘 去學校 預約'], ['不想收提醒', '取消提醒']],
+    buttons: [['排明天的出門時間', '出門時間 明天'], ['預約計程車共乘', '共乘 去學校 預約'], ['不想收提醒', '取消提醒']],
     pop: pop, event: isExam ? event[3] : '', reason: isRain && isExam ? '下雨＋考試週' : isRain ? '下雨' : '考試週',
   };
 }

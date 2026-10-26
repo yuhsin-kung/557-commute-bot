@@ -93,7 +93,7 @@ test('出門建議：平日早八會多算尖峰的 10 分鐘；劍南路出發�
   assert.match(cards.出門建議.altText, /★ 搭 557 進校園：07:38 前到士林站\n　尖峰可能要等一兩班，已多算 10 分鐘/);
   assert.match(cards.出門建議.altText, /・搭其他車：07:42 前到士林站/);
   assert.equal(cards.出門建議.contents.header.contents[1].text, '明天 08:10 上課');
-  assert.equal(cards.出門建議.contents.footer.contents[0].action.text, '共乘 去學校 預約');
+  assert.equal(cards.出門建議.contents.footer.contents[2].action.text, '共乘 去學校 預約');
   assert.match(cards.出門建議劍南路.altText, /・學校專車：07:50 發車/);
 });
 

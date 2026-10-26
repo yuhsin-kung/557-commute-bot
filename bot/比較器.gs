@@ -106,7 +106,7 @@ function liveReply_(originName, building, classAt) {
     return card_(Object.assign(head, { // 卡片.gs
       notes: ['現在 ' + o.stop + ' 沒有車往東吳的即時資料，可能是末班車已過或還沒發車。'],
       footer: 'TDX 即時資料・' + nowText_(),
-      buttons: [{ label: '找人共乘', text: '共乘' }, { label: '排明天的出門時間', text: '出門時間 明天' }],
+      buttons: [{ label: '找人共乘計程車', text: '共乘' }, { label: '排明天的出門時間', text: '出門時間 明天' }],
     }));
   }
   options.sort((a, b) => a.arrive - b.arrive);
@@ -136,7 +136,7 @@ function liveReply_(originName, building, classAt) {
     notes: notes,
     warns: warns,
     footer: (classAt ? fmt_(classAt) + ' 上課・' : '') + 'TDX 即時資料・' + nowText_() + '・車程為估計值',
-    buttons: [{ label: '找人共乘', text: '共乘' }, { label: '557 站牌資訊', text: '557 站牌資訊' }],
+    buttons: [{ label: '找人共乘計程車', text: '共乘' }, { label: '557 站牌資訊', text: '557 站牌資訊' }],
   }));
 }
 
@@ -177,13 +177,12 @@ function planReply_(originName, building, classAt, isTomorrow) {
     rows: rows,
     warns: extra.reasons.length ? [extra.reasons.join('、') + '，已多算 ' + extra.min + ' 分鐘。'] : [],
     footer: '依預估車程推算，出門前按「比較所有公車路線」可以看即時到站',
-    buttons: [{ label: '預約共乘', text: originName === '士林站' ? '共乘 去學校 預約' : '共乘' }]
-      // 換出發站、換時間都用按的（選單.gs 的「出門時間」流程）
-      .concat(Object.keys(ORIGINS).filter(name => name !== originName).map(name => ({
-        label: '改從' + name + '出發',
-        text: ['出門時間', isTomorrow ? '明天' : '今天', fmt_(classAt), building || '不指定', name].join(' '),
-      })))
-      .concat([{ label: '換一個時間', text: '出門時間' }, { label: '比較所有公車路線', text: '比較所有公車路線' }]),
+    // 這張是事先規劃：最常做的是換時間；即時到站看下面那行小字說的「比較所有公車路線」
+    buttons: [
+      { label: '換一個時間', text: '出門時間' },
+      { label: '改從其他捷運站出發', text: ['出門時間', isTomorrow ? '明天' : '今天', fmt_(classAt), building || '不指定', '選出發站'].join(' ') },
+      { label: '預約計程車共乘', text: originName === '士林站' ? '共乘 去學校 預約' : '共乘' },
+    ],
   });
 }
 

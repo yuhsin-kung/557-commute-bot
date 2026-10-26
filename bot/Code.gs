@@ -154,7 +154,7 @@ function busReply_(direction, stopNames, title) {
     footer: 'TDX 即時資料・' + nowText_(),
     buttons: direction === 0
       ? [{ label: '比較所有公車路線', text: '比較所有公車路線' }, { label: '557 站牌資訊', text: '557 站牌資訊' }]
-      : [{ label: '找人共乘回士林', text: '共乘 回士林' }],
+      : [{ label: '找人共乘計程車回士林', text: '共乘 回士林' }],
   });
 }
 
