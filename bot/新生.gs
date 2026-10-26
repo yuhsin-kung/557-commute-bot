@@ -29,17 +29,34 @@ function nbIntro_() {
   [['新生測驗', '新生測驗'], ['557 站牌資訊', '557 站牌資訊'], ['排隊禮儀', '排隊禮儀']]);
 }
 
+/**
+ * 「排隊禮儀」：一支短片，不寫一大段字。
+ * 影片拍好後，把網址放進指令碼屬性 ETIQUETTE_VIDEO_URL，點畫面就會打開影片；還沒放之前先顯示影片的樣子。
+ */
 function nbEtiquette_() {
-  return choices_([
-    '🙋 排隊禮儀：一起排好，大家都快',
-    '',
-    '・隊伍被馬路切斷時，接在最後面，不要從斷開的地方排進去。',
-    '・前門、後門各一排時，先看清楚自己排的是哪一排。',
-    '・車來了依序上車，後面的人不往前擠。',
-    '・擠不上去就等下一班，或改搭其他公車到錢穆故居站。',
-    '',
-    '這份宣導只講規則，不點名、不拍攝任何人。',
-  ].join('\n'), [['557 站牌資訊', '557 站牌資訊'], ['比較所有公車路線', '比較所有公車路線']]);
+  const video = PROPS.getProperty('ETIQUETTE_VIDEO_URL');
+  const screen = {
+    type: 'box', layout: 'vertical', backgroundColor: '#2B2522', height: '170px', justifyContent: 'center', alignItems: 'center', spacing: 'sm',
+    contents: [
+      { type: 'box', layout: 'vertical', width: '64px', height: '64px', cornerRadius: '32px', backgroundColor: '#FFFFFFE6', justifyContent: 'center', alignItems: 'center',
+        contents: [{ type: 'text', text: '▶', size: 'xxl', color: UI.brand, align: 'center' }] },
+      { type: 'text', text: '1:00', size: 'xs', color: '#FFFFFFB3', align: 'center' },
+    ],
+  };
+  if (video) screen.action = { type: 'uri', label: '看影片', uri: video };
+  return {
+    type: 'flex',
+    altText: '排隊禮儀短片：一起排好，大家都快',
+    contents: {
+      type: 'bubble',
+      hero: screen,
+      body: { type: 'box', layout: 'vertical', backgroundColor: UI.paper, paddingAll: '16px', spacing: 'sm', contents: [
+        { type: 'text', text: '排隊禮儀', size: 'lg', weight: 'bold', color: UI.ink },
+        { type: 'text', text: '一分鐘看懂 557 怎麼排隊，一起排好，大家都快', size: 'sm', color: UI.muted, wrap: true },
+      ] },
+      footer: { type: 'box', layout: 'vertical', backgroundColor: UI.paper, paddingAll: '12px', paddingTop: '0px', contents: [menuLink_()] }, // 卡片.gs
+    },
+  };
 }
 
 // ===== 新生測驗 =====

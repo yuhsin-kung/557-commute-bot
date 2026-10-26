@@ -60,6 +60,7 @@ function sampleCards() {
   keep('打卡', env.call('ptCheckinButton_', 'A'));
   keep('新生測驗', env.call('nbQuiz_', 'A', '新生測驗'));
   keep('新生教學', env.call('nbIntro_'));
+  keep('排隊禮儀短片', env.call('nbEtiquette_'));
   // 學餐折價券：一張的卡片、兩張以上左右滑
   env.setNow('2026-10-26T08:00:00+08:00');
   const coupon = env.call('cpSheet_', '學餐折價券', ['時間', '使用者 ID', '券號', '面額', '狀態', '到期日']);

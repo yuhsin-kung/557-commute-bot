@@ -349,7 +349,12 @@ test('新生測驗：答錯會告訴正確答案，沒全對不給分', () => {
 
 test('排隊禮儀、包車意願', () => {
   const env = start();
-  assert.match(textOf(say(env, 'A', '排隊禮儀')), /不點名、不拍攝任何人/);
+  const etiquette = say(env, 'A', '排隊禮儀');
+  assert.equal(etiquette.altText, '排隊禮儀短片：一起排好，大家都快');
+  assert.equal(buttonsOf(etiquette).length, 0, '不放按鈕，只有回選單');
+  assert.equal(etiquette.contents.hero.action, undefined, '還沒有影片網址就不能點');
+  env.props.ETIQUETTE_VIDEO_URL = 'https://youtu.be/example';
+  assert.equal(say(env, 'A', '排隊禮儀').contents.hero.action.uri, 'https://youtu.be/example');
   assert.match(textOf(say(env, 'A', '包車')), /規劃中/);
   assert.match(say(env, 'A', '包車 我有興趣'), /意願記下來了/);
   assert.deepEqual(JSON.parse(JSON.stringify(rows(env, '意願紀錄')[0].slice(1))), ['A', '包車', '有興趣']);
