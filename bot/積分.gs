@@ -18,7 +18,6 @@ const PT = {
   BIKE: 1,              // 騎 YouBike 到校
   EARLY: 1,             // 7:30 前到校
   QUIZ: 1,              // 新生測驗全對
-  UMBRELLA: 1,          // 借傘後歸還
   COUPON_POINTS: 5,     // 幾點換一張學餐折價券
   COUPON_VALUE: 30,     // 折價券面額（元）
   COUPON_DAYS: 30,      // 兌換後幾天內要用
@@ -45,7 +44,6 @@ const PT_BADGES = [
   ['新生上路', '新生測驗全對', s => s.測驗 >= 1],
   ['走路達人', '從錢穆故居站走進學校 5 次', s => s.步行 >= 5],
   ['早鳥', '7:30 前到校 3 次', s => s.早到 >= 3],
-  ['雨天英雄', '借過雨傘並歸還', s => s.還傘 >= 1],
   ['共乘夥伴', '完成 1 次計程車共乘', s => s.共乘 >= 1],
   ['減碳一公斤', '累積少排放 1 公斤 CO₂', s => s.減碳 >= 1000],
 ];
@@ -63,7 +61,7 @@ function ptAdd_(uid, mode, points, co2, note) {
 }
 
 function ptStats_(uid) {
-  const s = { 步行: 0, 騎車: 0, 早到: 0, 測驗: 0, 還傘: 0, 共乘: 0, 減碳: 0 };
+  const s = { 步行: 0, 騎車: 0, 早到: 0, 測驗: 0, 共乘: 0, 減碳: 0 };
   cpSheet_('通勤紀錄', PT_LOG_HEAD).getDataRange().getValues().slice(1).forEach(r => {
     if (r[1] !== uid) return;
     if (r[2] in s) s[r[2]] += 1;

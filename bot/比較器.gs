@@ -118,6 +118,7 @@ function liveReply_(originName, building, classAt) {
       + (classAt && opt.arrive > classAt ? '（會遲到）' : ''),
     best: i === 0,
   }));
+  if (originName === '士林站') otherWays_(now, building, classAt).forEach(r => rows.push(r));
 
   const notes = [];
   const warns = [];
@@ -139,8 +140,29 @@ function liveReply_(originName, building, classAt) {
     notes: notes,
     warns: warns,
     footer: (classAt ? fmt_(classAt) + ' 上課・' : '') + 'TDX 即時資料・' + nowText_() + '・車程為估計值',
-    buttons: [{ label: '找人共乘計程車', text: '共乘' }, { label: '557 站牌資訊', text: '557 站牌資訊' }],
+    buttons: [{ label: '找人共乘計程車', text: '共乘' }, { label: 'YouBike 車數', text: 'YouBike' }],
   }));
+}
+
+// 公車以外的方法（「比較所有路線」）：車程是地圖估計值，之後用實測校正
+const YB_RIDE_MIN = 18;   // 士林站騎 YouBike 到校內，3.5 公里有一段上坡（含借車、還車）
+const TAXI_RIDE_MIN = 10; // 士林站搭計程車到校門口
+
+/** 士林站出發的 YouBike、計程車共乘，接在公車的下面 */
+function otherWays_(now, building, classAt) {
+  const late = at => (classAt && at > classAt ? '（會遲到）' : '');
+  const rows = [];
+  const near = ybStations_().filter(s => s.toMrt <= YB_NEAR_MRT_M); // YouBike.gs
+  if (near.length) {
+    const bikes = near.reduce((sum, s) => sum + s.bikes, 0);
+    const at = addMin_(now, YB_RIDE_MIN + walkMin_(building, CAMPUS));
+    rows.push({ label: '🚲 YouBike', value: '約 ' + fmt_(at) + ' 到',
+      sub: (bikes ? '士林站附近可借 ' + bikes + ' 台' : '士林站附近現在沒有車可借') + '，騎約 ' + YB_RIDE_MIN + ' 分鐘' + late(at) });
+  }
+  const taxi = addMin_(now, CP.LIVE_WAIT_MIN + TAXI_RIDE_MIN + walkMin_(building, CAMPUS)); // 共乘.gs
+  rows.push({ label: '🚕 計程車共乘', value: '約 ' + fmt_(taxi) + ' 到',
+    sub: '最多等 ' + CP.LIVE_WAIT_MIN + ' 分鐘湊人，4 人每人約 ' + cpShare_(4) + ' 元' + late(taxi) });
+  return rows;
 }
 
 /** 出門建議模式：上課時間還很久，用預估車程往回推 */
@@ -150,10 +172,12 @@ function planReply_(originName, building, classAt, isTomorrow) {
   const extra = crowdExtra_(classAt);
   const peak = isPeak_(addMin_(classAt, -30));
   const rows = [];
+  let remind = null; // 557 發車提醒（發車提醒.gs）：建議到士林站的時間
 
   if (originName === '士林站') {
     const by557 = addMin_(mustArrive, -(o.rideMin[CAMPUS] + walkMin_(building, CAMPUS) + (peak ? PEAK_EXTRA_MIN : 0) + extra.min));
     const byOther = addMin_(mustArrive, -(o.rideMin[QIAN] + walkMin_(building, QIAN) + 5 + extra.min));
+    remind = fmt_(by557);
     rows.push({ label: '搭 557 進校園', value: fmt_(by557) + ' 前到士林站',
       sub: peak ? '尖峰可能要等一兩班，已多算 ' + PEAK_EXTRA_MIN + ' 分鐘' : '' });
     rows.push({ label: '搭其他車', value: fmt_(byOther) + ' 前到士林站',
@@ -179,13 +203,13 @@ function planReply_(originName, building, classAt, isTomorrow) {
     subtitle: building ? building + ' 棟 ' + BUILDINGS[building][0] : '',
     rows: rows,
     warns: extra.reasons.length ? [extra.reasons.join('、') + '，已多算 ' + extra.min + ' 分鐘。'] : [],
-    footer: '依預估車程推算，出門前按「比較所有公車路線」可以看即時到站',
-    // 這張是事先規劃：最常做的是換時間；即時到站看下面那行小字說的「比較所有公車路線」
+    footer: '依預估車程推算，出門前按「比較所有路線」可以看即時到站',
+    // 這張是事先規劃：最常做的是換時間；即時到站看下面那行小字說的「比較所有路線」
     buttons: [
       { label: '換一個時間', text: '出門時間' },
       { label: '改從其他捷運站出發', text: ['出門時間', isTomorrow ? '明天' : '今天', fmt_(classAt), building || '不指定', '選出發站'].join(' ') },
       { label: '預約計程車共乘', text: originName === '士林站' ? '共乘 去學校 預約' : '共乘' },
-    ],
+    ].concat(remind ? [{ label: '557 發車前提醒我', text: '出門提醒 ' + (isTomorrow ? '明天' : '今天') + ' ' + remind }] : []),
   });
 }
 

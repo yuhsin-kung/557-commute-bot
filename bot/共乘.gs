@@ -249,6 +249,7 @@ function cpLeave_(g, uid, now) {
 
 function 共乘每分鐘檢查() {
   cpLocked_(() => cpTick_(cpNow_()));
+  lvTick_(cpNow_()); // 發車提醒.gs：順便推播到時間的 557 發車提醒
 }
 
 function cpTick_(now) {

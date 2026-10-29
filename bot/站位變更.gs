@@ -84,7 +84,7 @@ function gemini_(prompt) {
   return geminiParts_([{ text: prompt }]);
 }
 
-/** 看圖回答（雨傘.gs 讀傘號用）。data 是 base64 */
+/** 看圖回答（積分.gs 讀 YouBike 騎乘紀錄用）。data 是 base64 */
 function geminiImage_(prompt, mimeType, data) {
   return geminiParts_([{ text: prompt }, { inline_data: { mime_type: mimeType, data: data } }]);
 }

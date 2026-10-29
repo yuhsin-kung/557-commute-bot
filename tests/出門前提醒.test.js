@@ -67,3 +67,54 @@ test('比較所有公車路線：最快的車開進學校就說「抵達學校�
   assert.match(alt, /目前只要搭乘 紅30，便能最快速地抵達錢穆故居站，再步行進校。/);
   assert.doesNotMatch(alt, /走一樣的路/);
 });
+
+test('比較所有路線：公車下面接著列 YouBike 和計程車共乘；舊說法「比較所有公車路線」也認得', () => {
+  const env = loadBot(ALL);
+  const eta = (route, dir, sec) => ({ RouteName: { Zh_tw: route }, Direction: dir, EstimateTime: sec });
+  env.context.__etas = [eta('557', 0, 60), eta('紅30', 1, 600)];
+  env.run('etaAtStop_ = () => __etas; isPeak_ = () => false;');
+  env.respond.youbike = [{ sna: 'YouBike2.0_捷運士林站(1號出口)', available_rent_bikes: 12, available_return_bikes: 20, latitude: 25.0955, longitude: 121.527 }];
+  const alt = env.call('liveReply_', '士林站', '', null).altText;
+  assert.match(alt, /🚲 YouBike：約 \d\d:\d\d 到/);
+  assert.match(alt, /士林站附近可借 12 台，騎約 18 分鐘/);
+  assert.match(alt, /🚕 計程車共乘：約 \d\d:\d\d 到/);
+  assert.match(alt, /最多等 5 分鐘湊人，4 人每人約 40 元/);
+  assert.match(alt, /目前只要搭乘 557/, '最快的公車那句照舊');
+  assert.equal(env.call('route_', '比較所有公車路線').altText.split('\n')[0], env.call('route_', '比較所有路線').altText.split('\n')[0]);
+});
+
+test('557 發車前提醒：出門建議按一下就設好，時間到推播 557 下一班多久到士林站', () => {
+  const env = loadBot(ALL);
+  env.setNow('2026-10-12T21:00:00+08:00');
+  const plan = env.call('planReply_', '士林站', 'D', new Date('2026-10-13T08:10:00+08:00'), true);
+  const button = buttonsOf(plan).find(b => b[0] === '557 發車前提醒我');
+  assert.ok(button, '士林站出發的出門建議有提醒按鈕');
+  assert.match(button[1], /^出門提醒 明天 \d\d:\d\d$/);
+  assert.equal(buttonsOf(env.call('planReply_', '劍南路站', 'D', new Date('2026-10-13T08:10:00+08:00'), true)).some(b => b[0] === '557 發車前提醒我'), false, '不搭 557 就沒有');
+
+  const set = env.call('memberReply_', 'A', '出門提醒 明天 07:40');
+  assert.match(saidOf(set), /已設定出門提醒/);
+  assert.match(saidOf(set), /明天 07:25，我會告訴你 557 下一班多久到士林站/);
+  env.call('memberReply_', 'A', '出門提醒 明天 07:45'); // 再設一次會蓋掉舊的
+  assert.deepEqual(env.sheets['發車提醒'].rows.slice(1).map(r => r[4]), ['取消', '等待中']);
+
+  env.props.TDX_CLIENT_ID = 'id';
+  env.respond['openid-connect/token'] = { access_token: 't' };
+  env.respond['EstimatedTimeOfArrival'] = [{ RouteName: { Zh_tw: '557' }, Direction: 0, EstimateTime: 240 }, { RouteName: { Zh_tw: '557' }, Direction: 1, EstimateTime: 60 }];
+  env.setNow('2026-10-13T07:29:00+08:00');
+  env.call('lvTick_', env.call('cpNow_'));
+  assert.equal(env.fetches.filter(f => f.url.endsWith('/message/push')).length, 0, '還沒到 07:30 不推');
+  env.setNow('2026-10-13T07:30:00+08:00');
+  env.call('lvTick_', env.call('cpNow_'));
+  const pushed = env.fetches.filter(f => f.url.endsWith('/message/push'));
+  assert.equal(pushed.length, 1);
+  assert.equal(pushed[0].body.to, 'A');
+  const said = JSON.stringify(pushed[0].body.messages);
+  assert.match(said, /建議 07:45 前到士林站/);
+  assert.match(said, /557 下一班約 4 分鐘後到士林站/, '只看往東吳的方向');
+  env.call('lvTick_', env.call('cpNow_'));
+  assert.equal(env.fetches.filter(f => f.url.endsWith('/message/push')).length, 1, '一個提醒只推一次');
+
+  assert.match(env.call('memberReply_', 'A', '取消出門提醒'), /目前沒有設定出門提醒/);
+  assert.match(saidOf(env.call('memberReply_', 'A', '出門提醒 今天 07:40')), /快到出門時間了/);
+});

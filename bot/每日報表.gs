@@ -1,7 +1,7 @@
 /**
  * 每日報表（模組六）：每天晚上把當天的紀錄整理成一封信，寄給德育中心和軍訓室
  *
- * 內容：多少人用 Bot、問了什麼、比較器被問的上課時段、共乘成團數、步行／騎車／早到／借傘、
+ * 內容：多少人用 Bot、問了什麼、比較器被問的上課時段、共乘成團數、步行／騎車／早到、
  *       少排放的碳，加上 Gemini 寫的三行摘要（沒有金鑰或額度用完就用固定句子）。
  * 收件人放在指令碼屬性 REPORT_EMAILS（逗號分隔）；沒設定就只記在「每日報表」分頁、不寄信。
  * 每一天的數字都會存一列在「每日報表」分頁，之後做簡報的圖表直接用。
@@ -12,7 +12,7 @@
  */
 const REPORT_HOUR = 22;
 const REPORT_HEAD = ['日期', '使用人數', '訊息數', '比較器次數', '共乘成團', '共乘人次', '獨行', '步行', '騎車', '早到',
-  '借傘', '新訂閱', '少排放（公克）', '最多人問的上課時間', '摘要'];
+  '新訂閱', '少排放（公克）', '最多人問的上課時間', '摘要'];
 
 // ===== 排程每晚執行 =====
 
@@ -40,7 +40,6 @@ function buildReport_(day) {
   const compares = onDay('比較器紀錄', 0);
   const carpool = onDay('共乘紀錄', 0);
   const trips = onDay('通勤紀錄', 0);
-  const umbrellas = onDay('雨傘', 4);
   const subs = onDay('訂閱', 2).filter(r => r[1] === '訂閱中');
 
   const count = (rows, col, value) => rows.filter(r => r[col] === value).length;
@@ -62,7 +61,6 @@ function buildReport_(day) {
     walk: count(trips, 2, '步行'),
     bike: count(trips, 2, '騎車'),
     early: count(trips, 2, '早到'),
-    umbrellas: umbrellas.length,
     newSubs: subs.length,
     co2: trips.reduce((sum, r) => sum + (Number(r[4]) || 0), 0),
     topTime: topTime,
@@ -89,7 +87,7 @@ function reportItems_(r) {
     ['最多人問的上課時間', r.topTime || '—'],
     ['共乘', r.carpoolRiders + ' 人次（' + r.carpoolGroups + ' 團）'], ['一個人也出發（獨行）', r.solo + ' 次'],
     ['步行（錢穆故居站 → 校內）', r.walk + ' 次'], ['騎 YouBike', r.bike + ' 次'], ['7:30 前到校', r.early + ' 次'],
-    ['借傘', r.umbrellas + ' 次'], ['新訂閱提醒', r.newSubs + ' 人'], ['少排放', (r.co2 / 1000).toFixed(2) + ' 公斤 CO₂'],
+    ['新訂閱提醒', r.newSubs + ' 人'], ['少排放', (r.co2 / 1000).toFixed(2) + ' 公斤 CO₂'],
   ];
 }
 
@@ -110,7 +108,7 @@ function reportHtml_(r) {
 
 function saveReport_(r) {
   cpSheet_('每日報表', REPORT_HEAD).appendRow([r.date, r.users, r.messages, r.compares, r.carpoolGroups, r.carpoolRiders, r.solo,
-    r.walk, r.bike, r.early, r.umbrellas, r.newSubs, Math.round(r.co2), r.topTime, r.summary]);
+    r.walk, r.bike, r.early, r.newSubs, Math.round(r.co2), r.topTime, r.summary]);
 }
 
 /** 讀一個分頁的資料列；分頁還沒建立就當作沒有資料（不要為了報表去建空的分頁） */

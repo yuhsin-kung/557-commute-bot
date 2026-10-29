@@ -55,7 +55,7 @@ function cardsPage() {
 // 上排左到右、下排左到右。text 是按了以後替使用者傳出去的字，要跟 LINE 後台設定的一樣
 const MENU = [
   { icon: 'route', label: '出門前提醒', hint: '怎麼去・幾點出門・天氣', text: '出門前提醒', primary: true },
-  { icon: 'car', label: '557 以外的選擇', hint: '共乘・YouBike・雨傘', text: '557 以外的選擇' },
+  { icon: 'car', label: '557 以外的選擇', hint: '共乘・YouBike・共享雨傘', text: '557 以外的選擇' },
   { icon: 'bus-stop', label: '公車站牌與排隊', hint: '上車地點・排隊禮儀', text: '公車站牌與排隊' },
   { icon: 'award', label: '積分與打卡', hint: '5 點換 30 元學餐折價券', text: '積分與打卡' },
 ];

@@ -167,7 +167,7 @@ function render(s) {
       h = '<div class="card">' + head + '<div class="big">這次沒有人順路</div>'
         + '<div class="note">' + (s.reward ? '謝謝你用共乘，送你 ' + s.reward + ' 點 🎁' : '謝謝你用共乘！今天的獎勵已經領過了。') + '</div>'
         + '<p class="hint">接下來要怎麼去？</p>'
-        + '<a class="btn main" href="' + chat('比較所有公車路線') + '">改搭公車（比較所有公車路線）</a>'
+        + '<a class="btn main" href="' + chat('比較所有路線') + '">改搭公車（比較所有路線）</a>'
         + '<a class="btn" href="' + chat('共乘') + '">再開一次鈴</a></div>';
     } else {
       h = '<div class="card">' + head + '<div class="big">這一團結束了</div><a class="btn main" href="' + chat('共乘') + '">再找一團</a></div>';

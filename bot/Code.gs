@@ -35,8 +35,8 @@ function handleEvent_(ev) {
     return;
   }
   if (ev.type === 'message' && ev.message.type === 'image') {
-    // 雨傘.gs：借傘、還傘要拍傘號；積分.gs：騎車到校要傳 YouBike 騎乘紀錄。都沒在等照片就不回
-    const photo = umPhoto_(ev.source.userId, ev.message.id) || ptBikePhoto_(ev.source.userId, ev.message.id);
+    // 積分.gs：騎車到校要傳 YouBike 騎乘紀錄。沒在等照片就不回
+    const photo = ptBikePhoto_(ev.source.userId, ev.message.id);
     if (photo) {
       reply_(ev.replyToken, photo);
       log_(ev, '（照片）', photo);
@@ -89,11 +89,12 @@ function memberReply_(uid, text) {
   if (text === '確認兌換折價券') return ptRedeem_(uid);
   if (/^(我的折價券|我的學餐折價券|折價券)$/.test(text)) return ptMyCoupons_(uid);
   if (/^(youbike|ubike|微笑單車|腳踏車)$/i.test(text)) return ybReply_(); // YouBike.gs
-  if (/^(借傘|還傘|共享雨傘)(\s|$)/.test(text)) return umText_(uid, text); // 雨傘.gs
+  if (/^(借傘|還傘|共享雨傘)(\s|$)/.test(text)) return umText_(); // 雨傘.gs：Raingo 租借站說明
   if (/^(新生須知|新生教學|新生)$/.test(text)) return nbIntro_(); // 新生.gs
   if (text === '新生測驗' || /^答\s*[1-3]$/.test(text)) return nbQuiz_(uid, text);
   if (text === '排隊禮儀') return nbEtiquette_();
   if (/^包車(\s|$)/.test(text)) return charterText_(uid, text);
+  if (/^(出門提醒 |取消出門提醒$)/.test(text)) return lvText_(uid, text); // 發車提醒.gs
   return null;
 }
 
@@ -110,7 +111,7 @@ function route_(text) {
   if (/站牌|站位|上車(地點|處)|候車|排隊|哪(裡|邊|兒)?(搭|排|上車|等)/.test(text)) {
     return stationReply_(); // 站位變更.gs：「557 站牌資訊」「557 在哪裡搭」都會到這裡
   }
-  if (/^(比較所有公車路線|幫我比較路線|現在最快的車)$/.test(text)) {
+  if (/^(比較所有路線|比較所有公車路線|幫我比較路線|現在最快的車)$/.test(text)) {
     return liveReply_('士林站', '', null); // 比較器.gs：士林站現在最快的幾班車
   }
   return compareReply_(text); // 其他問題交給比較器（比較器.gs）判斷
@@ -138,7 +139,7 @@ function bus557Reply_() {
     title: '557 往東吳／往捷運站',
     rows: rows,
     footer: 'TDX 即時資料・' + nowText_(),
-    buttons: [{ label: '比較所有公車路線', text: '比較所有公車路線' }, { label: '557 站牌資訊', text: '557 站牌資訊' }],
+    buttons: [{ label: '比較所有路線', text: '比較所有路線' }, { label: '557 站牌資訊', text: '557 站牌資訊' }],
   });
 }
 
@@ -154,7 +155,7 @@ function busReply_(direction, stopNames, title) {
     }),
     footer: 'TDX 即時資料・' + nowText_(),
     buttons: direction === 0
-      ? [{ label: '比較所有公車路線', text: '比較所有公車路線' }, { label: '557 站牌資訊', text: '557 站牌資訊' }]
+      ? [{ label: '比較所有路線', text: '比較所有路線' }, { label: '557 站牌資訊', text: '557 站牌資訊' }]
       : [{ label: '找人共乘計程車回士林', text: '共乘 回士林' }],
   });
 }

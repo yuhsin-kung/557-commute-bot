@@ -1,4 +1,4 @@
-// 積分、打卡、成就、YouBike、雨傘、新生測驗、包車、每日報表的測試。執行：npm test
+// 積分、打卡、成就、YouBike、共享雨傘、新生測驗、包車、每日報表的測試。執行：npm test
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -244,83 +244,21 @@ test('YouBike：列出士林站可借、東吳附近可還；抓不到資料會�
   assert.doesNotMatch(reply, /很遠的站/);
 });
 
-// ===== 共享雨傘：借還都要拍傘號 =====
+// ===== 共享雨傘：Raingo 租借站，Bot 只說明 =====
 
-/** 假裝同學傳了一張照片，AI 從照片讀出 seen（例如 'U01'、'看不到'） */
-function photo(env, uid, seen) {
-  env.props.GEMINI_API_KEY = 'test-key';
-  env.onFetch = url => {
-    if (url.includes('api-data.line.me')) return { body: 'fake-jpeg', type: 'image/jpeg' };
-    if (url.includes('generativelanguage')) return { body: { candidates: [{ content: { parts: [{ text: seen }] } }] } };
-    return undefined;
-  };
-  const answer = env.call('umPhoto_', uid, 'msg-' + Math.random());
-  env.onFetch = null;
-  return answer;
-}
-
-test('雨傘：選地點後要拍傘號，照片上的傘號在架上才借得到', () => {
+test('共享雨傘：顯示 Raingo 租借站（規劃中），不收照片、不給積分；設好網址才有借用方式按鈕', () => {
   const env = start();
-  env.call('建立雨傘清單');
-  assert.equal(rows(env, '雨傘').length, 6);
-  assert.deepEqual(buttonsOf(say(env, 'A', '借傘')).map(b => b[1]), ['借傘 錢穆故居站', '借傘 校門口']);
-  assert.equal(photo(env, 'A', 'U01'), null, '沒有在借還時傳照片，Bot 不回');
-  assert.match(say(env, 'A', '借傘 錢穆故居站'), /請拍下要借的那把傘上的傘號/);
-  assert.match(photo(env, 'A', '看不到'), /看不清楚傘號/);
-  assert.match(photo(env, 'A', 'U05'), /U05 現在不在錢穆故居站的傘架上/, 'U05 放在校門口');
-  assert.match(photo(env, 'A', 'U99'), /不是共享雨傘的傘號/);
-  assert.match(textOf(photo(env, 'A', 'u-2')), /借到 U02/, '小寫、有符號也讀得到');
-  assert.deepEqual(JSON.parse(JSON.stringify(rows(env, '雨傘')[1].slice(0, 4))), ['U02', '借出', 'A', '錢穆故居站']);
-  assert.match(textOf(say(env, 'A', '借傘 校門口')), /已經借了 U02/);
-});
-
-test('雨傘：還傘要拍到借的那一把，對了才加 1 點、解鎖雨天英雄', () => {
-  const env = start();
-  env.call('建立雨傘清單');
-  say(env, 'A', '借傘 錢穆故居站');
-  photo(env, 'A', 'U01');
-  assert.match(say(env, 'A', '還傘 校門口'), /請拍下你借的 U01 上的傘號/);
-  assert.match(photo(env, 'A', 'U02'), /照片上的傘號是 U02，你借的是 U01/);
-  assert.equal(rows(env, '雨傘')[0][1], '借出', '拍錯不算還');
-  const back = photo(env, 'A', 'U01');
-  assert.match(back, /已歸還 U01.*\+1 點/);
-  assert.match(back, /雨天英雄/);
-  assert.equal(rows(env, '雨傘')[0][3], '校門口', '傘現在在校門口');
-  assert.match(say(env, 'A', '還傘 校門口'), /沒有借傘/);
-});
-
-test('雨傘：AI 不能用的時候不放行，請同學再傳一次', () => {
-  const env = start();
-  env.call('建立雨傘清單');
-  say(env, 'A', '借傘 錢穆故居站');
-  env.onFetch = url => (url.includes('api-data.line.me') ? { body: 'fake-jpeg' } : undefined);
-  assert.match(env.call('umPhoto_', 'A', 'm1'), /暫時沒辦法辨識照片/); // 沒有 Gemini 金鑰
-  assert.equal(rows(env, '雨傘').filter(r => r[1] === '借出').length, 0);
-});
-
-test('雨傘：重複借還不能一直加分，還傘的積分一天只給一次', () => {
-  const env = start();
-  env.call('建立雨傘清單');
-  say(env, 'A', '借傘 錢穆故居站'); photo(env, 'A', 'U01');
-  say(env, 'A', '還傘 校門口');
-  assert.match(photo(env, 'A', 'U01'), /\+1 點/);
-  say(env, 'A', '借傘 校門口'); photo(env, 'A', 'U01');
-  say(env, 'A', '還傘 錢穆故居站');
-  assert.match(photo(env, 'A', 'U01'), /已歸還 .*今天的還傘積分已經領過了/);
-  assert.equal(env.call('cpUser_', 'A').points, 1);
-
-  env.addMinutes(24 * 60);
-  say(env, 'A', '借傘 錢穆故居站'); photo(env, 'A', 'U01');
-  say(env, 'A', '還傘 校門口');
-  assert.match(photo(env, 'A', 'U01'), /\+1 點/, '隔天可以再拿');
-  assert.equal(env.call('cpUser_', 'A').points, 2);
-});
-
-test('雨傘：那個點借完了會說沒有', () => {
-  const env = start();
-  env.call('建立雨傘清單');
-  ['A', 'B', 'C'].forEach((u, i) => { say(env, u, '借傘 校門口'); photo(env, u, 'U0' + (4 + i)); });
-  assert.match(say(env, 'D', '借傘 校門口'), /沒有傘可以借了/);
+  ['共享雨傘', '借傘', '還傘 校門口'].forEach(text => assert.match(say(env, 'A', text).altText, /共享雨傘（規劃中）/, text));
+  const card = say(env, 'A', '共享雨傘');
+  assert.match(card.altText, /錢穆故居站：Raingo 租借站/);
+  assert.match(card.altText, /一站借、另一站還/);
+  assert.deepEqual(buttonsOf(card), []);
+  env.props.RAINGO_URL = 'https://example.com/raingo';
+  assert.deepEqual(buttonsOf(say(env, 'A', '共享雨傘')), [['看借用方式', 'https://example.com/raingo']]);
+  assert.equal(env.call('handleEvent_', { type: 'message', replyToken: 'r', source: { userId: 'A' }, message: { type: 'image', id: 'm1' } }), undefined);
+  assert.equal(env.fetches.filter(f => f.url.endsWith('/message/reply')).length, 0, '沒在等騎乘紀錄的照片就不回');
+  assert.equal(user(env, 'A').points, 0);
+  assert.doesNotMatch(textOf(say(env, 'A', '我的紀錄')), /雨天英雄/);
 });
 
 // ===== 新生測驗、排隊禮儀、包車 =====

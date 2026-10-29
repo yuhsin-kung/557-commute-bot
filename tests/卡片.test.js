@@ -72,7 +72,7 @@ test('每一種回覆的卡片：沒有空字串、顏色格式正確、按鈕�
 test('即時比較：照到校時間排，最快的標成推薦，不會到東吳的路線不列', () => {
   const card = sampleCards().即時比較;
   const rows = card.contents.body.contents.filter(c => c.type === 'box' && c.contents[0].layout === 'horizontal');
-  assert.deepEqual(rows.map(r => r.contents[0].contents[0].text), ['紅30', '255', '304重慶', '557']);
+  assert.deepEqual(rows.map(r => r.contents[0].contents[0].text), ['紅30', '255', '304重慶', '557', '🚕 計程車共乘'], '公車下面接著其他方法（這裡沒有 YouBike 資料）');
   assert.equal(rows[0].contents[0].contents[0].color, '#A63A2B', '最快的那一列用品牌色');
   assert.equal(rows[1].contents[0].contents[0].color, '#1B1D22');
   assert.match(rows[0].contents[0].contents[1].text, /^即將進站・\d\d:\d\d 到$/);

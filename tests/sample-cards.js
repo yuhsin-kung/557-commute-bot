@@ -62,6 +62,8 @@ function sampleCards() {
   keep('新生教學', env.call('nbIntro_'));
   keep('排隊禮儀短片', env.call('nbEtiquette_'));
   keep('公車站牌與排隊禮儀', env.call('nbStopQueue_'));
+  keep('共享雨傘（Raingo）', env.call('umText_'));
+  keep('出門提醒設好了', env.call('lvText_', 'A', '出門提醒 明天 07:40'));
   env.respond.youbike = [{ sna: 'YouBike2.0_捷運士林站(1號出口)', available_rent_bikes: 38, available_return_bikes: 22, latitude: 25.0955, longitude: 121.527 }, { sna: 'YouBike2.0_東吳大學', available_rent_bikes: 8, available_return_bikes: 14, latitude: 25.0946, longitude: 121.5457 }];
   keep('YouBike 車數', env.call('ybReply_'));
   // 學餐折價券：一張的卡片、兩張以上左右滑
