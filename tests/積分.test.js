@@ -216,13 +216,13 @@ test('兌換學餐折價券：先顯示點數、問要不要換；按確認才�
   assert.match(page.content, /2026\/11\/16/);
   assert.match(page.content, /可以使用/);
   assert.match(page.content, /結帳時出示此頁面給學餐人員/);
-  assert.match(env.call('doGet', { parameter: { page: 'coupon', t: user(env, 'B').token, c: 'SC1015-0001' } }).content, /找不到這張券/, '別人的代碼看不到這張券');
+  assert.match(env.call('doGet', { parameter: { page: 'coupon', t: user(env, 'B').token, c: 'SC1017-0001' } }).content, /找不到這張券/, '別人的代碼看不到這張券');
   assert.equal(env.call('doGet', { parameter: { page: 'coupon', t: user(env, 'A').token, c: '<script>' } }).text, '東吳通勤達人', '券號格式不對就不給頁面');
 
   // 30 天後過期
   env.addMinutes(31 * 24 * 60);
   assert.match(say(env, 'A', '我的折價券').altText, /目前沒有可以用的折價券/);
-  assert.match(env.call('doGet', { parameter: { page: 'coupon', t: user(env, 'A').token, c: 'SC1015-0001' } }).content, /已過期/);
+  assert.match(env.call('doGet', { parameter: { page: 'coupon', t: user(env, 'A').token, c: 'SC1017-0001' } }).content, /已過期/);
 });
 
 // ===== YouBike =====
