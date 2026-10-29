@@ -21,7 +21,7 @@ const CP = {
   NO_SHOW_GRACE_MIN: 3,   // 預約：出發時間過幾分鐘還沒按「我到了」算沒出現
   SLOT_MIN: 10,           // 預約幾分鐘一格
   RESERVE_DAYS: 7,        // 最遠可以預約幾天後
-  SOLO_POINTS: 1,         // 只有一個人的獎勵，一天一次（積分 3 點換 30 元學餐折價券）
+  SOLO_POINTS: 1,         // 只有一個人的獎勵，一天一次（積分 5 點換 30 元學餐折價券）
   NO_SHOW_PENALTY: 5,
   LATE_CANCEL_PENALTY: 2,
   RIDE_BONUS: 1,          // 完成一次共乘加回的信用分

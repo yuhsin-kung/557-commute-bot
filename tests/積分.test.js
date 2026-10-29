@@ -75,7 +75,7 @@ test('7:30 前到校早到 +1 點，一天一次；7:30 以後沒有；不再發
   const early = start(MON_0700);
   const first = checkin(early, 'A', CAMPUS).lines.join('\n');
   assert.match(first, /早到 \+1 點/);
-  assert.match(first, /3 點換 30 元學餐折價券/);
+  assert.match(first, /5 點換 30 元學餐折價券/);
   assert.doesNotMatch(first, /早餐/);
   early.addMinutes(5);
   assert.doesNotMatch(checkin(early, 'A', CAMPUS).lines.join('\n'), /早到 \+/);
@@ -170,50 +170,50 @@ test('共乘上車、獨行都算進「共乘夥伴」', () => {
   assert.match(textOf(say(env, 'A', '我的紀錄')), /🏅 共乘夥伴/);
 });
 
-test('兌換學餐折價券：先顯示點數、問要不要換；按確認才扣 3 點、給券號', () => {
+test('兌換學餐折價券：先顯示點數、問要不要換；按確認才扣 5 點、給券號', () => {
   const env = start(MON_0700);
   const none = say(env, 'A', '兌換折價券');
   assert.match(none.altText, /目前積分：0 點/);
-  assert.match(none.altText, /還差：3 點/);
-  assert.match(textOf(say(env, 'A', '確認兌換折價券')), /還差：3 點/, '不夠點數按確認也不會扣');
-  for (let day = 0; day < 3; day++) { // 三天都 7:30 前到校，一天 1 點
+  assert.match(none.altText, /還差：5 點/);
+  assert.match(textOf(say(env, 'A', '確認兌換折價券')), /還差：5 點/, '不夠點數按確認也不會扣');
+  for (let day = 0; day < 5; day++) { // 五天都 7:30 前到校，一天 1 點
     checkin(env, 'A', CAMPUS);
     env.addMinutes(24 * 60);
   }
-  assert.equal(user(env, 'A').points, 3);
+  assert.equal(user(env, 'A').points, 5);
   assert.deepEqual(buttonsOf(say(env, 'A', '我的紀錄'))[0], ['兌換學餐折價券', '兌換折價券']);
   const ask = say(env, 'A', '兌換折價券');
   assert.equal(ask.type, 'flex', '是卡片，不是純文字');
-  assert.match(ask.altText, /目前積分：3 點/);
+  assert.match(ask.altText, /目前積分：5 點/);
   assert.match(ask.altText, /可以兌換：1 張/);
   assert.match(ask.altText, /兌換後剩下 0 點。要兌換嗎？/);
   assert.deepEqual(buttonsOf(ask), [['確認兌換', '確認兌換折價券'], ['先不要', '我的紀錄']]);
-  assert.equal(user(env, 'A').points, 3, '還沒按確認，不扣點');
+  assert.equal(user(env, 'A').points, 5, '還沒按確認，不扣點');
 
   const got = say(env, 'A', '確認兌換折價券');
   assert.match(got[0], /兌換成功！剩下 0 點/);
   const card = got[1];
   assert.equal(card.type, 'flex');
-  assert.match(card.altText, /^30 元學餐折價券｜券號 SC1015-0001｜2026\/11\/14 到期$/);
+  assert.match(card.altText, /^30 元學餐折價券｜券號 SC1017-0001｜2026\/11\/16 到期$/);
   const buttons = card.contents.footer.contents.map(b => [b.action.label, b.action.uri || b.action.text]);
   assert.equal(buttons[0][0], '查看此券');
-  assert.match(buttons[0][1], /\?page=coupon&t=[0-9a-f-]{36}&c=SC1015-0001$/);
+  assert.match(buttons[0][1], /\?page=coupon&t=[0-9a-f-]{36}&c=SC1017-0001$/);
   assert.deepEqual(buttons[1], ['我的折價券', '我的折價券']);
   assert.equal(user(env, 'A').points, 0);
-  assert.deepEqual(JSON.parse(JSON.stringify(rows(env, '學餐折價券')[0].slice(1))), ['A', 'SC1015-0001', 30, '未使用', '2026/11/14']);
-  assert.match(textOf(say(env, 'A', '確認兌換折價券')), /還差：3 點/, '換完再按確認也不能再換');
+  assert.deepEqual(JSON.parse(JSON.stringify(rows(env, '學餐折價券')[0].slice(1))), ['A', 'SC1017-0001', 30, '未使用', '2026/11/16']);
+  assert.match(textOf(say(env, 'A', '確認兌換折價券')), /還差：5 點/, '換完再按確認也不能再換');
 
   // 我的折價券：列出還能用的券
   const mine = say(env, 'A', '我的折價券');
   assert.equal(mine.altText, '我的折價券：1 張可以用');
-  assert.match(JSON.stringify(mine.contents), /SC1015-0001/);
+  assert.match(JSON.stringify(mine.contents), /SC1017-0001/);
   assert.match(say(env, 'B', '我的折價券').altText, /目前沒有可以用的折價券/);
 
   // 查看此券：代碼和券號都要對得上
-  const page = env.call('doGet', { parameter: { page: 'coupon', t: user(env, 'A').token, c: 'SC1015-0001' } });
+  const page = env.call('doGet', { parameter: { page: 'coupon', t: user(env, 'A').token, c: 'SC1017-0001' } });
   assert.equal(page.title, '學餐折價券');
   assert.match(page.content, /30 元學餐折價券/);
-  assert.match(page.content, /2026\/11\/14/);
+  assert.match(page.content, /2026\/11\/16/);
   assert.match(page.content, /可以使用/);
   assert.match(page.content, /結帳時出示此頁面給學餐人員/);
   assert.match(env.call('doGet', { parameter: { page: 'coupon', t: user(env, 'B').token, c: 'SC1015-0001' } }).content, /找不到這張券/, '別人的代碼看不到這張券');
