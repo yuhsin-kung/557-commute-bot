@@ -2,7 +2,7 @@
  * 站位變更推播（30）
  *
  * 每 6 小時檢查一次德育中心的「557、300、通勤30等路線公車及劍南路站師生專車」頁面，
- * 內容有變就用 Gemini 寫兩三句摘要，推播給有訂閱提醒的人，並記到「站位變更紀錄」。
+ * 站位或時刻真的有變，才推播給所有加 Bot 好友的人（不用訂閱）；只改排版就不推。都記到「站位變更紀錄」。
  * 學生按「557 站牌資訊」（或問「557 在哪裡搭」）時，回覆最新的摘要（回覆不用額度）。
  *
  * 第一次使用：在編輯器執行一次「設定站位檢查排程」，它也會先記下現在的頁面當作比對基準。
@@ -33,9 +33,9 @@ function 檢查站位變更() {
   }
 
   const message = diff;
-  sendToSubscribers_({ title: '557 上車資訊有更新', message: message, reason: '站位變更',
+  const sent = broadcastAll_({ title: '557 上車資訊有更新', message: message, reason: '站位變更',
     buttons: [{ label: '看德育中心公告', uri: STATION_PAGE_URL }, ['最新的上車地點', '557 站牌資訊']] }, '站位變更'); // 晚上提醒.gs
-  saveStation_(sheet, now, hash, summary, '已推播', diff);
+  saveStation_(sheet, now, hash, summary, sent ? '已推播給所有好友' : '推播失敗（可能是額度不夠）', diff);
 }
 
 /** 抓頁面，只留內文（標題列、側邊選單、頁尾的「最後更新時間」都不算） */

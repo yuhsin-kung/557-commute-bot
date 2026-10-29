@@ -126,6 +126,27 @@ function sendToSubscribers_(result, kind) {
   logPush_(kind, result.pop, result.event, to.length, result.reason + '，已發送（剩 ' + (left - to.length) + ' 則）');
 }
 
+/**
+ * 推播給所有加 Bot 好友的人（站位變更用，不用訂閱）。好友人數就是用掉的推播則數，額度不夠 LINE 會拒絕。
+ * 回傳有沒有發出去
+ */
+function broadcastAll_(result, kind) {
+  try {
+    UrlFetchApp.fetch('https://api.line.me/v2/bot/message/broadcast', {
+      method: 'post',
+      contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + PROPS.getProperty('LINE_CHANNEL_ACCESS_TOKEN') },
+      payload: JSON.stringify({ messages: [choices_(result.message, result.buttons || [['全部功能', '選單']], { title: result.title, menu: false })] }), // 卡片.gs
+    });
+    logPush_(kind, '', '', '全部好友', result.reason + '，已發送給所有好友');
+    return true;
+  } catch (err) {
+    console.error(err);
+    logPush_(kind, '', '', 0, result.reason + '，發送失敗：' + err);
+    return false;
+  }
+}
+
 /** 這個月還能主動推播幾則 */
 function pushQuotaLeft_() {
   const get = path => JSON.parse(UrlFetchApp.fetch('https://api.line.me/v2/bot/message/' + path, {

@@ -118,3 +118,25 @@ test('557 發車前提醒：出門建議按一下就設好，時間到推播 557
   assert.match(env.call('memberReply_', 'A', '取消出門提醒'), /目前沒有設定出門提醒/);
   assert.match(saidOf(env.call('memberReply_', 'A', '出門提醒 今天 07:40')), /快到出門時間了/);
 });
+
+test('站位變更：站牌真的改了才推播給所有好友（不用訂閱）；只改排版或沒變就不推', () => {
+  const env = loadBot(ALL);
+  env.context.__page = '557 在中正路 205 號前上車';
+  env.context.__diff = '';
+  env.run('fetchStationPage_ = () => __page; diffSummary_ = () => __diff; summarizeStation_ = () => "摘要";');
+  const sent = () => env.fetches.filter(f => /\/message\/(broadcast|multicast)$/.test(f.url));
+  env.call('檢查站位變更'); // 第一次只記比對基準
+  assert.equal(sent().length, 0);
+  env.call('檢查站位變更');
+  assert.equal(sent().length, 0, '頁面沒變就不推');
+  env.context.__page = '557 在中正路 205 號前上車。';
+  env.call('檢查站位變更');
+  assert.equal(sent().length, 0, '只改排版（Gemini 說無實質變更）也不推');
+  env.context.__page = '557 改到中正路 221 號前上車';
+  env.context.__diff = '557 士林站上車處搬到中正路 221 號前。';
+  env.call('檢查站位變更');
+  assert.equal(sent().length, 1);
+  assert.match(sent()[0].url, /\/message\/broadcast$/, '發給所有好友，不是只發給訂閱的人');
+  assert.match(JSON.stringify(sent()[0].body.messages), /搬到中正路 221 號前/);
+  assert.doesNotMatch(saidOf(env.call('remindSettings_')), /上車地點/, '訂閱提醒只講雨天和考試週');
+});
