@@ -25,9 +25,11 @@ const MENU = [
     buttons: [['計程車共乘', '共乘'], ['YouBike 車數', 'YouBike'], ['共享雨傘', '共享雨傘'], ['包車意願調查', '包車']],
   },
   {
-    name: '公車站牌與排隊',
-    hint: '不知道去哪裡搭車？查詢上車地點、排隊位置與搭車方式，出門不再霧煞煞。',
-    buttons: [['557 站牌資訊', '557 站牌資訊'], ['排隊禮儀', '排隊禮儀']],
+    // 只有一顆按鈕：按了直接傳上車地點＋排隊禮儀短片（新生.gs 的 nbStopQueue_），不再多跳一層。
+    // 圖文選單的圖如果還印舊名稱「公車站牌與排隊」，傳舊名稱一樣認得
+    name: '公車站牌與排隊禮儀',
+    alias: '公車站牌與排隊',
+    open: () => nbStopQueue_(),
   },
   {
     name: '積分與打卡',
@@ -49,10 +51,11 @@ function menuCard_() {
     { title: '東吳通勤達人', badge: '選單', primary: false, menu: false });
 }
 
-/** 按了分類：把這一類的功能按鈕傳到聊天室。不是分類名稱就回傳 null */
+/** 按了分類：把這一類的功能按鈕傳到聊天室（只有一個功能的分類直接打開它）。不是分類名稱就回傳 null */
 function menuCategory_(name) {
-  const c = MENU.filter(x => x.name === name)[0];
+  const c = MENU.filter(x => x.name === name || x.alias === name)[0];
   if (!c) return null;
+  if (c.open) return c.open();
   return choices_(c.hint, c.buttons, { title: c.name, badge: '選單', primary: false });
 }
 

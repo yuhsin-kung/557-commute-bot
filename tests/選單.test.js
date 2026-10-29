@@ -8,7 +8,7 @@ const { plain, saidOf, buttonsOf, hasQuickReply } = require('./helpers');
 
 const ALL = fs.readdirSync(path.join(__dirname, '..', 'bot')).filter(f => f.endsWith('.gs')).sort((a, b) => (a === 'Code.gs' ? -1 : b === 'Code.gs' ? 1 : 0));
 const MON_0700 = '2026-10-12T07:00:00+08:00';
-const CATEGORIES = ['出門前提醒', '557 以外的選擇', '公車站牌與排隊', '積分與打卡'];
+const CATEGORIES = ['出門前提醒', '557 以外的選擇', '公車站牌與排隊禮儀', '積分與打卡'];
 
 /** 會連網路的回覆換成固定的字，測試只看「有沒有走到對的功能」 */
 function start() {
@@ -46,23 +46,36 @@ test('按分類，Bot 把那一類的功能按鈕傳到聊天室', () => {
     ['降雨查詢', '降雨查詢'], ['雨天與考試週訂閱提醒', '訂閱提醒設定'],
   ]);
   assert.deepEqual(buttonsOf(send(env, '557 以外的選擇')[0]).map(b => b[1]), ['共乘', 'YouBike', '共享雨傘', '包車']);
-  assert.deepEqual(buttonsOf(send(env, '公車站牌與排隊')[0]).map(b => b[1]), ['557 站牌資訊', '排隊禮儀']);
   assert.deepEqual(buttonsOf(send(env, '積分與打卡')[0]), [
     ['到校打卡（早到、步行）', '打卡'], ['騎車到校', '騎車到校'], ['我的紀錄', '我的紀錄'], ['兌換學餐折價券', '兌換折價券'], ['我的折價券', '我的折價券'], ['全校減碳', '全校減碳'],
   ]);
 });
 
+test('「公車站牌與排隊禮儀」只有一顆按鈕：直接左右滑上車地點和排隊禮儀短片', () => {
+  const env = start();
+  ['公車站牌與排隊禮儀', '公車站牌與排隊'].forEach(text => {
+    const out = send(env, text)[0];
+    assert.equal(out.contents.type, 'carousel', text);
+    assert.equal(out.contents.contents.length, 2);
+    assert.match(out.altText, /557 上車地點/);
+    assert.match(out.altText, /排隊禮儀短片/);
+  });
+  // 分開傳也還認得
+  assert.equal(send(env, '557 站牌資訊')[0].contents.type, 'bubble');
+  assert.equal(send(env, '排隊禮儀')[0].altText, '排隊禮儀短片：一起排好，大家都快');
+});
+
 test('每個功能的入口都在某個分類裡', () => {
   const env = start();
-  const all = CATEGORIES.flatMap(c => buttonsOf(send(env, c)[0]).map(b => b[1]));
-  ['比較所有公車路線', '出門時間', '557 即時動態', '557 站牌資訊', '降雨查詢', '訂閱提醒設定',
-    '共乘', 'YouBike', '共享雨傘', '包車', '排隊禮儀', '打卡', '我的紀錄', '兌換折價券', '我的折價券', '全校減碳', '騎車到校']
+  const all = CATEGORIES.filter(c => c !== '公車站牌與排隊禮儀').flatMap(c => buttonsOf(send(env, c)[0]).map(b => b[1]));
+  ['比較所有公車路線', '出門時間', '557 即時動態', '降雨查詢', '訂閱提醒設定',
+    '共乘', 'YouBike', '共享雨傘', '包車', '打卡', '我的紀錄', '兌換折價券', '我的折價券', '全校減碳', '騎車到校']
     .forEach(command => assert.ok(all.includes(command), '沒有「' + command + '」的按鈕'));
 });
 
 test('分類裡每一顆按鈕傳出去的字，Bot 都認得', () => {
   const env = start();
-  CATEGORIES.forEach(category => {
+  CATEGORIES.filter(c => c !== '公車站牌與排隊禮儀').forEach(category => { // 這一類沒有功能按鈕，直接打開
     buttonsOf(send(env, category)[0]).forEach(([label, text]) => {
       assert.equal(isUnknown(send(env, text)), false, '「' + category + '」的「' + label + '」傳出「' + text + '」，Bot 看不懂');
     });
@@ -136,7 +149,7 @@ test('加好友：歡迎的話、新生須知、選單', () => {
   assert.equal(reply.length, 3);
   assert.match(reply[0].text, /^嗨！我是東吳通勤達人/);
   assert.match(saidOf(reply[1]), /新生須知：第一次搭 557/);
-  assert.deepEqual(buttonsOf(reply[1]).map(b => b[1]), ['新生測驗', '557 站牌資訊', '排隊禮儀']);
+  assert.deepEqual(buttonsOf(reply[1]).map(b => b[1]), ['新生測驗', '公車站牌與排隊禮儀']);
   assert.deepEqual(buttonsOf(reply[2]).map(b => b[0]), CATEGORIES);
 });
 

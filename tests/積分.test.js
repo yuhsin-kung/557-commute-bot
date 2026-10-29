@@ -343,7 +343,7 @@ test('新生須知、新生測驗：全對 +1 點、解鎖新生上路，再考�
 test('新生測驗：答錯會告訴正確答案，沒全對不給分', () => {
   const env = start();
   say(env, 'A', '新生測驗');
-  assert.match(textOf(say(env, 'A', '答 1')), /正確答案是「按「557 站牌資訊」問我」/);
+  assert.match(textOf(say(env, 'A', '答 1')), /正確答案是「按「公車站牌與排隊禮儀」問我」/);
   say(env, 'A', '答 1');
   assert.match(textOf(say(env, 'A', '答 2')), /答對 2\/3 題/);
   assert.equal(user(env, 'A').points, 0);
