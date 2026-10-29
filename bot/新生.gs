@@ -1,11 +1,11 @@
 /**
- * 新生與排隊文化（模組五）：新生排隊教學（23）、排隊禮儀（28）；順便放學生自組包車的意願登記（43）
+ * 新生與排隊文化（模組五）：新生排隊教學（23）、排隊禮儀（28）；順便放學生包車的登記說明（43）
  *
  * 「新生須知」：加好友時自動跳出（選單.gs 的 menuWelcome_），也可以傳「新生須知」再看一次。
  *   重點說明＋教學短片連結（拍好後把網址放進指令碼屬性 NEWBIE_VIDEO_URL）
  * 「新生測驗」：三題小測驗，全對送積分、解鎖第一個成就（積分.gs）
  * 「排隊禮儀」：只講規則，不點名、不拍攝任何人
- * 「包車」：說明規劃中，按「我有興趣」記一筆到「意願紀錄」
+ * 「包車」：說明流程（選課後開表單統計時段 → 洽詢業者 → 每月報名 → 尖峰直達），表單開放時多一顆填表按鈕
  *
  * 上車地點會因捷運施工調整，所以這裡不寫死站牌位置，一律請學生按「公車站牌與排隊禮儀」（站位變更.gs）。
  * 用到卡片.gs 的 choices_，共乘.gs 的 cpSheet_、cpNow_，積分.gs 的 ptAdd_、ptStats_、PT。
@@ -109,28 +109,23 @@ function nbAsk_(uid, i, score, feedback) {
     { title: '第 ' + (i + 1) + ' 題／共 ' + NB_QUIZ.length + ' 題', badge: '新生測驗', primary: false, menu: false });
 }
 
-// ===== 學生自組包車（43）：還在調查需求 =====
+// ===== 學生包車（43）：選課後統計各時段人數，再洽詢業者 =====
 
-function charterText_(uid, text) {
-  const sheet = cpSheet_('意願紀錄', ['時間', '使用者 ID', '項目', '內容']); // 共乘.gs
-  const who = () => sheet.getDataRange().getValues().slice(1).filter(r => r[2] === '包車').map(r => r[1]);
-  let mine = who().indexOf(uid) >= 0;
-  let fresh = false;
-  if (text.trim() === '包車 我有興趣' && !mine) {
-    sheet.appendRow([cpNow_(), uid, '包車', '有興趣']);
-    mine = fresh = true;
-  }
-  const count = Object.keys(who().reduce((set, id) => { set[id] = 1; return set; }, {})).length;
-  const survey = PROPS.getProperty('SURVEY1_URL'); // 問卷表單.gs「建立通勤問卷」存的網址
+/**
+ * 每學期選課結束後，把包車登記表單的網址放進指令碼屬性 CHARTER_FORM_URL，卡片就會多一顆「填寫包車登記表單」；
+ * 統計截止後把這個屬性刪掉，卡片就回到「下次選課結束後開放登記」。登記的資料在表單那邊，Bot 不另外記。
+ */
+function charterText_() {
+  const form = PROPS.getProperty('CHARTER_FORM_URL');
   return card_({ // 卡片.gs
     badge: '557 以外的選擇',
-    title: '🚐 學生自組包車（規劃中）',
-    rows: [{ label: '目前有興趣', value: count + ' 人', best: true }],
-    notes: [
-      fresh ? '✅ 收到！你的意願記下來了。' : mine ? '你已經登記過有興趣了，謝謝！' : '',
-      '固定在尖峰時段從士林站直達校園，用學期訂閱制。目前在調查需求，還沒有發車；開辦前會先確認合法的業者和保險。',
+    title: '🚐 學生包車（規劃中）',
+    rows: [
+      { label: '登記', value: form ? '表單開放中' : '下次選課結束後開放', best: true },
+      { label: '路線', value: '捷運士林站 → 校園，尖峰時段直達' },
+      { label: '報名', value: '以一個月為單位繳費' },
     ],
-    buttons: (mine ? [] : [{ label: '我有興趣', text: '包車 我有興趣' }])
-      .concat(survey ? [{ label: '填寫包車需求問卷', uri: survey }] : []),
+    notes: ['每學期選課結束後開放表單，統計各時段需要搭乘的人數；統計截止後，依人數最多的幾個時段洽詢合法遊覽車或交通業者，人數確定後才發車，發車時間由 Bot 推播。'],
+    buttons: form ? [{ label: '填寫包車登記表單', uri: form }] : [],
   });
 }

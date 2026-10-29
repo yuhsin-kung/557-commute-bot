@@ -93,7 +93,7 @@ function memberReply_(uid, text) {
   if (/^(新生須知|新生教學|新生)$/.test(text)) return nbIntro_(); // 新生.gs
   if (text === '新生測驗' || /^答\s*[1-3]$/.test(text)) return nbQuiz_(uid, text);
   if (text === '排隊禮儀') return nbEtiquette_();
-  if (/^包車(\s|$)/.test(text)) return charterText_(uid, text);
+  if (/^包車(\s|$)/.test(text)) return charterText_(); // 新生.gs
   if (/^(出門提醒 |取消出門提醒$)/.test(text)) return lvText_(uid, text); // 發車提醒.gs
   return null;
 }
