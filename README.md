@@ -59,7 +59,6 @@
 ├── README.md          ← 你正在看的這份
 ├── LINE指令說明.md    ← Bot 聽得懂什麼、回什麼、記在哪裡
 ├── 問卷題目.md        ← 通勤問卷和回饋問卷的題目（改題目要連 bot/問卷表單.gs 一起改）
-├── 共乘設計.md        ← 計程車共乘的設計：即時＋預約、付款、獎懲規則
 ├── package.json       ← 只用來跑測試和預覽（npm test、npm run preview、npm run validate:line）
 ├── design/
 │   └── 圖文選單.png   ← 聊天室底部的圖文選單，上傳到 LINE 後台用
