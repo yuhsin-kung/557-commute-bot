@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<title>557通勤平台_期中報告</title>
+<style>
+@page { size: A4; margin: 2.5cm 2.5cm 2.3cm 2.5cm; }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body {
+  margin: 0; color: #000;
+  font-family: "Times New Roman", "PMingLiU", "新細明體", serif;
+  font-size: 12pt; line-height: 20pt; text-align: justify;
+}
+.kai { font-family: "Times New Roman", "DFKai-SB", "標楷體", serif; }
+p { margin: 0; text-indent: 2em; padding-left: 2em; }
+.cover p, .toc p { padding-left: 0; }
+p.noindent { text-indent: 0; }
+h1, h2, h3 { font-weight: bold; break-after: avoid; page-break-after: avoid; }
+/* 第一階層：16 號標楷體，靠左，前後 0.5 行 */
+h1 { margin-top:14pt !important; font-family: "Times New Roman", "DFKai-SB", "標楷體", serif; font-size: 16pt; line-height: 24pt; margin: 10pt 0 10pt 0; }
+/* 第二階層：14 號新細明體，縮排 2 字元，前後 0.5 行 */
+h2 { font-size: 14pt; line-height: 22pt; margin: 8pt 0 6pt 0; padding-left: 2em; font-weight: bold; }
+/* 第三階層：12 號，縮排 2 字元 */
+h3 { font-size: 12pt; line-height: 20pt; margin: 4pt 0 2pt 0; padding-left: 2em; }
+.chapter { break-before: page; }
+
+/* 封面 */
+.cover { height: 247mm; display: flex; flex-direction: column; align-items: center; text-align: center; break-after: page; }
+.cover .course { font-size: 18pt; line-height: 28pt; margin-top: 40mm; }
+.cover .kind { font-size: 22pt; line-height: 32pt; margin-top: 6mm; letter-spacing: 2pt; }
+.cover .title { font-size: 26pt; line-height: 38pt; margin-top: 30mm; font-weight: bold; }
+.cover .subtitle { font-size: 16pt; line-height: 26pt; margin-top: 6mm; }
+.cover table.members { margin-top: 32mm; border-collapse: collapse; font-size: 14pt; line-height: 26pt; }
+.cover table.members td { padding: 2pt 14pt; border: none; text-align: left; }
+.cover .date { margin-top: auto; font-size: 14pt; line-height: 24pt; margin-bottom: 8mm; }
+
+/* 目錄 */
+.toc { break-after: page; }
+.toc h1 { text-align: center; font-size: 20pt; margin: 0 0 18pt 0; }
+.toc ol { list-style: none; padding: 0; margin: 0; }
+.toc li { display: flex; align-items: baseline; line-height: 26pt; }
+.toc li.l2 { padding-left: 2em; line-height: 22pt; }
+.toc li .t { white-space: nowrap; }
+.toc li .dots { flex: 1; border-bottom: 1px dotted #555; margin: 0 6pt; transform: translateY(-4pt); }
+.toc li .pg { min-width: 1.5em; text-align: right; }
+
+/* 圖表 */
+figure { margin: 8pt 0 10pt 0; text-align: center; break-inside: avoid; }
+figure img { max-width: 100%; display: block; margin: 0 auto; }
+figcaption { font-size: 10.5pt; line-height: 16pt; margin-top: 4pt; text-align: center; }
+.cap-top { font-size: 10.5pt; line-height: 16pt; text-align: center; margin: 8pt 0 4pt; font-weight: bold; break-after: avoid; }
+.src { font-size: 9pt; line-height: 13pt; color: #333; text-align: left; margin-top: 3pt; }
+table.t { width: 100%; border-collapse: collapse; font-size: 10.5pt; line-height: 15pt; margin: 0 0 10pt 0; }
+table.t tr { break-inside: avoid; }
+table.t th, table.t td { border: 0.75pt solid #000; padding: 3pt 5pt; vertical-align: middle; text-align: left; }
+table.t th { background: #e8e8e8; text-align: center; font-weight: bold; }
+table.t td.c { text-align: center; }
+.row { display: flex; gap: 5mm; justify-content: center; align-items: flex-start; }
+.row figure { flex: 1; margin-top: 4pt; }
+.card img { border: 0.5pt solid #999; }
+.done { font-weight: bold; }
+.todo { color: #555; }
+.fill { background: #fff3a8; }
+ul.bul, ol.num { margin: 2pt 0 4pt 0; padding-left: 6em; }
+ul.bul li, ol.num li { margin: 0; }
+.quote { font-family: "Times New Roman", "DFKai-SB", "標楷體", serif; margin: 6pt 0 8pt 0; padding-left: 5em; text-indent: 0; }
+.refs p { text-indent: -2em; padding-left: 2em; text-align: left; word-break: break-all; }
+table.keep { break-inside: avoid; }
+.small { font-size: 10.5pt; line-height: 16pt; }
+</style>
+</head>
+<body>
+
+<!-- ============ 封面 ============ -->
+<section class="cover kai">
+  <div class="course">智慧創新整合實務</div>
+  <div class="kind">學生專案計畫期中報告</div>
+  <div class="title">557 通勤平台</div>
+  <div class="subtitle">以 LINE Bot 引導分流，<br>緩解外雙溪校區 557 公車尖峰擁擠問題</div>
+  <table class="members">
+    <tr><td>資料科學系二年級 B 班</td><td>14173236</td><td>龔俞心</td></tr>
+    <tr><td>資料科學系二年級 B 班</td><td>14173237</td><td>簡晨芸</td></tr>
+    <tr><td>資料科學系三年級 B 班</td><td>13173201</td><td>林紹軒</td></tr>
+  </table>
+  <div class="date">中華民國 115 年 11 月</div>
+</section>
+
+<!-- ============ 目錄 ============ -->
+<section class="toc">
+  <h1>目　錄</h1>
+  <ol>
+    <li><span class="t">壹、專案背景與問題定義</span><span class="dots"></span><span class="pg" data-for="s1"></span></li>
+    <li><span class="t">貳、使用者需求與現況分析</span><span class="dots"></span><span class="pg" data-for="s2"></span></li>
+    <li><span class="t">參、創新解決方案設計</span><span class="dots"></span><span class="pg" data-for="s3"></span></li>
+    <li><span class="t">肆、技術應用與可行性分析</span><span class="dots"></span><span class="pg" data-for="s4"></span></li>
+    <li><span class="t">伍、專案執行進度與初步成果</span><span class="dots"></span><span class="pg" data-for="s5"></span></li>
+    <li><span class="t">陸、後續工作規劃與團隊分工</span><span class="dots"></span><span class="pg" data-for="s6"></span></li>
+    <li><span class="t">柒、結語</span><span class="dots"></span><span class="pg" data-for="s7"></span></li>
+    <li><span class="t">參考文獻</span><span class="dots"></span><span class="pg" data-for="ref"></span></li>
+    <li><span class="t">附錄一　AI 工具使用聲明</span><span class="dots"></span><span class="pg" data-for="ap1"></span></li>
+    <li><span class="t">附錄二　通勤問卷題目摘要</span><span class="dots"></span><span class="pg" data-for="ap2"></span></li>
+  </ol>
+</section>
+
+<!-- ============ 壹 ============ -->
+<section id="s1">
+<h1>壹、專案背景與問題定義</h1>
+
+<h2>一、專案背景</h2>
+<p>東吳大學外雙溪校區位於山邊，校區外沒有捷運直達，多數同學必須在捷運士林站轉乘 557 公車上學。557 是往返士林站與外雙溪校區最主要、也最擁擠的路線。每逢上課尖峰，士林站候車隊伍經常排成長龍，同學只能看著滿載的公車一班班開走。在 Dcard 東吳大學板上，關於「557 太擠」、「排隊被插隊」、「站牌一直換」的抱怨也從未間斷（Dcard，n.d.）。</p>
+<p>此外，因捷運環狀線北環段施工，557 在士林站的上車處自民國 115 年 1 月 12 日起遷至中正路 205 號前，士林國中站亦於 2 月 7 日起遷移（東吳大學德育中心，2026）。北環段預計民國 120 年才完工（理財周刊，n.d.），代表站位變動造成的不便還會持續數年。</p>
+<p>學校並非沒有作為：德育中心已於上下學尖峰加開 557、300、通勤 30 等路線及劍南路站師生專車，並建議同學尖峰時段改至士林國中站排隊（東吳大學德育中心，2026）。然而多數同學仍從士林站轉乘 557，專車班次有限，能分走的人不多；改至士林國中站排隊也只是改變排隊地點，搭乘 557 的總人數並未減少。</p>
+
+<h2>二、問題定義</h2>
+<p>綜合上述背景，本專案將核心問題定義為：</p>
+<p class="quote">外雙溪校區學生的通勤需求集中在少數尖峰時段與單一路線（557），而學生缺乏「何時會擠、還有哪些替代方式、改走其他方式有什麼好處」的資訊與誘因，導致尖峰人潮無法被分散；學校方面也缺乏每日的通勤需求數據，難以據以調整交通安排。</p>
+<p>加開班次需要公車處的資源與預算，並非學生能直接推動的事。因此本專案不以「增加班次」為目標，而是聚焦在學生端可以改變的行為：<b>引導分流、提供替代交通方案，並把需求數據整理給學校參考</b>。研究範圍限定為「捷運士林站往返外雙溪校區」的通勤旅次，以平日上課時段為主。</p>
+
+<h2>三、專案目標</h2>
+<p>本專案以 LINE Bot「東吳通勤達人」為單一入口，設定三項目標：</p>
+<table class="t">
+  <tr><th style="width:18%">目標</th><th>說明</th><th style="width:30%">對應的分流方式</th></tr>
+  <tr><td class="c">分散尖峰人潮</td><td>透過獎勵機制鼓勵提早到校、改搭其他公車步行進校，讓同學在時間與路線上的選擇更有彈性。</td><td>時間分流、空間分流</td></tr>
+  <tr><td class="c">多元通勤選擇</td><td>即時比較不同公車路線、YouBike 與計程車共乘的到校時間，讓同學知道改走其他方式會不會比較快。</td><td>空間分流、車資分流</td></tr>
+  <tr><td class="c">資訊整合</td><td>將天氣提醒、公車動態、站牌資訊、打卡集點整合於 LINE Bot；並每日彙整報表提供學校。</td><td>資訊整合、需求回饋</td></tr>
+</table>
+</section>
+
+<!-- ============ 貳 ============ -->
+<section id="s2">
+<h1>貳、使用者需求與現況分析</h1>
+
+<h2>一、資料蒐集方法</h2>
+<p>為避免只憑自身經驗判斷問題，本專案以三種方式蒐集實際資料，如表 1 所示。</p>
+<div class="cap-top">表 1　資料蒐集方法</div>
+<table class="t">
+  <tr><th style="width:20%">方法</th><th style="width:30%">對象與期間</th><th>內容</th></tr>
+  <tr><td class="c">線上問卷</td><td>東吳外雙溪校區學生，2026 年 10 月發放，有效樣本 n＝200（匿名）</td><td>通勤方式、候車時間、擠不上車頻率、站位遷移經驗、替代方案與獎勵意願；獎勵與包車金額題採 A/B/C 三版本（30／45／60 元），依年級群組發放，各版本填答人數為 94、51、55 人。</td></tr>
+  <tr><td class="c">公車實測</td><td>2026/10/12–10/16（週一至週五），07:00–19:00</td><td>團隊撰寫程式，透過交通部 TDX 公車即時動態 API 每 15 秒記錄 557 各車進出站，每日平均 82 班，計算相鄰兩班抵達士林站的間隔。</td></tr>
+  <tr><td class="c">次級資料</td><td>德育中心公告、Dcard 東吳板、問卷開放題</td><td>學校現有措施、站位異動資訊、學生自發抱怨與建議。</td></tr>
+</table>
+
+<h2>二、現況分析</h2>
+<h3>（一）擁擠程度：問卷結果</h3>
+<p>問卷結果顯示，557 擁擠並非少數人的感受，而是多數學生每週都會遇到的日常（表 2）。其中「上車處搬遷後第一次去搭沒有找到」的比例高達 57%，說明站位資訊的傳達也是一大痛點。</p>
+<div class="cap-top">表 2　557 通勤現況問卷結果（n＝200）</div>
+<table class="t">
+  <tr><th>指標</th><th style="width:16%">比例</th></tr>
+  <tr><td>每週至少經歷一次因 557 太擠而上不了車</td><td class="c">58%</td></tr>
+  <tr><td>平均要等 10 分鐘以上才搭得上 557</td><td class="c">68%</td></tr>
+  <tr><td>有早八（8:10 第一節）的日子通常踩線或遲到</td><td class="c">28%</td></tr>
+  <tr><td>557 上車處搬遷後，第一次去搭沒有找到</td><td class="c">57%</td></tr>
+  <tr><td>通勤時已會搭其他公車至錢穆故居站再步行進校</td><td class="c">17%</td></tr>
+</table>
+<p class="src">註：百分比以全部填答者為分母。資料來源：本團隊東吳外雙溪通勤問卷。</p>
+
+<h3>（二）供給面：557 班次頻率實測</h3>
+<p>若尖峰人多、班次也相對增加，擁擠程度應可被吸收。但實測結果顯示（圖 1），團隊依上下課人潮訂出的五個尖峰時段，557 平均 7.9 分鐘來一班（最長間隔 16.5 分鐘，每小時平均 7.8 班）；離峰平均 10.2 分鐘一班（最長間隔 29.8 分鐘，每小時 5.9 班）。除 09:30–10:10 時段班距較密外，早八前、午間與 15:00 時段的班距都接近 10 分鐘，與離峰相差無幾。換言之，<b>尖峰時段人流最多，557 的班次卻沒有明顯增加</b>，供需落差是擁擠的直接原因。</p>
+<figure>
+<svg width="560" height="235" viewBox="0 0 560 235" xmlns="http://www.w3.org/2000/svg" font-family="Times New Roman, PMingLiU, serif">
+  <g font-size="11" fill="#000">
+    <line x1="60" y1="190" x2="545" y2="190" stroke="#000" stroke-width="1"/>
+    <line x1="60" y1="20" x2="60" y2="190" stroke="#000" stroke-width="1"/>
+    <g stroke="#bbb" stroke-dasharray="3 3">
+      <line x1="60" y1="133.3" x2="545" y2="133.3"/><line x1="60" y1="76.7" x2="545" y2="76.7"/><line x1="60" y1="20" x2="545" y2="20"/>
+    </g>
+    <text x="52" y="194" text-anchor="end">0</text>
+    <text x="52" y="137" text-anchor="end">4</text>
+    <text x="52" y="81" text-anchor="end">8</text>
+    <text x="52" y="24" text-anchor="end">12</text>
+    <text x="18" y="105" text-anchor="middle" transform="rotate(-90 18 105)">平均等車時間（分）</text>
+    <!-- bars: scale 170/12 = 14.17 per min -->
+    <rect x="75"  y="51.2"  width="55" height="138.8" fill="#4a4a4a"/><text x="102.5" y="46" text-anchor="middle">9.8</text>
+    <rect x="155" y="120.6" width="55" height="69.4"  fill="#4a4a4a"/><text x="182.5" y="115" text-anchor="middle">4.9</text>
+    <rect x="235" y="51.2"  width="55" height="138.8" fill="#4a4a4a"/><text x="262.5" y="46" text-anchor="middle">9.8</text>
+    <rect x="315" y="48.3"  width="55" height="141.7" fill="#4a4a4a"/><text x="342.5" y="43" text-anchor="middle">10.0</text>
+    <rect x="395" y="79.5"  width="55" height="110.5" fill="#4a4a4a"/><text x="422.5" y="74" text-anchor="middle">7.8</text>
+    <rect x="475" y="45.5"  width="55" height="144.5" fill="#fff" stroke="#000" stroke-dasharray="4 2"/><text x="502.5" y="40" text-anchor="middle">10.2</text>
+    <text x="102.5" y="207" text-anchor="middle">07:30–08:10</text>
+    <text x="182.5" y="207" text-anchor="middle">09:30–10:10</text>
+    <text x="262.5" y="207" text-anchor="middle">12:00–13:10</text>
+    <text x="342.5" y="207" text-anchor="middle">15:00–15:30</text>
+    <text x="422.5" y="207" text-anchor="middle">17:00–18:30</text>
+    <text x="502.5" y="207" text-anchor="middle">離峰平均</text>
+    <text x="300" y="228" text-anchor="middle" font-size="10">■ 尖峰時段　　□ 離峰（07:00–19:00 其他時間）</text>
+  </g>
+</svg>
+<figcaption>圖 1　557 各尖峰時段平均等車時間</figcaption>
+<div class="src">資料來源：本團隊以 TDX 公車即時動態 API 實測，2026/10/12–10/16。等車時間＝相鄰兩班車抵達士林捷運站的間隔，依天文館（起點）發車時間歸類；尖峰時段由團隊依上下課人潮訂定。</div>
+</figure>
+
+<h3>（三）學生的聲音：開放題回饋</h3>
+<p>問卷開放題「對 557 的想法與建議」中，同學的回覆高度集中在「班次太少」、「排隊太久」與「尖峰太擠」，也有同學反映班距不固定、難以掌握出門時間。以下節錄部分原文：</p>
+<p class="quote">「拜託多來一點557五點放學都要等很久才能回家」、「557讓我每天都很焦慮 到底要提早幾點出門」、「公車數量和班次明顯不夠應付需要搭公車的學生」、「人好多，557地獄」、「班次希望能多開一點真的每天都很難擠上去」、「能不能班次多一點==每次都等很久也很不固定 有時候一次來超多台有時候都沒車」</p>
+
+<h2>三、使用者需求歸納</h2>
+<p>綜合問卷、實測與開放題，本專案將學生與學校兩類使用者的需求歸納如表 3，作為功能設計的依據。</p>
+<div class="cap-top">表 3　使用者痛點與需求對照</div>
+<table class="t keep">
+  <tr><th style="width:8%">對象</th><th style="width:36%">痛點（資料佐證）</th><th>需求</th></tr>
+  <tr><td class="c" rowspan="4">學生</td><td>不知道哪天會特別擠，也不確定其他公車哪台會比較快（68% 需等 10 分鐘以上）</td><td>出門前就能知道各種方式的預估到校時間</td></tr>
+  <tr><td>一個人搭計程車太貴（約 160 元），天氣不好又不想走路</td><td>有人分攤車資的共乘、雨天提醒與替代方案</td></tr>
+  <tr><td>提早到或改走路沒有任何好處（有獎勵時願意分流的比例明顯提高，見參、一）</td><td>讓分流行為「被看見、有回饋」</td></tr>
+  <tr><td>上車處搬遷，很多人第一次找不到（57%）</td><td>站位變更時主動通知、新生入門說明</td></tr>
+  <tr><td class="c">學校</td><td>只能依往年經驗安排班次，沒有每天的人潮數據</td><td>定期、自動化的學生通勤選擇紀錄</td></tr>
+</table>
+</section>
+
+<!-- ============ 參 ============ -->
+<section id="s3">
+<h1>參、創新解決方案設計</h1>
+
+<h2>一、設計依據：以問卷驗證三種分流方式</h2>
+<p>在設計功能之前，團隊先以問卷檢驗「學生在什麼條件下願意改變通勤行為」，分為時間分流、空間分流與車資分流三個方向。</p>
+
+<h3>（一）時間分流：獎勵加倍，意願沒有變高</h3>
+<p>問卷以 A/B/C 三版本詢問「若早上 7:30 前到校可獲得 30／45／60 元獎勵，每週願意提早到校幾天」。結果顯示（圖 2），給予 30 元獎勵後約有 35% 的學生願意提早到校；然而將獎勵提高至 45、60 元，願意的比例並沒有明顯提高（三組差異未達統計顯著，卡方檢定 p＝0.48）。這表示學生卡的是「要早起」本身，而非獎勵不夠，因此本專案採用最低的 30 元作為獎勵基準。</p>
+
+
+<p>以課表資料估算，每天早八約有 2,384 人到校。若每位提早到校的學生每天發放 30 元：2,384 人 × 35% × 30 元 × 20 個上課日 ≈ 每月 50 萬元，學校難以長期負擔。因此團隊在不降低單次獎勵金額的前提下，比較三種發放方式（表 4），最後選擇「集點制」：成本最低，又能照顧到所有願意分流的學生。</p>
+<div class="cap-top">表 4　獎勵發放方式比較</div>
+<table class="t">
+  <tr><th></th><th>每天發放</th><th>每日限量 300 份</th><th>集點制（5 點換 1 份）</th></tr>
+  <tr><td class="c">每月成本</td><td>約 50 萬元</td><td>約 18 萬元</td><td><b>約 10 萬元</b></td></tr>
+  <tr><td class="c">受益學生</td><td>約 835 人／天</td><td>300 人／天</td><td>約 835 人／天</td></tr>
+  <tr><td class="c">評估</td><td>吸引力最強，但成本太高</td><td>成本好控制，但晚到的學生沒有誘因</td><td>成本最低，吸引力可能降低，需試辦驗證</td></tr>
+</table>
+
+<h3>（二）空間分流：75% 學生不排斥步行進校</h3>
+<p>士林站有 255、小 19、683 等其他公車可到錢穆故居站，再步行約 10 分鐘進校。問卷顯示已有 17% 的學生這樣通勤；而若步行可累積點數兌換學餐折價券，約 75% 的學生在無特殊情況（如下雨、很熱）下願意改搭其他公車步行入校（圖 3）。因此，本專案將「時間分流」與「空間分流」結合，從兩個方向降低 557 尖峰壓力。</p>
+<div class="row"><figure style="flex:1.25"><img src="fig/chart_time.png" style="height:52mm"><figcaption>圖 2　不同獎勵金額下每週願意提早到校天數<br>（30 元 n＝94、45 元 n＝51、60 元 n＝55）</figcaption></figure><figure style="flex:1"><img src="fig/chart_space.png" style="height:52mm"><figcaption>圖 3　步行可集點時，改搭其他公車<br>步行進校的意願（可複選）</figcaption></figure></div>
+
+<h3>（三）車資分流：每人 45 元以下，七成願意搭</h3>
+<p>針對「從士林站直達校園、與其他學生分攤車資」的學生包車，三版本問卷顯示每人單趟 45 元以下時，皆有七成以上學生願意搭乘；即使提高到 60 元，仍有超過一半的學生願意。以士林站到外雙溪校區計程車約 160 元估算，3 人共乘每人約 55 元、4 人每人約 40 元，正好落在學生可接受的範圍內，成為計程車共乘與學期包車兩項功能的設計依據。</p>
+
+<h2>二、功能架構</h2>
+<p>依據上述需求與問卷結果，團隊將 LINE Bot 功能分為四個選單與一個學校端功能（表 5）。學生只需加入一個 LINE 官方帳號，不必另外下載 App。</p>
+<div class="cap-top">表 5　LINE Bot「東吳通勤達人」功能架構</div>
+<table class="t">
+  <tr><th style="width:18%">選單</th><th>提供的功能</th><th style="width:22%">對應痛點</th></tr>
+  <tr><td class="c">出門前提醒</td><td>比較所有路線（公車＋YouBike＋計程車共乘）、出門時間建議、557 發車前提醒、557 雙向即時動態、降雨查詢、雨天與考試週訂閱提醒</td><td>不知道哪天擠、哪條路線快</td></tr>
+  <tr><td class="c">557 以外的選擇</td><td>計程車共乘（現在走／7 天內預約、信用分制度）、YouBike 即時車數、共享雨傘、學期包車調查</td><td>計程車太貴、天氣不好</td></tr>
+  <tr><td class="c">積分與打卡</td><td>定位打卡（7:30 前早到、錢穆故居站步行）、騎 YouBike 到校（截圖由 AI 審核）、集滿 5 點換 30 元學餐折價券、我的紀錄與成就、全校減碳看板</td><td>分流沒有回饋</td></tr>
+  <tr><td class="c">公車站牌與排隊禮儀</td><td>新生須知與三題測驗、557 最新上車地點（每 6 小時檢查德育中心公告，變更即推播）、排隊禮儀短片</td><td>站位搬遷找不到</td></tr>
+  <tr><td class="c">每日報表（學校端）</td><td>每晚 10 點彙整當日紀錄，由 AI 寫成三行摘要，以 Email 寄給德育中心與軍訓室</td><td>學校缺乏每日數據</td></tr>
+</table>
+
+<h2>三、服務流程改善前後</h2>
+<p>以「有早八的一天」為例（圖 4），改善前學生前一晚沒有任何提醒，照平常時間出門，到士林站才發現大排長龍，最後踩線或遲到；改善後，Bot 在前一晚依降雨機率與學校行事曆推播「建議早 10 分鐘出門」，學生到士林站時可詢問 Bot，依即時交通狀況改搭其他公車到錢穆故居站，準時到校並打卡累積點數。</p>
+<figure><img src="fig/flow1.png" style="width:66%"><figcaption>圖 4　服務流程改善前後：早八上學的一天</figcaption></figure>
+<p>同樣地，557 擠不上時，學生可透過 Bot 即時比較其他交通方式或發起計程車共乘（4 人各付 40 元）；到校後的打卡與通勤選擇也會每天彙整成報表寄給德育中心，讓過去「看不見」的需求被學校看見。</p>
+
+<h2>四、方案創新性</h2>
+<p>相較於一般公車動態 App 只提供「下一班何時到」，本方案的差異在於：（1）以分流為目標，將 557 以外的公車、YouBike、共乘放在同一張卡片比較並直接給出建議；（2）以 A/B 測試問卷的實證數據決定獎勵金額與發放方式；（3）學生的每一次選擇都成為學校調整交通安排的數據，形成學生與學校之間的回饋迴路；（4）以學生原本就在使用的 LINE 為入口，免安裝、後端全採免費額度。</p>
+</section>
+
+<!-- ============ 肆 ============ -->
+<section id="s4">
+<h1>肆、技術應用與可行性分析</h1>
+
+<h2>一、系統架構</h2>
+<p>系統架構如圖 5 所示。學生在 LINE 聊天室透過圖文選單、文字、手機定位或拍照與 Bot 互動；LINE Messaging API 以 Webhook 將訊息送至 Google Apps Script 後端。後端判斷訊息時採「規則優先，看不懂才問 AI」的設計，以節省 AI 用量並確保回覆穩定。即時資料來自 TDX 公車動態、中央氣象署降雨機率、臺北市 YouBike 開放資料與德育中心公告；所有紀錄存放於 Google 試算表，並由排程每日產出報表寄送學校。</p>
+<figure><img src="fig/arch.png" style="width:64%"><figcaption>圖 5　557 通勤平台系統架構圖</figcaption></figure>
+
+<h2>二、技術選擇說明</h2>
+<div class="cap-top">表 6　使用技術與用途</div>
+<table class="t">
+  <tr><th style="width:24%">技術／資料</th><th>用途</th><th style="width:22%">選用理由</th></tr>
+  <tr><td>LINE Messaging API</td><td>收發訊息、推播提醒、圖文選單、Flex 卡片</td><td>學生普及率高，免安裝</td></tr>
+  <tr><td>Google Apps Script</td><td>後端邏輯（doPost／doGet）、自動排程（每晚 9 點提醒、每 6 小時檢查站位、每晚 10 點報表、每分鐘共乘成團）</td><td>免費雲端執行，不需架設伺服器</td></tr>
+  <tr><td>Google 試算表＋表單</td><td>儲存訊息、共乘、積分、折價券、報表與問卷資料</td><td>學校行政人員也能直接檢視</td></tr>
+  <tr><td>交通部 TDX API</td><td>16 條公車路線即時到站</td><td>官方開放資料，學研單位可免費申請</td></tr>
+  <tr><td>中央氣象署開放資料</td><td>士林區降雨機率（雨天提醒）</td><td>官方開放資料</td></tr>
+  <tr><td>臺北市 YouBike 即時資料</td><td>士林站周邊與校內站點可借可還數</td><td>每分鐘更新</td></tr>
+  <tr><td>Google Gemini</td><td>理解使用者自由輸入、摘要站位公告與每日報表、判讀 YouBike 騎乘截圖</td><td>免費額度、支援圖片</td></tr>
+</table>
+
+<h2>三、可行性分析</h2>
+<h3>（一）技術可行性</h3>
+<p>系統的核心功能已實作並上線運作（詳見伍、二），所使用的 API 皆為公開資料，並已撰寫自動化測試驗證卡片格式與主要流程。需要注意的是 TDX API 有每秒呼叫次數限制，團隊曾因大量下載歷史資料被暫停使用，目前已改為依需求即時查詢。</p>
+<h3>（二）經濟可行性</h3>
+<p>系統本身全部使用免費額度（Apps Script、試算表、LINE、TDX、氣象署、Gemini），開發與維運的金錢成本接近零。唯一的限制是 LINE 免費方案每月僅 200 則主動推播，若好友數增加，站位變更等全體推播將快速消耗額度，屆時需評估升級方案或改以被動查詢為主。</p>
+<p>真正的困難在於獎勵經費。表 4 的集點制雖然已是三種方式中最省的，每月仍約需 10 萬元，一學期（約 4 個月）約 40 萬元，對學校或任何單一單位都是不小的負擔，也不是本團隊能自行籌措的金額。而且這個數字是假設 35% 有意願的學生全部參與所做的估算，實際參與率與兌換率仍未知，可能高估也可能低估。因此本專案不預設「全校全面發放」，而採分階段、成本可控的做法：</p>
+<ol class="num">
+  <li><b>先小規模試辦，算出真實成本</b>：試辦期間只開放給試用者，並設定每人每月兌換上限（例如最多 2 張、60 元），讓總支出有明確上限；再以試辦的實際參與率與兌換率，重新估算全面推行所需的經費。</li>
+  <li><b>經費來源分散，不只依賴學校補助</b>：與校內學餐廳洽談以折價券形式合作，店家實際負擔的成本低於票面金額，也可帶來來客；同時帶著試辦數據向德育中心等單位說明，爭取部分補助或納入既有活動經費。</li>
+  <li><b>保留調整空間</b>：若經費不足，可提高兌換門檻（如 8 點換 1 張）、只計算最需要分流的 7:30 前早到，或以成就徽章、減碳看板等非金錢誘因補足。</li>
+</ol>
+<p>換言之，獎勵經費是本專案目前最大的不確定因素，需待合作洽談與試辦數據出爐後才能確認可行的規模。</p>
+<h3>（三）營運與法規可行性</h3>
+<p>計程車共乘由團主叫車付款、其他人轉帳分攤，Bot 只負責媒合；學期包車則須洽詢合法遊覽車或交通業者，並確認保險與收費方式的合法性。隱私方面，問卷全程匿名；Bot 只記錄必要的打卡與通勤選擇，每日報表只呈現統計數字，不含個人身分。</p>
+<h3>（四）限制與風險</h3>
+<div class="cap-top">表 7　目前已知限制與因應方式</div>
+<table class="t">
+  <tr><th style="width:34%">限制／風險</th><th>因應方式</th></tr>
+  <tr><td>車程、步行時間與碳排係數目前為估計值</td><td>試辦期間實測步行時間，同時出發驗證路線建議</td></tr>
+  <tr><td>問卷為「填答意願」，實際行為可能較少</td><td>題目已將代價寫入（如「要比平常早出門」），並以試辦打卡人數驗證</td></tr>
+  <tr><td>定位打卡可能被假定位 App 規避</td><td>搭配每日次數上限、異常紀錄檢查</td></tr>
+  <tr><td>AI 判讀騎乘截圖的準確度未經大量驗證</td><td>同一筆紀錄不得重複使用；試辦期間人工抽查</td></tr>
+  <tr><td>每日報表不含現場實際排隊人數</td><td>申請悠遊卡刷卡數據校正人潮推算</td></tr>
+</table>
+</section>
+
+<!-- ============ 伍 ============ -->
+<section id="s5">
+<h1>伍、專案執行進度與初步成果</h1>
+
+<h2>一、執行時程與進度</h2>
+<p>表 8 列出本專案自 2026 年 10 月起的執行時程，並明確區分已完成與預計執行的項目。</p>
+<div class="cap-top">表 8　專案執行時程（● 已完成；○ 預計執行）</div>
+<table class="t">
+  <tr><th style="width:20%">時間</th><th>工作項目</th><th style="width:12%">狀態</th></tr>
+  <tr><td class="c">10/08</td><td>問題探索：蒐集德育中心公告、Dcard 抱怨與 TDX 資源，完成專案整理與模組規劃</td><td class="c done">● 已完成</td></tr>
+  <tr><td class="c">10/10–10/13</td><td>LINE Bot 第一版（557 動態、多路線比較器）；問卷題目設計與表單程式化</td><td class="c done">● 已完成</td></tr>
+  <tr><td class="c">10/12–10/16</td><td>以 TDX 實測 557 一週班距</td><td class="c done">● 已完成</td></tr>
+  <tr><td class="c">10 月中下旬</td><td>通勤問卷發放與回收（n＝200），A/B/C 三版本分析</td><td class="c done">● 已完成</td></tr>
+  <tr><td class="c">10/26</td><td>Bot 改版：積分 1 點制與學餐折價券、557 雙向即時動態、全校減碳卡片</td><td class="c done">● 已完成</td></tr>
+  <tr><td class="c">10/30</td><td>東吳黑客松（流程改善組）初審書面簡報繳交</td><td class="c done">● 已完成</td></tr>
+  
+  <tr><td class="c">11 月下旬</td><td>招募試用者：於班級群組與社群發布 Bot 加好友連結，邀請同學試用</td><td class="c todo">○ 預計</td></tr>
+  <tr><td class="c">11 月下旬–12 月</td><td>洽談合作：向德育中心說明專案、請教每日報表需求與試辦經費；與校內學餐廳洽談折價券合作；與 Raingo 洽詢共享雨傘設點</td><td class="c todo">○ 預計</td></tr>
+  <tr><td class="c">12 月</td><td>小規模試辦：試辦集點換折價券（視合作結果）、每日報表試寄德育中心、實測步行時間</td><td class="c todo">○ 預計</td></tr>
+  <tr><td class="c">12 月</td><td>試用一至兩週後發放「使用後回饋問卷」，蒐集使用過的功能、路線建議準確度與滿意度</td><td class="c todo">○ 預計</td></tr>
+  <tr><td class="c">116 年 1 月</td><td>彙整試辦數據，比較試辦前後指標，完成期末報告</td><td class="c todo">○ 預計</td></tr>
+</table>
+
+<h2>二、已完成成果</h2>
+<h3>（一）LINE Bot 原型</h3>
+<p>LINE Bot「東吳通勤達人」已建置完成並可實際加入使用，各功能完成狀態如表 9。圖 6 為實機畫面。</p>
+<div class="row">
+  <figure class="card"><img src="fig/card_compare.png" style="height:48mm"><figcaption>(a) 比較所有路線</figcaption></figure>
+  <figure class="card"><img src="fig/card_taxi.png" style="height:28mm"><br><img src="fig/card_rain.png" style="height:17mm;margin-top:2mm"><figcaption>(b) 計程車共乘、降雨查詢</figcaption></figure>
+  <figure class="card"><img src="fig/card_checkin.png" style="height:22mm"><br><img src="fig/card_coupon.png" style="height:24mm;margin-top:2mm"><figcaption>(c) 到校打卡、兌換折價券</figcaption></figure>
+  <figure class="card"><img src="fig/card_report.png" style="height:36mm"><figcaption>(d) 每日報表（測試資料示意）</figcaption></figure>
+</div>
+<figcaption style="margin-top:-4pt;margin-bottom:10pt">圖 6　LINE Bot 實機畫面與每日報表範例</figcaption>
+<div class="cap-top">表 9　Bot 功能完成狀態</div>
+<table class="t">
+  <tr><th style="width:24%">功能</th><th style="width:16%">狀態</th><th>說明</th></tr>
+  <tr><td>出門前提醒（全部）</td><td class="c done">已上線</td><td>路線比較、出門時間建議、發車提醒、557 動態、降雨查詢、訂閱提醒</td></tr>
+  <tr><td>計程車共乘、YouBike 車數</td><td class="c done">已上線</td><td>含現在走／預約、我到了、信用分扣分</td></tr>
+  <tr><td>積分與打卡、折價券</td><td class="c done">已上線</td><td>定位打卡、騎車截圖審核、我的紀錄、全校減碳</td></tr>
+  <tr><td>新生須知、站位變更推播</td><td class="c done">已上線</td><td>加好友自動推送；每 6 小時檢查公告</td></tr>
+  <tr><td>每日報表</td><td class="c done">程式完成</td><td>目前以測試資料產出，尚未正式寄送學校</td></tr>
+  <tr><td>共享雨傘</td><td class="c todo">規劃中</td><td>規劃與 Raingo 合作設置租借站</td></tr>
+  <tr><td>學期包車</td><td class="c todo">規劃中</td><td>選課後以表單統計時段，再洽詢業者</td></tr>
+</table>
+
+<h3>（二）資料分析成果</h3>
+<p>完成通勤問卷 200 份回收與三版本 A/B 分析、557 一週實測與班距分析，並據此得出三項關鍵發現：（1）尖峰班距與離峰相近，供需落差明確；（2）獎勵金額由 30 元加倍至 60 元，提早到校意願沒有明顯提高，故採最低成本方案；（3）每人 45 元以下的共乘價格可吸引七成學生。這些發現已直接反映在獎勵制度與共乘定價的設計中。</p>
+
+<h3>（三）程式品質與每日報表</h3>
+<p>程式碼以 GitHub 進行版本控管，至今共 71 次提交；並以 Node.js 撰寫 14 個測試檔、共 107 項單元與功能測試，涵蓋卡片格式、選單、共乘、積分、問卷題目一致性等。撰寫本報告時 106 項通過，1 項與日期相關的測試待修正。每日報表已可依當日紀錄自動產生（圖 6(d)），但目前內容為測試資料，尚未有真實使用數據。</p>
+
+
+<h2>三、尚未完成與待驗證事項</h2>
+<p>為清楚區分成果與規劃，以下項目<b>尚未執行或尚無實際數據</b>：Bot 尚未進行正式的使用者試辦，因此目前沒有真實的使用人數、分流成效與滿意度數據；集點換折價券尚未與學餐廳達成合作；共享雨傘與學期包車仍在規劃階段；排隊禮儀短片與新生測驗的實際學習成效尚未驗證。這些將是期末前的主要工作。</p>
+</section>
+
+<!-- ============ 陸 ============ -->
+<section id="s6">
+<h1>陸、後續工作規劃與團隊分工</h1>
+
+<h2>一、後續工作規劃</h2>
+<p>後續依「先在校內小規模試辦、再與學校合作推動、最後擴展到更多校園」三階段進行（表 10）。</p>
+<div class="cap-top">表 10　後續工作三階段規劃</div>
+<table class="t">
+  <tr><th style="width:20%">階段</th><th>工作內容</th></tr>
+  <tr><td class="c">短期｜本學期<br>小規模試辦</td><td>邀請同學試用 LINE Bot 並發放使用回饋問卷；試辦集點換學餐折價券，比較試辦前後 7:30 前到校人數；實測步行時間，同時出發驗證路線建議的準確度；修正已知問題（關鍵字互相搶答、回程路線比較）。</td></tr>
+  <tr><td class="c">中期｜下學期<br>與學校合作推動</td><td>每日報表試寄德育中心，確認最需要的資料欄位；與校內學餐廳合作提供折價券；申請悠遊卡刷卡數據，校正人潮推算；依選課結果開放包車登記並洽詢合法業者。</td></tr>
+  <tr><td class="c">長期｜一年以上<br>擴展到更多校園</td><td>累積通勤數據，作為學校改善交通安排的依據；推廣到其他需要「捷運轉公車」的學校；建立長期的通勤趨勢與減碳紀錄。</td></tr>
+</table>
+
+<h3>（一）成效驗證指標</h3>
+<p>試辦一學期後，將以 Bot 使用紀錄與回饋問卷比對問卷基準值，預期目標如表 11。表中「目標值」為團隊設定的期望，並非已達成的成果。</p>
+<div class="cap-top">表 11　預期成效指標</div>
+<table class="t">
+  <tr><th>指標</th><th style="width:18%">現況（問卷）</th><th style="width:18%">試辦目標</th><th style="width:22%">驗證方式</th></tr>
+  <tr><td>有早八的日子踩線或遲到</td><td class="c">28%</td><td class="c">20%</td><td class="c">回饋問卷</td></tr>
+  <tr><td>每週至少一次擠不上 557</td><td class="c">58%</td><td class="c">45%</td><td class="c">回饋問卷</td></tr>
+  <tr><td>會搭其他公車到錢穆故居站步行進校</td><td class="c">17%</td><td class="c">30%</td><td class="c">回饋問卷、步行打卡數</td></tr>
+  <tr><td>7:30 前到校人數</td><td class="c">試辦前基準</td><td class="c">較基準增加</td><td class="c">早到打卡數</td></tr>
+</table>
+
+<h2>二、團隊分工</h2>
+<p>本組三位成員的分工如表 12。</p>
+<div class="cap-top">表 12　團隊分工</div>
+<table class="t keep">
+  <tr><th style="width:22%">工作項目</th><th>內容</th><th style="width:26%">負責成員</th></tr>
+  <tr><td>專案管理、問題探索</td><td>時程控管、背景資料蒐集、簡報與報告統整</td><td class="c">簡晨芸</td></tr>
+  <tr><td>問卷設計與分析</td><td>題目設計、A/B 版本發放、統計分析與圖表</td><td class="c">龔俞心</td></tr>
+  <tr><td>557 實測與資料分析</td><td>TDX 資料收集程式、班距分析</td><td class="c">龔俞心</td></tr>
+  <tr><td>LINE Bot 開發與測試</td><td>Apps Script 後端、卡片設計、自動化測試</td><td class="c">林紹軒</td></tr>
+  <tr><td>視覺設計</td><td>圖文選單、卡片美編、簡報設計</td><td class="c">林紹軒</td></tr>
+  <tr><td>試辦推廣與對外聯繫</td><td>招募試用者、德育中心與學餐廳洽談</td><td class="c">簡晨芸</td></tr>
+</table>
+</section>
+
+<!-- ============ 柒 ============ -->
+<section id="s7">
+<h1>柒、結語</h1>
+<p>557 擁擠是外雙溪學生的日常：58% 的學生每週至少擠不上一次，而尖峰班距幾乎與離峰相同。加開班次非學生所能決定，但本專案透過問卷找到學生可以改變的地方——集點鼓勵早到與步行進校、以每人 40 至 55 元的共乘分流，並以 LINE Bot 整合這些選擇、把需求整理給學校。目前原型與分析已完成，實際成效與獎勵經費仍待合作洽談與試辦數據驗證。</p>
+</section>
+
+<!-- ============ 參考文獻 ============ -->
+<section id="ref" class="chapter refs">
+<h1>參考文獻</h1>
+<p>Dcard 東吳大學板（n.d.）。〈是時候來教如何搭557了！〉、〈557專車宣導〉、〈給東吳新人：東吳生活大補帖〉。取自 https://www.dcard.tw/f/scu</p>
+<p>LINE Corporation（2026）。Messaging API documentation。取自 https://developers.line.biz/en/docs/messaging-api/</p>
+<p>中央氣象署（2026）。氣象資料開放平臺：鄉鎮天氣預報—臺北市（F-D0047-061）。取自 https://opendata.cwa.gov.tw/</p>
+<p>交通部（2026）。TDX 運輸資料流通服務平臺：公車即時動態資料。取自 https://tdx.transportdata.tw/</p>
+<p>東吳大學德育中心（2026）。557、300、通勤30等路線公車及劍南路站師生專車；交通資訊。取自 https://web-ch.scu.edu.tw/life/web_page/2440</p>
+<p>理財周刊（n.d.）。環狀線北環段修正計畫相關報導。</p>
+<p>臺北市政府交通局（2022、2025）。111 年度、114 年度臺北市交通流量及特性調查。</p>
+<p>臺北市資料大平臺（2026）。YouBike 2.0 臺北市公共自行車即時資訊。取自 https://data.taipei/</p>
+<p>環境部（2017）。產品碳足跡資訊網：市區公車（甲類）每人公里碳足跡 76.7 公克 CO₂e。取自 https://cfp-calculate.tw/</p>
+<p>Google（2026）。Apps Script documentation。取自 https://developers.google.com/apps-script</p>
+<p>本團隊（2026）。東吳外雙溪通勤問卷（n＝200）與 557 公車 TDX 實測資料（2026/10/12–10/16），未出版原始資料。</p>
+</section>
+
+<!-- ============ 附錄 ============ -->
+<section id="ap1" class="chapter">
+<h1>附錄一　AI 工具使用聲明</h1>
+<p>本專案於開發與報告撰寫過程中使用下列 AI 工具，使用情形與人工查核方式如下：</p>
+<div class="cap-top">附表 1　AI 工具使用情形</div>
+<table class="t">
+  <tr><th style="width:20%">工具名稱</th><th style="width:40%">用途</th><th>人工查核方式</th></tr>
+  <tr><td>Claude（Anthropic，Claude Code）</td><td>協助撰寫與修改 LINE Bot 程式碼及自動化測試；協助將團隊簡報與專案資料彙整為本期中報告的文字與排版。</td><td>程式經自動化測試與組員手機實機測試；報告中所有數據由組員逐項比對問卷原始回覆、TDX 實測紀錄與簡報，文字由組員審閱修訂。</td></tr>
+  <tr><td>Google Gemini（Bot 內建）</td><td>理解使用者自由輸入的文字、摘要德育中心公告與每日報表、判讀 YouBike 騎乘截圖。</td><td>Bot 採「規則優先、看不懂才問 AI」；截圖判讀結果於試辦期間人工抽查。</td></tr>
+</table>
+<p>本報告中的問卷結果與 557 實測數據皆為團隊實際蒐集，未使用 AI 生成或修改任何調查數據；表 11 的目標值為團隊設定之預期，已於文中標明。圖 6(d) 每日報表為測試資料產生之示意畫面。</p>
+</section>
+
+<section id="ap2">
+<h1 style="margin-top:22pt">附錄二　通勤問卷題目摘要</h1>
+<p>通勤基本問卷共 21 題，採匿名方式，填答時間約 3～5 分鐘，分為六部分：</p>
+<table class="t small">
+  <tr><th style="width:22%">部分</th><th>題目重點</th></tr>
+  <tr><td>A. 基本資料</td><td>年級、每週到校天數、每週第一節課天數</td></tr>
+  <tr><td>B. 怎麼到學校</td><td>通勤方式（複選）、轉乘捷運站、557 平均等車時間、過去一個月擠不上車次數</td></tr>
+  <tr><td>C. 站牌</td><td>站位搬遷後第一次是否找到、是否知道士林國中站排隊建議、下雨天通勤方式改變</td></tr>
+  <tr><td>D. 557 以外的選擇</td><td>YouBike 電輔車意願與不騎原因、學生包車願付金額與時段、計程車共乘意願</td></tr>
+  <tr><td>E. 如果有獎勵</td><td>第一節課通常到校時間、7:30 前到校獎勵下每週願意提早幾天（30／45／60 元三版本）、步行累積點數的改搭意願</td></tr>
+  <tr><td>F. 招募測試</td><td>是否願意加入 Bot 測試、對 557 通勤的意見（開放題）</td></tr>
+</table>
+<p>另設計 9 題「使用後回饋問卷」，於試辦一週後發放，內容包含使用過的功能、是否照建議改搭其他公車、到站時間準確度、收到提醒後是否提早出門、整體滿意度與推薦意願。</p>
+</section>
+
+</body>
+</html>
