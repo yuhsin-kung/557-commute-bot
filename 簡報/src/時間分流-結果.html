@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<style>
+  .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; margin-top: 34px; }
+  .big { font-size: 26px; line-height: 1.5; }
+  .big b { font-size: 64px; font-weight: 900; }
+  .point { margin-top: 26px; font-size: 22px; line-height: 1.6; }
+  .point .tag { margin-bottom: 4px; }
+  .chart { padding: 26px 30px 18px; }
+  .chart .ttl { font-size: 18px; text-align: center; color: #263759; }
+  .bars { display: flex; justify-content: space-around; align-items: flex-end; height: 290px; margin-top: 18px; border-bottom: 2px solid #9AA5BC; }
+  .bar { width: 110px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+  .bar .v { font-size: 34px; font-weight: 900; margin-bottom: 6px; }
+  .bar .b { width: 100%; border-radius: 10px 10px 0 0; background: #9AA5BC; }
+  .bar.on .b { background: #E0A526; }
+  .bar.on .v { color: #B57900; }
+  .labels { display: flex; justify-content: space-around; margin-top: 10px; }
+  .labels div { width: 110px; text-align: center; font-size: 22px; font-weight: 900; }
+  .labels small { display: block; font-size: 15px; font-weight: 500; color: #5B6680; }
+</style></head><body>
+<h1>時間分流－獎勵加倍，意願沒有變高</h1>
+<div class="sub">早上 7:30 前到校獎勵：每週願意提早到校幾天（依獎勵金額分版本）</div>
+<div class="wrap">
+  <div>
+    <div class="big">只要 <b class="hl">30</b> 元<br>就有 <b class="hl">39%</b> 的同學願意提早到校</div>
+    <div class="point"><span class="tag">發現</span><br>獎勵加到 45、60 元，願意的比例沒有明顯提高<br>→ 學生卡的是「要早起」，不是獎勵不夠</div>
+    <div class="point"><span class="tag">所以</span><br>採用最低的 <span class="hl">30 元</span>，再設計最省的發放方式（見下頁）</div>
+  </div>
+  <div class="box chart">
+    <div class="ttl">願意提早到校的比例（扣除本來就 7:30 前到的人）</div>
+    <div class="bars">
+      <div class="bar on"><div class="v">39%</div><div class="b" style="height:78%"></div></div>
+      <div class="bar"><div class="v">43%</div><div class="b" style="height:86%"></div></div>
+      <div class="bar"><div class="v">31%</div><div class="b" style="height:62%"></div></div>
+    </div>
+    <div class="labels">
+      <div>30 元<small>成本 1 倍</small></div>
+      <div>45 元<small>成本 1.5 倍</small></div>
+      <div>60 元<small>成本 2 倍</small></div>
+    </div>
+  </div>
+</div>
+<div class="note">註：30 元 n＝94、45 元 n＝51、60 元 n＝55；三組差異未達統計顯著（卡方檢定，p＝0.48）。「願意」指一週至少 1 天提早到校。各組年級分布不平均，後續已改由程式依年級自動分配版本。本題為填答意願，實際效果將以試辦打卡人數驗證。</div>
+</body></html>

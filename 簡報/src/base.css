@@ -1,0 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@500;700;900&display=block');
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1280px; height: 720px; }
+body { background: #263759; color: #F3EDE4; font-family: 'Noto Serif TC', 'PMingLiU', serif; font-weight: 700; padding: 46px 64px 0; position: relative; overflow: hidden; }
+h1 { text-align: center; font-size: 46px; font-weight: 900; letter-spacing: 2px; }
+.sub { text-align: center; font-size: 21px; color: #D9CBB8; margin-top: 10px; font-weight: 500; }
+.hl { color: #FFD45C; }
+.note { position: absolute; left: 64px; right: 64px; bottom: 22px; font-size: 13px; line-height: 1.6; color: #AEB8CC; font-weight: 500; }
+.box { background: #EDE6DD; color: #263759; border-radius: 18px; }
+.tag { display: inline-block; font-size: 16px; padding: 3px 12px; border-radius: 6px; background: #3A4E78; color: #F3EDE4; margin-bottom: 8px; }

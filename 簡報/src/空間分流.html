@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8"><link rel="stylesheet" href="base.css">
+<style>
+  .wrap { display: grid; grid-template-columns: 450px 1fr; gap: 40px; margin-top: 30px; }
+  .point { font-size: 21px; line-height: 1.55; margin-bottom: 20px; }
+  .point b { font-size: 34px; font-weight: 900; }
+  .key { margin-top: 6px; padding: 14px 18px; border: 2px solid #E0A526; border-radius: 14px; font-size: 22px; line-height: 1.55; }
+  .chart { padding: 24px 28px; }
+  .chart .ttl { font-size: 18px; color: #263759; margin-bottom: 12px; }
+  .row { display: grid; grid-template-columns: 180px 1fr 92px; align-items: center; margin: 16px 0; }
+  .row .n { font-size: 19px; text-align: right; padding-right: 14px; }
+  .track { display: flex; align-items: center; }
+  .fill { height: 42px; border-radius: 0 8px 8px 0; }
+  .pct { font-size: 26px; font-weight: 900; margin-left: 10px; }
+  .why { font-size: 16px; text-align: center; padding: 4px 0; border-radius: 6px; color: #fff; }
+  .y .fill { background: #9AA5BC; } .y .pct { color: #5B6680; }
+  .t .fill { background: #E0A526; } .t .pct { color: #B57900; } .t .why { background: #B57900; }
+  .w .fill { background: #D9822B; } .w .pct { color: #B0601A; } .w .why { background: #B0601A; }
+  .g .fill { background: #C9CED9; } .g .pct { color: #8A93A6; }
+  .sum { margin-top: 14px; padding-top: 12px; border-top: 2px dashed #B8AE9F; font-size: 19px; color: #263759; }
+  .sum b { font-size: 24px; color: #B57900; }
+</style></head><body>
+<h1>空間分流－想改走的人很多，卡在時間和天氣</h1>
+<div class="sub">錢穆故居站步行獎勵：是否願意改搭其他公車再步行進校（可累積點數兌換學餐折價券）</div>
+<div class="wrap">
+  <div>
+    <div class="point"><span class="tag">有基礎</span><br>已經有 <b class="hl">46%</b> 的同學會走這條路<br>沒有勾選「不會」的同學有 <b class="hl">75%</b></div>
+    <div class="point"><span class="tag">卡在兩個條件</span><br><span class="hl">時間</span>：36% 只有不趕時間時才願意<br><span style="color:#F0A55A">天氣</span>：29% 下雨或很熱就不願意</div>
+    <div class="key">問題不在學生不願意，<br>而是<span class="hl">不確定改走會不會比較慢、<br>天氣適不適合走路</span></div>
+  </div>
+  <div class="box chart">
+    <div class="ttl">你會願意這樣通勤嗎？（可複選，n＝200）</div>
+    <div class="row y"><div class="n">會，且常常這樣做</div><div class="track"><div class="fill" style="width:26%"></div><div class="pct">26%</div></div><div></div></div>
+    <div class="row t"><div class="n">不趕時間的時候會</div><div class="track"><div class="fill" style="width:36%"></div><div class="pct">36%</div></div><div class="why">卡在時間</div></div>
+    <div class="row w"><div class="n">下雨或很熱就不會</div><div class="track"><div class="fill" style="width:29%"></div><div class="pct">29%</div></div><div class="why">卡在天氣</div></div>
+    <div class="row g"><div class="n">不會</div><div class="track"><div class="fill" style="width:26%"></div><div class="pct">26%</div></div><div></div></div>
+    <div class="sum">願意改走的人裡，最多的是<b>「有條件」願意</b>，而不是完全不願意</div>
+  </div>
+</div>
+<div class="note">註：複選題，百分比為勾選該選項人數 ÷ 200，加總會超過 100%。「不會」含「不會，因為不吃學餐」。另有填答者表示從錢穆故居站走進校園約需 15～20 分鐘，實際步行時間將實測確認。</div>
+</body></html>
