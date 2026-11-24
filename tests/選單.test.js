@@ -190,6 +190,8 @@ test('超過 6 顆的按鈕排成兩欄，單數的最後一顆自己一列、�
 
 test('出門建議的卡片：換時間是主要按鈕；換出發站先選站；共乘寫明是計程車', () => {
   const env = start();
+  // 用真的時鐘判斷「明天」。釘在週六中午，明天是週日、非尖峰，提醒時間才不會多算 10 分鐘
+  env.run("const __RealDate = Date; Date = class extends __RealDate { constructor(...a) { super(...(a.length ? a : [__RealDate.parse('2026-10-17T12:00:00+08:00')])); } static now() { return __RealDate.parse('2026-10-17T12:00:00+08:00'); } };");
   const card = send(env, '出門時間 明天 08:10 D')[0];
   assert.deepEqual(buttonsOf(card), [
     ['換一個時間', '出門時間'],
