@@ -65,6 +65,28 @@ def trip_events(vid="1", num="EAA-001"):
 TRIP = trip_events()
 
 
+# 同一台車接著跑回程：08:05 開進東吳大學（校內）停 7 分鐘，08:12 到錢穆故居（62 人），
+# 一路到 08:19 捷運士林站（進站 62 人、離站 20 人），08:22 到士林國中
+def return_events(vid="1", num="EAA-001"):
+    steps = [
+        ("0", m.SCHOOL, "1", "080500", None), ("0", m.SCHOOL, "0", "080530", (m.SCHOOL, 50, 3, "080550")),
+        ("1", m.R_QIAN, "1", "081200", (m.R_QIAN, 60, 3, "081210")), ("1", m.R_QIAN, "0", "081230", (m.R_QIAN, 62, 3, "081250")),
+        ("1", "171165", "1", "081300", None), ("1", "171166", "1", "081400", None), ("1", "171167", "1", "081500", None),
+        ("1", "171168", "1", "081600", None), ("1", "171169", "1", "081800", None), ("1", "171169", "0", "081810", ("171169", 62, 3, "081830")),
+        ("1", m.R_MRT, "1", "081900", (m.R_MRT, 62, 3, "081902")), ("1", m.R_MRT, "0", "082100", (m.R_MRT, 20, 1, "082120")),
+        ("1", "171171", "1", "082200", None),
+    ]
+    out, last3 = [], ""
+    for direction, stop, kind, hms, crowd in steps:
+        if crowd:
+            last3 = a3(vid, crowd[0], crowd[1], crowd[2], "261125" + crowd[3])
+        out.append((vid, num, a2(vid, direction, stop, kind, "261125" + hms), last3))
+    return out
+
+
+RETURN = return_events()
+
+
 class ParseTest(unittest.TestCase):
     def test_parse_real_snapshot(self):
         """2026/11/24 從網站抓的真實資料：7 台車都解析得出位置和人數"""
@@ -75,6 +97,16 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(len(crowds), 7)
         c = next(c for c in crowds if c["車牌"] == "EAA-057")
         self.assertEqual((c["站牌ID"], c["車上人數"], c["擁擠等級"], c["回報時間"]), ("171175", "56", "3", "2026-11-24 16:16:05"))
+
+    def test_parse_etas_real_snapshot(self):
+        """網站預估：只記士林國中、士林站、錢穆故居、回程士林站；用資料時間，不是抓取時間"""
+        import json
+        with open(os.path.join(HERE, "fixtures", "557動態.json"), encoding="utf-8") as f:
+            etas = m.parse_etas(json.load(f), datetime(2026, 11, 24, 16, 17, 30))
+        got = {x["站牌ID"]: (x["預估秒數"], x["車牌"], x["資料時間"]) for x in etas}
+        self.assertEqual(set(got), set(m.ETA_STOPS))
+        self.assertEqual(got[m.MRT], ("214", "EAA-057", "2026-11-24 16:16:26"))
+        self.assertEqual(got[m.R_QIAN][:2], ("104", "EAA-068"))
 
     def test_level_fallback(self):
         """網站沒給等級（0）時用網頁的換算：>32 擁擠、>22 中等"""
@@ -202,6 +234,84 @@ class TripTest(unittest.TestCase):
         self.assertEqual(m.build_trips(events, crowds), [])
 
 
+class ReturnTest(unittest.TestCase):
+    def test_one_return_trip(self):
+        events, crowds = run([snapshot(b) for b in TRIP[:-1] + RETURN])
+        [t] = m.build_returns(events, crowds)
+        row = dict(zip(m.RETURN_HEAD, m.return_row(1, t)))
+        self.assertEqual(row["到東吳大學(開始停靠)"], datetime(2026, 11, 25, 8, 5))
+        self.assertEqual(row["錢穆故居到站"], datetime(2026, 11, 25, 8, 12))
+        self.assertEqual(row["士林站到站"], datetime(2026, 11, 25, 8, 19))
+        self.assertEqual(row["東吳停靠(分)"], 7.0)
+        self.assertEqual(row["錢穆故居→士林站總計(分)"], 7.0)
+        self.assertEqual([row[l + "人數"] for _, l in m.R_CROWD_POINTS], [60, 62, 62, 20])
+        self.assertEqual((row["錢穆故居淨上車(人)"], row["士林站淨上車(人，負的＝下車多)"]), (2, -42))
+        self.assertEqual(t["備註"], [])
+
+    def test_return_sheet_written(self):
+        events, crowds = run([snapshot(b) for b in TRIP[:-1] + RETURN])
+        trips, returns = m.build_trips(events, crowds), m.build_returns(events, crowds)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "x.xlsx")
+            m.write_excel(path, trips, events, crowds, datetime(2026, 11, 25), (), returns)
+            wb = load_workbook(path)
+            got = dict(zip(m.RETURN_HEAD, [c.value for c in wb["回程每班車"][2]]))
+            self.assertEqual((got["車牌"], got["到錢穆故居時人數"], got["到錢穆故居時擁擠"]), ("EAA-001", 60, "擁擠"))
+            col = m.RETURN_HEAD.index("離開士林站人數")
+            self.assertEqual(wb["回程每班車"][2][col].fill.fgColor.rgb[-6:], "C6EFCE", "20 人舒適＝綠")
+            slot = [c.value for c in wb["回程每15分鐘"][3]]
+            self.assertEqual(slot[:2], ["08:00–08:15", 1])
+
+    def test_go_and_return_are_separate(self):
+        """同一台車的去程、回程各自一列，互不影響"""
+        events, crowds = run([snapshot(b) for b in TRIP[:-1] + RETURN])
+        self.assertEqual(len(m.build_trips(events, crowds)), 1)
+        self.assertEqual(len(m.build_returns(events, crowds)), 1)
+
+    def test_return_started_before_monitoring(self):
+        """監測開始時已經離開東吳（第一筆在福林國小以後）：不列，放進資料不完整"""
+        events, crowds = run([snapshot(b) for b in RETURN[9:]])
+        incomplete = []
+        self.assertEqual(m.build_returns(events, crowds, incomplete), [])
+        self.assertTrue(incomplete[0]["沒列原因"].startswith("回程：監測開始時已經離開東吳"))
+
+    def test_return_mrt_arrival_filled_from_previous_stop(self):
+        """回程進士林站沒回報：用離開福林國小的人數"""
+        steps = [(b[0], b[1], b[2], b[3].replace(f"{m.R_MRT},62,3,261125081902", "171169,62,3,261125081830")) for b in RETURN]
+        events, crowds = run([snapshot(b) for b in steps])
+        [t] = m.build_returns(events, crowds)
+        self.assertEqual(t["士林站到站人數"]["車上人數"], "62")
+        self.assertIn("沒回報，用相鄰站的人數（中間沒人上下車）：到士林站時＝離開福林國小", t["備註"])
+
+
+class EtaTest(unittest.TestCase):
+    def eta(self, data_time, sec, stop=m.MRT):
+        return {"資料時間": "2026-11-25 " + data_time, "站牌ID": stop, "預估秒數": str(sec), "車輛ID": "1", "車牌": "EAA-001", "抓取時間": ""}
+
+    def test_error_against_actual_arrival(self):
+        """07:50 網站說士林站 2 分鐘後到（07:52），實際 07:53 到 → 晚 1 分；07:51 說 1 分（07:52）→ 晚 1 分"""
+        events, _ = run([snapshot(b) for b in TRIP])
+        scored = m.evaluate_etas([self.eta("07:50:00", 120), self.eta("07:51:00", 60)], events)
+        self.assertEqual([x["誤差分"] for x in scored], [1.0, 1.0])
+
+    def test_skip_special_codes_and_missing(self):
+        """進站中(0)、未發車(-1) 不算；找不到實際到站的留 None"""
+        events, _ = run([snapshot(b) for b in TRIP])
+        scored = m.evaluate_etas([self.eta("07:50:00", 0), self.eta("07:50:00", -1), self.eta("07:50:00", 120, stop="171171")], events)
+        self.assertEqual(len(scored), 1)
+        self.assertIsNone(scored[0]["誤差分"])
+
+    def test_accuracy_sheet(self):
+        events, crowds = run([snapshot(b) for b in TRIP])
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "x.xlsx")
+            m.write_excel(path, m.build_trips(events, crowds), events, crowds, datetime(2026, 11, 25), (), (),
+                          [self.eta("07:50:00", 120), self.eta("07:45:00", 600)])
+            rows = [[c.value for c in r] for r in load_workbook(path)["網站預估準度"].iter_rows(min_row=3)]
+            self.assertEqual([r[:6] for r in rows], [["往東吳｜捷運士林站", "0–3 分", 1, 1, 1, 1],
+                                                     ["往東吳｜捷運士林站", "10–15 分", 1, 1, -2, 2]])
+
+
 class ExcelTest(unittest.TestCase):
     def test_excel_columns(self):
         events, crowds = run([snapshot(b) for b in TRIP])
@@ -217,10 +327,12 @@ class ExcelTest(unittest.TestCase):
             self.assertEqual(got["天文館→東吳總計(分)"], 25.0)
             self.assertEqual([got[l + k] for l in ("到士林國中時", "離開士林國中", "到士林站時", "離開士林站") for k in ("人數", "擁擠")],
                              [18, "舒適", 20, "舒適", 20, "舒適", 55, "擁擠"])
-            self.assertEqual(got["士林站淨上車(人)"], 35)
+            self.assertEqual((got["士林國中淨上車(人)"], got["士林站淨上車(人)"]), (2, 35))
             col = {n: i for i, n in enumerate(m.TRIP_HEAD)}
             color = lambda name: ws[2][col[name]].fill.fgColor.rgb[-6:]
             self.assertEqual((color("離開士林國中人數"), color("離開士林站擁擠")), ("C6EFCE", "FFC7CE"), "綠舒適、紅擁擠")
+            self.assertIn("回程每班車", wb.sheetnames)
+            self.assertIn("回程每15分鐘", wb.sheetnames)
             slot = [c.value for c in wb["每15分鐘"][3]]
             self.assertEqual(slot[:2] + slot[-2:], ["07:45–08:00", 1, 10.0, 12.0])
 
