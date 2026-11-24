@@ -71,8 +71,21 @@ function compareReply_(text) {
 function compareQuery_(q, text) {
   const origin = ORIGINS[q.origin] ? q.origin : '士林站';
   const building = BUILDINGS[q.building] ? q.building : '';
+  const unspecified = /(^|\s)不指定(\s|$)/.test(String(text || ''));
   const now = new Date();
   const classAt = q.arriveTime ? timeOn_(q.day === '明天' ? addMin_(now, 24 * 60) : now, q.arriveTime) : null;
+
+  // 先查出門脈絡（放假／考試週／步行）。放假不出建議卡，也不查即時到站。
+  const ctx = classContext_({
+    date: classAt ? Utilities.formatDate(classAt, TZ, 'yyyy-MM-dd') : '',
+    arriveTime: q.arriveTime || '',
+    building: building,
+  });
+  if (ctx.holiday) return holidayReply_(ctx);
+  // 有上課時間但沒說大樓：先問在哪一棟（已選「不指定」才直接給建議）
+  if (classAt && !building && !unspecified) {
+    return menuFlow_('出門時間 ' + (q.day === '明天' ? '明天' : '今天') + ' ' + q.arriveTime);
+  }
 
   // 上課時間還很久（或是明天）→ 給出門建議；快到了 → 查即時到站
   const planAhead = classAt && (classAt - now) > 90 * 60 * 1000;
@@ -203,7 +216,7 @@ function planReply_(originName, building, classAt, isTomorrow) {
     subtitle: building ? building + ' 棟 ' + BUILDINGS[building][0] : '',
     rows: rows,
     warns: extra.reasons.length ? [extra.reasons.join('、') + '，已多算 ' + extra.min + ' 分鐘。'] : [],
-    footer: '依預估車程推算，出門前按「比較所有路線」可以看即時到站',
+    footer: contextFooter_(classAt, building),
     // 這張是事先規劃：最常做的是換時間；即時到站看下面那行小字說的「比較所有路線」
     buttons: [
       { label: '換一個時間', text: '出門時間' },
