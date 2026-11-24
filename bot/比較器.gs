@@ -82,9 +82,11 @@ function compareQuery_(q, text) {
     building: building,
   });
   if (ctx.holiday) return holidayReply_(ctx);
-  // 有上課時間但沒說大樓：先問在哪一棟（已選「不指定」才直接給建議）
+  // 有上課時間但沒說大樓：先問在哪一棟（已選「不指定」才直接給建議）。出發站沿用選單指令，預設士林站可省略。
   if (classAt && !building && !unspecified) {
-    return menuFlow_('出門時間 ' + (q.day === '明天' ? '明天' : '今天') + ' ' + q.arriveTime);
+    const dayWord = q.day === '明天' ? '明天' : '今天';
+    const originTail = origin !== '士林站' ? ' ' + origin : '';
+    return menuFlow_('出門時間 ' + dayWord + ' ' + q.arriveTime + originTail);
   }
 
   // 上課時間還很久（或是明天）→ 給出門建議；快到了 → 查即時到站

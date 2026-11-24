@@ -165,6 +165,30 @@ test('沒說大樓不編造教室，改問在哪一棟；選了不指定才给�
   assert.doesNotMatch(any.altText, /第二教學研究大樓/);
 });
 
+test('口頭說了出發站但沒說大樓：選棟與不指定都帶原站，建議卡不退回士林站', () => {
+  const env = boot();
+  freeze(env, '2026-10-12T21:00:00+08:00'); // 明天 2026-10-13（週二），不是放假日
+  const ask = env.call('compareReply_', '從劍南路站明天 8:10 上課');
+  assert.match(ask.altText, /你在哪一棟上課/);
+  const buttons = buttonsOf(ask);
+  assert.ok(buttons.length >= 13);
+  buttons.forEach(([, text]) => assert.match(text, /劍南路站/, text));
+  const building = buttons.find(([, text]) => text === '出門時間 明天 08:10 D 劍南路站');
+  assert.ok(building, buttons.map(b => b[1]).join('、'));
+  const skip = buttons.find(b => b[0] === '不指定');
+  assert.equal(skip[1], '出門時間 明天 08:10 不指定 劍南路站');
+
+  const card = env.call('menuFlow_', building[1]);
+  assert.equal(card.contents.header.contents[0].text, '出門建議');
+  assert.match(card.altText, /★ 捷運劍南路站：\d\d:\d\d 前到站/);
+  assert.doesNotMatch(card.altText, /到士林站|搭 557 進校園/);
+
+  const any = env.call('menuFlow_', skip[1]);
+  assert.equal(any.contents.header.contents[0].text, '出門建議');
+  assert.match(any.altText, /★ 捷運劍南路站：\d\d:\d\d 前到站/);
+  assert.doesNotMatch(any.altText, /到士林站|搭 557 進校園/);
+});
+
 test('查不到上課日就明確說找不到，不編節次或教室', () => {
   const env = boot();
   const miss = plainCtx(env, {});
