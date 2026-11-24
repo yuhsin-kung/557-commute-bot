@@ -3,11 +3,11 @@
  * 步行、騎車、早到一次都是 1 點；集滿 5 點換一張 30 元學餐折價券（傳「兌換折價券」）。
  *
  * 打卡不用 QR code（會被拍照外流），改用手機定位：
- *   在 LINE 傳「打卡」→ 打開打卡頁 → 手機回報位置 → 伺服器算離哪個打卡點最近。
+ *   在 LINE 傳「打卡」→ 打開打卡頁（一次性代碼，10 分鐘、用過即失效）→ 手機間隔約 3 秒回報兩次位置 → 伺服器用第二次定位算距離。
  *   - 在錢穆故居站打卡：開始計時
- *   - 25 分鐘內走到校內再打一次：步行完成，加分、記減碳量
- *   - 7:30 前在校內打卡：早到 1 點（一天一次）
- * 只記打卡點名稱、距離和誤差，不記經緯度。
+ *   - 同一天、6～20 分鐘內走到校內再打一次：步行完成，加分、記減碳量
+ *   - 離校 500 公尺以外可打出門卡（只記距離）；7:30 前在校內打卡，而且當天已有出門卡、間隔夠久：早到 1 點（一天一次，不分交通方式）
+ * 只記打卡點名稱、距離和誤差，不記經緯度。拒收時多記原因。
  *
  * 積分跟共乘共用「共乘用戶」分頁的「積分」欄；每一筆加分記在「通勤紀錄」。
  * 成就不另外存，每次從紀錄算出來。
@@ -21,11 +21,16 @@ const PT = {
   COUPON_POINTS: 5,     // 幾點換一張學餐折價券
   COUPON_VALUE: 30,     // 折價券面額（元）
   COUPON_DAYS: 30,      // 兌換後幾天內要用
-  WALK_MAX_MIN: 25,     // 起點打卡後幾分鐘內到校才算步行
+  WALK_MIN_MIN: 6,       // 起點到校至少要隔這麼久才算步行
+  WALK_MAX_MIN: 20,      // 起點打卡後幾分鐘內到校才算步行（要同一天）
   EARLY_BEFORE: '07:30',
-  NEAR_M: 150,          // 離錢穆故居站多近算「在站牌」
-  CAMPUS_M: 300,        // 離校內 557 站多近算「在學校」
-  MAX_ACCURACY_M: 150,  // 定位誤差超過這個數字不收
+  NEAR_M: 50,           // 離錢穆故居站多近算「在站牌」
+  CAMPUS_M: 50,         // 離校內 557 站多近算「在學校」
+  MAX_ACCURACY_M: 50,   // 定位誤差超過這個數字不收
+  DEPART_MIN_M: 500,    // 離校內打卡點至少這麼遠，才算出門卡
+  DEPART_MIN_PER_KM: 1, // 出門卡到到校，每公里至少要隔幾分鐘
+  FIX_MAX_AGE_SEC: 30,  // 定位時間戳最多比送出早幾秒
+  BIKE_MAX_LAG_MIN: 60, // YouBike 還車時間跟上傳最多差幾分鐘
   WALK_KM: 0.8,         // 錢穆故居站到校內，少搭的公車距離
   BIKE_KM: 3.5,         // 士林站到東吳
   // 市區公車（甲類）每人每公里 76.7 公克 CO₂e：環境部產品碳足跡資訊網，2017 年公告。
@@ -37,7 +42,7 @@ const PT_START = '錢穆故居站';
 const PT_CAMPUS = '校內 557 站';
 const PT_COUPON_HEAD = ['時間', '使用者 ID', '券號', '面額', '狀態', '到期日'];
 const PT_LOG_HEAD = ['時間', '使用者 ID', '方式', '積分', '少排放（公克）', '備註'];
-const PT_CHECKIN_HEAD = ['時間', '使用者 ID', '打卡點', '距離（公尺）', '誤差（公尺）', '結果'];
+const PT_CHECKIN_HEAD = ['時間', '使用者 ID', '打卡點', '距離（公尺）', '誤差（公尺）', '結果', '原因'];
 
 /** 成就：[名稱, 條件說明, 判斷] */
 const PT_BADGES = [
@@ -90,10 +95,16 @@ function ptBadgeText_(fresh) {
 
 // ===== LINE 訊息 =====
 
-/** 「打卡」：給一個按鈕打開打卡頁 */
+/** 「打卡」：發一組 10 分鐘、用過即失效的代碼，打開打卡頁。優惠券頁仍用 user.token。 */
+function ptOnceKey_(code) {
+  return 'pt_once_' + code;
+}
+
 function ptCheckinButton_(uid) {
-  return choices_('早到：7:30 前在學校打卡。\n步行：在錢穆故居站先打一次，走進學校再打一次。\n一次 1 點，集滿 ' + PT.COUPON_POINTS + ' 點換 ' + PT.COUPON_VALUE + ' 元學餐折價券。', // 卡片.gs
-    [{ label: '打開打卡頁', uri: cpWebAppUrl_() + '?page=checkin&t=' + cpUser_(uid).token }, ['我的紀錄', '我的紀錄']],
+  const code = Utilities.getUuid();
+  CacheService.getScriptCache().put(ptOnceKey_(code), uid, 10 * 60);
+  return choices_('早到：先在離學校 ' + PT.DEPART_MIN_M + ' 公尺外打出門卡，7:30 前再到學校打卡。\n步行：在錢穆故居站先打一次，同一天 ' + PT.WALK_MIN_MIN + '～' + PT.WALK_MAX_MIN + ' 分鐘內走進學校再打一次。\n一次 1 點，集滿 ' + PT.COUPON_POINTS + ' 點換 ' + PT.COUPON_VALUE + ' 元學餐折價券。', // 卡片.gs
+    [{ label: '打開打卡頁', uri: cpWebAppUrl_() + '?page=checkin&t=' + code }, ['我的紀錄', '我的紀錄']],
     { title: '到校打卡', badge: '積分' });
 }
 
@@ -301,7 +312,20 @@ function ptSchool_() {
  * 同一筆騎乘紀錄只能用一次，一天只算一次。GPS 打卡分不出是不是騎車，所以改看 YouBike 自己的紀錄。
  */
 const PT_BIKE_WAIT_MIN = 10;
-const PT_BIKE_CAMPUS = /東吳|外雙溪|錢穆|故宮|至善|臨溪|雙溪/; // 學校附近的還車站名稱
+const PT_BIKE_STATIONS = ['東吳大學', '至善臨溪路口', '國立故宮博物院', '梅林新村']; // 校內 557 站 700 公尺內的正式站名
+
+/** 去掉截圖站名前的 YouBike2.0_ 與空白，再跟清單完全比對 */
+function ptBikeStop_(name) {
+  return String(name || '').replace(/YouBike2\.0_/g, '').replace(/[\s\u3000]+/g, '');
+}
+
+/** 還車時間（ride.date + HH:MM，台北時間）。看不懂回傳 null */
+function ptBikeWhen_(ride) {
+  const m = String(ride.time || '').trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m || !/^\d{4}-\d{2}-\d{2}$/.test(ride.date || '')) return null;
+  const stamp = new Date(ride.date + 'T' + ('0' + m[1]).slice(-2) + ':' + m[2] + ':00+08:00');
+  return isNaN(stamp.getTime()) ? null : stamp;
+}
 
 function ptBike_(uid) {
   if (ptDoneToday_(uid, '騎車')) return '今天已經記過騎車到校了，明天繼續 🚲';
@@ -328,7 +352,12 @@ function ptBikePhoto_(uid, messageId) {
   if (!ride) return '🚲 看不出這是 YouBike 的騎乘紀錄，請截圖 App 裡這次騎乘的紀錄再傳一次。';
   const today = Utilities.formatDate(cpNow_(), TZ, 'yyyy-MM-dd');
   if (ride.date !== today) return '🚲 這筆紀錄是 ' + ride.date + ' 的，要用今天的騎乘紀錄喔。';
-  if (!PT_BIKE_CAMPUS.test(ride.to)) return '🚲 還車站是「' + ride.to + '」，要在學校附近還車才算騎車到校。';
+  if (PT_BIKE_STATIONS.indexOf(ptBikeStop_(ride.to)) < 0) return '🚲 還車站是「' + ride.to + '」，要在學校附近還車才算騎車到校。';
+  const returned = ptBikeWhen_(ride);
+  if (!returned) return '🚲 看不出還車時間，請截圖有寫還車時間的紀錄再傳一次。';
+  const lagMin = (cpNow_().getTime() - returned.getTime()) / 60000;
+  if (lagMin < -5) return '🚲 還車時間是 ' + ride.time + '，比現在晚了超過 5 分鐘，不能用這張截圖。';
+  if (lagMin > PT.BIKE_MAX_LAG_MIN) return '🚲 還車時間是 ' + ride.time + '，離現在超過 ' + PT.BIKE_MAX_LAG_MIN + ' 分鐘，請用剛還車的紀錄。';
   const key = [ride.date, ride.time, ride.from, ride.to].join('｜');
   return cpLocked_(() => { // 共乘.gs
     if (ptDoneToday_(uid, '騎車')) { cache.remove('bike_wait_' + uid); return '今天已經記過騎車到校了，明天繼續 🚲'; }
@@ -371,67 +400,139 @@ function ptReadRide_(messageId) {
 
 // ===== 打卡頁呼叫的函式（google.script.run） =====
 
-/**
- * 打卡頁回報位置。這是公開網頁能呼叫的函式，所以每個參數都檢查格式。
- * 回傳 { ok, title, lines }，打卡頁直接顯示。
- */
-function ptCheckin(token, lat, lng, accuracy) {
-  if (!/^[0-9a-f-]{36}$/.test(String(token || ''))) return { ok: false, title: '連結失效', lines: ['請回 LINE 再傳一次「打卡」。'] };
-  const ok = v => typeof v === 'number' && isFinite(v);
-  if (!ok(lat) || !ok(lng) || !ok(accuracy) || Math.abs(lat) > 90 || Math.abs(lng) > 180) {
-    return { ok: false, title: '定位資料不正確', lines: ['請再試一次。'] };
-  }
-  return cpLocked_(() => {
-    const user = cpUserByToken_(token);
-    if (!user) return { ok: false, title: '連結失效', lines: ['請回 LINE 再傳一次「打卡」。'] };
-    const cache = CacheService.getScriptCache();
-    if (cache.get('checkin_' + user.id)) return { ok: false, title: '剛剛打過了', lines: ['一分鐘後再試。'] };
-    cache.put('checkin_' + user.id, '1', 60);
-    return ptCheckinAt_(user.id, [lat, lng], accuracy);
+function ptDay_(date) {
+  return Utilities.formatDate(new Date(date), TZ, 'yyyy-MM-dd');
+}
+
+/** 1 →「1」、1.901 →「1.9」 */
+function ptShowMin_(m) {
+  const v = Math.round(m * 10) / 10;
+  return Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : v.toFixed(1);
+}
+
+/** 兩次定位都要是數字、範圍正確。格式不對時不消耗代碼 */
+function ptFixesOk_(fixes) {
+  if (!Array.isArray(fixes) || fixes.length !== 2) return false;
+  return fixes.every(f => {
+    if (!f || typeof f !== 'object') return false;
+    const num = v => typeof v === 'number' && isFinite(v);
+    return num(f.lat) && num(f.lng) && num(f.accuracy) && num(f.ts) && Math.abs(f.lat) <= 90 && Math.abs(f.lng) <= 180 && f.accuracy >= 0;
   });
 }
 
-function ptCheckinAt_(uid, here, accuracy) {
+/**
+ * 打卡頁回報兩次位置。這是公開網頁能呼叫的函式，所以每個參數都檢查格式。
+ * fixes = [{ lat, lng, accuracy, ts }, { … }]，ts 是瀏覽器的 position.timestamp（毫秒）。
+ * 回傳 { ok, title, lines }，打卡頁直接顯示。距離用第二次定位。
+ */
+function ptCheckin(code, fixes) {
+  if (!/^[0-9a-f-]{36}$/.test(String(code || ''))) return { ok: false, title: '連結失效', lines: ['請回 LINE 再傳一次「打卡」。'] };
+  if (!ptFixesOk_(fixes)) return { ok: false, title: '定位資料不正確', lines: ['請再試一次。'] };
+  return cpLocked_(() => {
+    const cache = CacheService.getScriptCache();
+    const uid = cache.get(ptOnceKey_(code));
+    if (!uid) return { ok: false, title: '連結失效', lines: ['請回 LINE 再傳一次「打卡」。連結 10 分鐘內有效，而且只能用一次。'] };
+    cache.remove(ptOnceKey_(code)); // 用過即失效
+    if (cache.get('checkin_' + uid)) return { ok: false, title: '剛剛打過了', lines: ['一分鐘後再試。'] };
+    cache.put('checkin_' + uid, '1', 60);
+    return ptCheckinAt_(uid, fixes);
+  });
+}
+
+function ptCheckinAt_(uid, fixes) {
   const sheet = cpSheet_('打卡紀錄', PT_CHECKIN_HEAD);
   const now = cpNow_();
-  const record = (spot, dist, result) => sheet.appendRow([now, uid, spot, Math.round(dist), Math.round(accuracy), result]);
+  const second = fixes[1];
+  const here = [second.lat, second.lng];
+  const accuracy = second.accuracy;
+  const record = (spot, dist, result, reason) => sheet.appendRow([now, uid, spot, Math.round(dist), Math.round(accuracy), result, reason || '']);
 
+  if (fixes.some(f => now.getTime() - f.ts > PT.FIX_MAX_AGE_SEC * 1000)) {
+    record('', 0, '定位太舊', '定位時間比送出早超過 ' + PT.FIX_MAX_AGE_SEC + ' 秒');
+    return { ok: false, title: '定位太舊', lines: ['定位時間超過 ' + PT.FIX_MAX_AGE_SEC + ' 秒，請重新定位再打卡。'] };
+  }
+  const a = fixes[0];
+  if (a.lat === second.lat && a.lng === second.lng && a.accuracy === second.accuracy) {
+    record('', 0, '定位重複', '兩次定位的座標與誤差完全相同');
+    return { ok: false, title: '兩次定位相同', lines: ['兩次定位的座標與誤差完全一樣，請到室外重新定位再打卡。'] };
+  }
   if (accuracy > PT.MAX_ACCURACY_M) {
-    record('', 0, '誤差太大');
+    record('', 0, '誤差太大', '定位誤差超過 ' + PT.MAX_ACCURACY_M + ' 公尺');
     return { ok: false, title: '定位不夠準', lines: ['誤差約 ' + Math.round(accuracy) + ' 公尺。走到室外、打開 GPS 再試一次。'] };
   }
   const dStart = ptMeters_(here, GEO_POINTS[PT_START]);
   const dCampus = ptMeters_(here, GEO_POINTS[PT_CAMPUS]);
 
   if (dStart <= PT.NEAR_M) {
-    record(PT_START, dStart, '起點');
-    return { ok: true, title: '錢穆故居站打卡成功', lines: ['開始計時！' + PT.WALK_MAX_MIN + ' 分鐘內走進學校再打一次卡，就有 ' + PT.WALK + ' 點。'] };
+    record(PT_START, dStart, '起點', '');
+    return { ok: true, title: '錢穆故居站打卡成功', lines: ['開始計時！同一天 ' + PT.WALK_MIN_MIN + '～' + PT.WALK_MAX_MIN + ' 分鐘內走進學校再打一次卡，就有 ' + PT.WALK + ' 點。'] };
   }
-  if (dCampus > PT.CAMPUS_M) {
-    const nearer = dStart < dCampus ? [PT_START, dStart] : ['學校', dCampus];
-    record('', nearer[1], '不在打卡點');
-    return { ok: false, title: '不在打卡點附近', lines: ['離' + nearer[0] + '還有大約 ' + Math.round(nearer[1]) + ' 公尺。', '打卡點：錢穆故居站、校內。'] };
+  if (dCampus <= PT.CAMPUS_M) return ptArrive_(uid, sheet, now, dCampus, record);
+  if (dCampus >= PT.DEPART_MIN_M) {
+    record('出門', dCampus, '出門', '');
+    const need = dCampus / 1000 * PT.DEPART_MIN_PER_KM;
+    return { ok: true, title: '出門打卡成功', lines: ['已記錄出門，離學校大約 ' + Math.round(dCampus) + ' 公尺（只記距離，不記地點）。', '7:30 前到校再打卡就有早到點。這段約 ' + (dCampus / 1000).toFixed(1) + ' 公里，中間至少要隔 ' + ptShowMin_(need) + ' 分鐘。'] };
   }
+  const nearer = dStart < dCampus ? [PT_START, dStart] : ['學校', dCampus];
+  record('', nearer[1], '不在打卡點', '離' + nearer[0] + '還有大約 ' + Math.round(nearer[1]) + ' 公尺');
+  return { ok: false, title: '不在打卡點附近', lines: ['離' + nearer[0] + '還有大約 ' + Math.round(nearer[1]) + ' 公尺。', '打卡點：錢穆故居站、校內。離學校 ' + PT.DEPART_MIN_M + ' 公尺以外可以打出門卡。'] };
+}
 
-  // 到校：看有沒有步行、有沒有早到
+/** 人在校內：步行（同一天 6～20 分鐘）和早到（當天先有出門卡、間隔夠久）分開判斷。
+ *  這次有呼叫 ptAdd_（步行或早到）結果寫「加分」，都沒加才寫「到校」。
+ *  新規則沒給點（不是今天、少於 6 分、超過 20 分、沒有出門卡、間隔太短）把簡短原因用「；」寫進原因欄。 */
+function ptArrive_(uid, sheet, now, dCampus, record) {
   const lines = [];
+  const reasons = [];
   let fresh = [];
-  const started = sheet.getDataRange().getValues().slice(1)
-    .filter(r => r[1] === uid && r[2] === PT_START && now - new Date(r[0]) <= PT.WALK_MAX_MIN * 60000).pop();
+  let added = false;
+  const today = ptDay_(now);
+  const rows = sheet.getDataRange().getValues().slice(1);
+  const started = rows.filter(r => r[1] === uid && r[2] === PT_START && new Date(r[0]) <= now).pop();
   if (started && !ptDoneToday_(uid, '步行') && !ptDoneToday_(uid, '騎車')) {
-    const minutes = Math.max(1, Math.round((now - new Date(started[0])) / 60000));
-    const co2 = PT.WALK_KM * PT.BUS_G_PER_KM;
-    fresh = fresh.concat(ptAdd_(uid, '步行', PT.WALK, co2, minutes + ' 分鐘'));
-    lines.push('🚶 走了 ' + minutes + ' 分鐘，步行 +' + PT.WALK + ' 點');
-    lines.push('少排放 ' + Math.round(co2) + ' 公克 CO₂');
+    const elapsedMin = (now - new Date(started[0])) / 60000;
+    const sameDay = ptDay_(started[0]) === today;
+    if (!sameDay && elapsedMin <= PT.WALK_MAX_MIN) {
+      reasons.push('不是今天');
+      lines.push('🚶 錢穆故居站的打卡不是今天，步行要同一天完成，這次沒有步行點。');
+    } else if (sameDay && elapsedMin < PT.WALK_MIN_MIN) {
+      reasons.push('少於 ' + PT.WALK_MIN_MIN + ' 分');
+      lines.push('🚶 只隔了 ' + Math.max(1, Math.round(elapsedMin)) + ' 分鐘，步行要 ' + PT.WALK_MIN_MIN + '～' + PT.WALK_MAX_MIN + ' 分鐘，這次沒有步行點。');
+    } else if (sameDay && elapsedMin > PT.WALK_MAX_MIN) {
+      reasons.push('超過 ' + PT.WALK_MAX_MIN + ' 分');
+      lines.push('🚶 隔了 ' + Math.round(elapsedMin) + ' 分鐘，超過 ' + PT.WALK_MAX_MIN + ' 分鐘，這次沒有步行點。');
+    } else if (sameDay) {
+      const minutes = Math.max(1, Math.round(elapsedMin));
+      const co2 = PT.WALK_KM * PT.BUS_G_PER_KM;
+      fresh = fresh.concat(ptAdd_(uid, '步行', PT.WALK, co2, minutes + ' 分鐘'));
+      added = true;
+      lines.push('🚶 走了 ' + minutes + ' 分鐘，步行 +' + PT.WALK + ' 點');
+      lines.push('少排放 ' + Math.round(co2) + ' 公克 CO₂');
+    }
   }
   const hhmm = Utilities.formatDate(now, TZ, 'HH:mm');
   if (hhmm < PT.EARLY_BEFORE && !ptDoneToday_(uid, '早到')) {
-    fresh = fresh.concat(ptAdd_(uid, '早到', PT.EARLY, 0, hhmm));
-    lines.push('🌅 ' + hhmm + ' 到校，早到 +' + PT.EARLY + ' 點');  }
-  if (!lines.length) lines.push('到校打卡成功。先在錢穆故居站打卡再走進來才有步行積分；7:30 前到校有早到積分。');
+    const departed = rows.filter(r => r[1] === uid && r[2] === '出門' && ptDay_(r[0]) === today && new Date(r[0]) <= now).pop();
+    if (!departed) {
+      reasons.push('沒有出門卡');
+      lines.push('🌅 現在是 ' + hhmm + '，可是今天還沒有出門打卡，所以沒有早到點。出門要在離學校 ' + PT.DEPART_MIN_M + ' 公尺以外先打。');
+    } else {
+      const elapsedMin = (now - new Date(departed[0])) / 60000;
+      const distM = Number(departed[3]) || 0;
+      const needMin = distM / 1000 * PT.DEPART_MIN_PER_KM;
+      if (elapsedMin < needMin) {
+        reasons.push('間隔太短');
+        lines.push('🌅 出門到到校只隔了 ' + ptShowMin_(elapsedMin) + ' 分鐘，這段約 ' + (distM / 1000).toFixed(1) + ' 公里至少要隔 ' + ptShowMin_(needMin) + ' 分鐘，所以沒有早到點。');
+      } else {
+        fresh = fresh.concat(ptAdd_(uid, '早到', PT.EARLY, 0, hhmm));
+        added = true;
+        lines.push('🌅 ' + hhmm + ' 到校，早到 +' + PT.EARLY + ' 點');
+      }
+    }
+  }
+  if (!lines.length) lines.push('到校打卡成功。先在錢穆故居站打卡，同一天 ' + PT.WALK_MIN_MIN + '～' + PT.WALK_MAX_MIN + ' 分鐘走進來才有步行積分；7:30 前到校，而且今天先打過出門卡，才有早到積分。');
   if (fresh.length) lines.push('🏅 解鎖成就：' + fresh.join('、'));
-  record(PT_CAMPUS, dCampus, lines.length > 1 || fresh.length ? '加分' : '到校');
+  record(PT_CAMPUS, dCampus, added ? '加分' : '到校', reasons.join('；'));
   return { ok: true, title: '到校打卡成功', lines: lines.concat(['目前積分：' + cpUser_(uid).points + ' 點（' + PT.COUPON_POINTS + ' 點換 ' + PT.COUPON_VALUE + ' 元學餐折價券）']) };
 }
 
@@ -469,35 +570,48 @@ const PT_CHECKIN_HTML = `<!doctype html>
 <body>
 <div class="card">
   <h1>到校打卡</h1>
-  <div class="sub">只用你的位置判斷離哪個打卡點最近，不會記錄經緯度。手機問要不要允許定位時，請按允許。</div>
+  <div class="sub">只用你的位置判斷離哪個打卡點最近，不會記錄經緯度。會間隔約 3 秒抓兩次定位，兩次不一樣才收。手機問要不要允許定位時，請按允許。</div>
   <button id="go" onclick="run()">打卡</button>
 </div>
 <div class="card" id="out" style="display:none"></div>
 <script>
 var TOKEN = '__TOKEN__', BOT = '__BOT__';
 function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-function show(ok, title, lines) {
+function show(ok, title, lines, retry) {
   var out = document.getElementById('out');
   out.style.display = 'block';
   out.innerHTML = '<div class="big ' + (ok ? 'ok' : 'bad') + '">' + esc(title) + '</div>'
     + lines.map(function (l) { return '<p>' + esc(l) + '</p>'; }).join('')
     + '<a class="btn" href="https://line.me/R/oaMessage/' + encodeURIComponent(BOT) + '/?' + encodeURIComponent('我的紀錄') + '">回 LINE 看我的紀錄</a>';
   var btn = document.getElementById('go');
-  btn.disabled = false; btn.textContent = '再打一次';
+  if (retry) { btn.disabled = false; btn.textContent = '再打一次'; }
+  else { btn.disabled = true; btn.textContent = '請回 LINE 再傳一次「打卡」'; }
+}
+function locate(done, fail) {
+  navigator.geolocation.getCurrentPosition(done, fail, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+}
+function onGeoError(err) {
+  var why = { 1: '沒有允許定位。請到手機設定打開 LINE 的定位權限。', 2: '手機抓不到位置，走到室外再試一次。', 3: '等太久了，再試一次。' }[err.code] || '不明原因';
+  show(false, '拿不到定位', [why], true);
 }
 function run() {
   var btn = document.getElementById('go');
-  if (!('geolocation' in navigator)) return show(false, '拿不到定位', ['這個瀏覽器不支援定位。']);
-  btn.disabled = true; btn.textContent = '定位中…（最多 20 秒）';
-  navigator.geolocation.getCurrentPosition(function (pos) {
-    google.script.run
-      .withSuccessHandler(function (r) { show(r.ok, r.title, r.lines); })
-      .withFailureHandler(function () { show(false, '連線失敗', ['請再試一次。']); })
-      .ptCheckin(TOKEN, pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
-  }, function (err) {
-    var why = { 1: '沒有允許定位。請到手機設定打開 LINE 的定位權限。', 2: '手機抓不到位置，走到室外再試一次。', 3: '等太久了，再試一次。' }[err.code] || '不明原因';
-    show(false, '拿不到定位', [why]);
-  }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+  if (!('geolocation' in navigator)) return show(false, '拿不到定位', ['這個瀏覽器不支援定位。'], true);
+  btn.disabled = true; btn.textContent = '定位中…（約 3 秒，抓兩次）';
+  locate(function (first) {
+    btn.textContent = '再定位一次…';
+    setTimeout(function () {
+      locate(function (second) {
+        var fixes = [first, second].map(function (pos) {
+          return { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy, ts: pos.timestamp };
+        });
+        google.script.run
+          .withSuccessHandler(function (r) { show(r.ok, r.title, r.lines, false); })
+          .withFailureHandler(function () { show(false, '連線失敗', ['請回 LINE 再傳一次「打卡」。'], false); })
+          .ptCheckin(TOKEN, fixes);
+      }, onGeoError);
+    }, 3000);
+  }, onGeoError);
 }
 </script>
 </body>
