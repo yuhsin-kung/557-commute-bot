@@ -18,7 +18,7 @@ function makeSheet() {
     getRange: (row, col, numRows = 1, numCols = 1) => ({
       getValue: () => rows[row - 1][col - 1],
       getValues: () => rows.slice(row - 1, row - 1 + numRows).map(r => r.slice(col - 1, col - 1 + numCols)),
-      setValues: values => values.forEach((r, i) => r.forEach((v, j) => { rows[row - 1 + i][col - 1 + j] = v; })),
+      setValues: values => values.forEach((r, i) => r.forEach((v, j) => { (rows[row - 1 + i] = rows[row - 1 + i] || [])[col - 1 + j] = v; })),
     }),
   };
 }
