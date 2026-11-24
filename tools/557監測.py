@@ -4,7 +4,7 @@
 # ///
 """557 監測（含車上人數）：記錄每班 557 從天文館發車、沿途每站、士林國中、捷運士林站、東吳大學的時間，
 以及到／離士林國中、捷運士林站時的車上人數（綠舒適／黃中等／紅擁擠）；
-回程記東吳停靠、錢穆故居→捷運士林站每站時間，和到／離錢穆故居、士林站的人數。輸出成 Excel。
+回程記東吳停靠、錢穆故居→捷運士林站每站時間，和離開東吳時的人數。輸出成 Excel。
 
 改自 557公車監測/bus557_monitor.py（只記到離站），這版多記網站的「車上人數／擁擠程度」。
 
@@ -70,6 +70,15 @@ STOP_NAMES.update({"171164": "東吳大學(錢穆故居)", "171165": "梅林新�
 SHORT = {START: "天文館", "212024": "科教館", "171175": "士林高商", "187538": "行政中心",
          JHS: "士林國中", MRT: "士林站", SCHOOL: "東吳"}
 LEVEL_NAMES = {1: "舒適", 2: "中等", 3: "擁擠"}
+CAPACITY = 70           # 557 公車設定最多載 70 人
+# 【網站人數會高估】網站人數看起來是「上車刷卡 − 下車刷卡」，定期票下車可以不刷，
+# 這些人下車了人數也不會減。2026/11/24 實測：
+#   - 回程開到終點天文館（全部人都下車了）網站還顯示 9–45 人 → 這些就是沒刷卡下車的人
+#   - 每趟去程從天文館發車後人數會歸零（科教館都是 0）
+#   - 但在東吳不會歸零：去程沒刷卡的人會帶到回程（EAA-075 東吳 39 → 回程 81）
+# 所以某一站的實際人數 = 網站人數 − 到那時為止沒刷卡下車的人，介在
+#   網站人數 − 這趟終點還顯示的人數（最少）～ 網站人數 − 這趟出發時已經顯示的人數（最多）
+# 去程出發時是 0；回程出發時是去程終點東吳還顯示的人數。
 POLL_SECONDS = 15
 TAIL_MINUTES = 30        # 結束時間後再追一下，等最後幾班開到東吳
 EXCEL_EVERY_SECONDS = 60
@@ -78,7 +87,8 @@ A3_EARLY = timedelta(seconds=10)    # 進站紀錄可能比人數回報晚幾秒
 A3_SPLIT = timedelta(seconds=5)     # 離站後 5 秒內的回報當成還在站上（進站那次）
 TRIP_GAP = timedelta(minutes=30)    # 同一台車去程中隔這麼久沒有新紀錄，就當成下一趟
 VISIT_LIMIT = timedelta(minutes=20) # 開進東吳大學後 20 分鐘內出現的回程才算同一趟（平常停 6–9 分鐘）
-SLOT_MINUTES = 15
+SLOT_MINUTES = 10       # Excel 的「每 N 分鐘」分頁；三天資料每格約 4 班，可用 --slot 改
+FEW_TRIPS = 3           # 一格少於這麼多班就塗灰、提醒參考就好
 
 RAW_FIELDS = ["事件時間", "車牌", "車輛ID", "去返程", "站牌ID", "事件", "抓取時間"]
 # (存在哪個欄位, Excel 欄名開頭)：每班車記這四個人數
@@ -91,7 +101,9 @@ GAP_COLS = [f"{SHORT[a]}→{SHORT[b]}(分)" for a, b in zip(_SEQ, _SEQ[1:])]
 TRIP_HEAD = (["編號", "車牌"] + TIME_COLS + GAP_COLS + ["天文館→東吳總計(分)",
              "到士林國中時人數", "到士林國中時擁擠", "離開士林國中人數", "離開士林國中擁擠",
              "到士林站時人數", "到士林站時擁擠", "離開士林站人數", "離開士林站擁擠",
-             "士林國中淨上車(人)", "士林站淨上車(人)", "跟前一班到士林站間隔(分)", "備註"])
+             "士林國中淨上車(人)", "士林站淨上車(人)",
+             "終點東吳還顯示(人，沒刷卡下車)", "到士林站時實際約(人)", f"士林站剩幾個位置(以{CAPACITY}人算)",
+             "跟前一班到士林站間隔(分)", "備註"])
 
 # ---- 回程（東吳 → 捷運士林站 → 天文館）----
 # 車開到去程終點「東吳大學」（校內）後會停 6–9 分鐘讓人上車，這段時間網站不回報人數，
@@ -105,8 +117,8 @@ R_NAMES = {R_QIAN: "東吳大學(錢穆故居)", "171165": "梅林新村", "1711
            "171172": "士林區行政中心", "199583": "士林高商", "199584": "國立科教館", "199585": "天文科學館"}
 R_SHORT = {R_QIAN: "錢穆故居", "171165": "梅林", "171166": "雙溪", "171167": "泰北", "171168": "官邸",
            "171169": "福林", R_MRT: "士林站"}
-R_CROWD_POINTS = [("錢穆到站人數", "到錢穆故居時"), ("錢穆人數", "離開錢穆故居"),
-                  ("士林站到站人數", "到士林站時"), ("士林站人數", "離開士林站")]
+# 回程只記一個人數：離開東吳時車上幾人（＝校內和錢穆故居都上完車、離開錢穆故居時的人數）
+R_CROWD_POINTS = [("東吳人數", "離開東吳")]
 R_TIME_COLS = ["到東吳大學(開始停靠)"] + [R_SHORT[x] + "到站" for x in R_BEFORE_MRT + [R_MRT]]
 R_GAP_COLS = ["東吳停靠(分)"] + [f"{R_SHORT[a]}→{R_SHORT[b]}(分)" for a, b in zip(R_BEFORE_MRT, R_BEFORE_MRT[1:] + [R_MRT])]
 # ---- 網站自己的到站預估（網頁上的「5分」「將到站」）----
@@ -118,7 +130,8 @@ ETA_MATCH_LATE = timedelta(minutes=30)  # 實際到站最多比預估晚這麼�
 
 RETURN_HEAD = (["編號", "車牌"] + R_TIME_COLS + R_GAP_COLS + ["錢穆故居→士林站總計(分)"]
                + [label + k for _, label in R_CROWD_POINTS for k in ("人數", "擁擠")]
-               + ["錢穆故居淨上車(人)", "士林站淨上車(人，負的＝下車多)", "跟前一班到錢穆故居間隔(分)", "備註"])
+               + ["出發前已顯示(人，去程沒刷卡)", "終點天文館還顯示(人)", "離開東吳實際約(人)",
+                  f"離開東吳剩幾個位置(以{CAPACITY}人算)", "跟前一班到錢穆故居間隔(分)", "備註"])
 
 SSL_CTX = ssl.create_default_context()
 SSL_CTX.verify_flags &= ~getattr(ssl, "VERIFY_X509_STRICT", 0)  # 官方憑證缺 SKI，Python 3.13+ 會擋
@@ -371,6 +384,16 @@ def build_trips(events, crowds, incomplete=None):
             lacking = [label for key, label in CROWD_POINTS if t[key] is None]
             if lacking:
                 t["備註"].append("沒有人數：" + "、".join(lacking))
+            # 開到終點東吳時網站還顯示的人數＝這趟沒刷卡下車的人（要在校內有人上車前：用去程錢穆故居離站那次，
+            # 沒有才用開進東吳的第一筆）
+            t["終點顯示"] = None
+            if SCHOOL in t["時間"]:
+                arrive = t["時間"][SCHOOL]
+                t["終點顯示"] = last_report(mine, {"171195"}, t["參考"], arrive + A3_EARLY)
+                if t["終點顯示"] is None:
+                    t["終點顯示"] = last_report(mine, {SCHOOL}, arrive - A3_EARLY, arrive + A3_WINDOW, first=True)
+            came = t["士林站到站人數"] or t["國中人數"]
+            t["士林站實際"] = real_range(int(came["車上人數"]) if came else None, 0, t["終點顯示"])
             # 士林國中和士林站中間沒有站：離開國中的人數應該等於開進士林站的人數，不一樣就標出來
             if t["國中人數"] and t["士林站到站人數"] and t["國中人數"]["車上人數"] != t["士林站到站人數"]["車上人數"]:
                 t["備註"].append(f"離開士林國中 {t['國中人數']['車上人數']} 人，到士林站時 {t['士林站到站人數']['車上人數']} 人，對不起來")
@@ -451,29 +474,32 @@ def build_returns(events, crowds, incomplete=None):
             if missing:
                 t["備註"].append("沒抓到：" + "、".join(missing))
 
+            # 離開東吳的人數：優先用離開錢穆故居那次回報；沒有就用開進梅林新村時（中間沒人上下車）；
+            # 再沒有才用開進錢穆故居時（還沒算到在錢穆故居上車的人，今天實測錢穆故居淨上車都是 0）
             mine = crowd_by_bus[vid]
-            t["錢穆到站人數"], t["錢穆人數"] = crowd_at(mine, R_QIAN, t["到站"].get(R_QIAN), t["離站"].get(R_QIAN))
-            t["士林站到站人數"], t["士林站人數"] = crowd_at(mine, R_MRT, t["到站"].get(R_MRT), t["離站"].get(R_MRT))
-            # 沒回報時用相鄰站補（中間沒人上下車）；錢穆故居進站前是在校內上車，沒有前一站可以補
-            filled = []
-            before = R_BEFORE_MRT[-1]
-            if t["士林站到站人數"] is None and (before in t["到站"] or before in t["離站"]):
-                left = crowd_at(mine, before, t["到站"].get(before), t["離站"].get(before))[1]
-                if left:
-                    t["士林站到站人數"] = left
-                    filled.append(f"到士林站時＝離開{R_NAMES[before]}")
-            for key, stop, label in (("錢穆人數", R_QIAN, "離開錢穆故居"), ("士林站人數", R_MRT, "離開士林站")):
-                nxt = R_ROUTE[R_ROUTE.index(stop) + 1]
-                if t[key] is None and (nxt in t["到站"] or nxt in t["離站"]):
-                    came = crowd_at(mine, nxt, t["到站"].get(nxt), t["離站"].get(nxt))[0]
-                    if came:
-                        t[key] = came
-                        filled.append(f"{label}＝到{R_NAMES[nxt]}時")
-            if filled:
-                t["備註"].append("沒回報，用相鄰站的人數（中間沒人上下車）：" + "、".join(filled))
-            lacking = [label for key, label in R_CROWD_POINTS if t[key] is None]
-            if lacking:
-                t["備註"].append("沒有人數：" + "、".join(lacking))
+            came, left = crowd_at(mine, R_QIAN, t["到站"].get(R_QIAN), t["離站"].get(R_QIAN))
+            nxt = R_ROUTE[1]
+            t["東吳人數"] = left
+            if left is None and (nxt in t["到站"] or nxt in t["離站"]):
+                t["東吳人數"] = crowd_at(mine, nxt, t["到站"].get(nxt), t["離站"].get(nxt))[0]
+                if t["東吳人數"]:
+                    t["備註"].append(f"離開東吳人數用開進{R_NAMES[nxt]}時的（中間沒人上下車）")
+            if t["東吳人數"] is None and came:
+                t["東吳人數"] = came
+                t["備註"].append("離開東吳人數用開進錢穆故居時的（沒算到在錢穆故居上車的人）")
+            if t["東吳人數"] is None:
+                t["備註"].append("沒有人數：離開東吳")
+            # 出發前已顯示＝去程開到東吳時還顯示的人數（去程沒刷卡下車，網站在東吳不歸零）
+            t["出發顯示"] = None
+            if t["東吳"]:
+                t["出發顯示"] = last_report(mine, {"171195"}, t["東吳"] - TRIP_GAP, t["東吳"] + A3_EARLY)
+                if t["出發顯示"] is None:
+                    t["出發顯示"] = last_report(mine, {SCHOOL}, t["東吳"] - A3_EARLY, t["東吳"] + A3_WINDOW, first=True)
+            # 終點天文館還顯示＝去程＋回程所有沒刷卡下車的人
+            t["終點顯示"] = last_report(mine, {"199585"}, t["參考"], t["參考"] + 2 * TRIP_GAP)
+            t["東吳實際"] = real_range(int(t["東吳人數"]["車上人數"]) if t["東吳人數"] else None, t["出發顯示"], t["終點顯示"])
+            if t["出發顯示"] is not None and t["終點顯示"] is not None and t["終點顯示"] < t["出發顯示"]:
+                t["備註"].append(f"終點天文館顯示 {t['終點顯示']} 人比出發前 {t['出發顯示']} 人少，對不起來，沒算實際人數")
             trips.append(t)
 
     trips.sort(key=lambda t: t["參考"])
@@ -493,10 +519,42 @@ def return_row(n, t):
     crowd_cells = []
     for key, _ in R_CROWD_POINTS:
         crowd_cells += [count(t[key]), LEVEL_NAMES[level_of(t[key])] if t[key] else ""]
-    qian_net = count(t["錢穆人數"]) - count(t["錢穆到站人數"]) if t["錢穆人數"] and t["錢穆到站人數"] else ""
-    mrt_net = count(t["士林站人數"]) - count(t["士林站到站人數"]) if t["士林站人數"] and t["士林站到站人數"] else ""
     return ([n, t["車牌"]] + seq + gaps + [minutes(at.get(R_QIAN), at.get(R_MRT))] + crowd_cells
-            + [qian_net, mrt_net, t["間隔"], "；".join(t["備註"])])
+            + [t["出發顯示"] if t["出發顯示"] is not None else "", t["終點顯示"] if t["終點顯示"] is not None else "",
+               fmt_range(t["東吳實際"]), seats_left(t["東吳實際"]), t["間隔"], "；".join(t["備註"])])
+
+
+def last_report(crowds, stops, start, end, first=False):
+    """這台車在 start～end 之間、標成這幾站之一的回報，取最後一筆（first=True 取第一筆）的人數"""
+    hits = sorted((c for c in crowds if c["站牌ID"] in stops and start <= crowd_time(c) <= end), key=crowd_time)
+    if not hits:
+        return None
+    return int((hits[0] if first else hits[-1])["車上人數"])
+
+
+def real_range(shown, ghost_start, ghost_end):
+    """網站人數 → 實際人數的範圍（扣掉沒刷卡下車的人）；資料不夠或對不起來就回傳 None"""
+    if shown is None or ghost_start is None or ghost_end is None or ghost_end < ghost_start:
+        return None
+    return max(0, shown - ghost_end), max(0, shown - ghost_start)
+
+
+def fmt_range(r):
+    if r is None:
+        return ""
+    return str(r[0]) if r[0] == r[1] else f"{r[0]}–{r[1]}"
+
+
+def seats_left(r):
+    """以 70 人算還剩幾個位置；超過 70 人寫「超載」"""
+    if r is None:
+        return ""
+    lo, hi = CAPACITY - r[1], CAPACITY - r[0]
+    if hi < 0:
+        return f"超載 {-hi} 人" if lo == hi else f"超載 {-hi}–{-lo} 人"
+    if lo < 0:
+        return f"0–{hi}（可能超載）"
+    return str(lo) if lo == hi else f"{lo}–{hi}"
 
 
 def crowd_time(c):
@@ -547,7 +605,9 @@ def trip_row(n, t):
     return ([n, t["車牌"], t["發車"]] + [at.get(s) for s in BEFORE_JHS[1:]] + [at.get(JHS), at.get(MRT), at.get(SCHOOL)]
             + gaps + [minutes(t["發車"], at.get(SCHOOL))] + crowd_cells
             + [count(t["國中人數"]) - count(t["國中到站人數"]) if t["國中人數"] and t["國中到站人數"] else "",
-               count(t["士林站人數"]) - count(came) if came and t["士林站人數"] else "", t["間隔"], "；".join(t["備註"])])
+               count(t["士林站人數"]) - count(came) if came and t["士林站人數"] else "",
+               t["終點顯示"] if t["終點顯示"] is not None else "", fmt_range(t["士林站實際"]), seats_left(t["士林站實際"]),
+               t["間隔"], "；".join(t["備註"])])
 
 
 def write_excel(path, trips, events, crowds, day, incomplete=(), returns=(), etas=()):
@@ -581,13 +641,22 @@ def write_excel(path, trips, events, crowds, day, incomplete=(), returns=(), eta
         if t["備註"]:
             ws[f"{col['備註']}{r}"].fill = warn_fill
     ws.row_dimensions[1].height = 45
-    autosize(ws, [5, 10] + [9] * len(TIME_COLS) + [9] * (len(GAP_COLS) + 1) + [8, 7] * len(CROWD_POINTS) + [9, 9, 9, 45])
+    autosize(ws, [5, 10] + [9] * len(TIME_COLS) + [9] * (len(GAP_COLS) + 1) + [8, 7] * len(CROWD_POINTS) + [9, 9, 12, 12, 12, 9, 45])
 
-    st = wb.create_sheet("每15分鐘")
+    few_fill = PatternFill("solid", fgColor="E7E6E6")
+
+    def mark_few(ws, n):
+        """這一格班數太少：整列塗灰、最後一欄寫提醒"""
+        if n < FEW_TRIPS:
+            ws.cell(row=ws.max_row, column=ws.max_column).value = f"只有 {n} 班，參考就好"
+            for c in ws[ws.max_row]:
+                c.fill = few_fill
+
+    st = wb.create_sheet(f"每{SLOT_MINUTES}分鐘")
     st.append([f"{day:%Y-%m-%d} 依「到捷運士林站的時間」每 {SLOT_MINUTES} 分鐘分組。"
                "間隔＝這班跟前一班到士林站差幾分鐘；人數是離開士林站時車上的人數"])
     header(st, ["時段", "班次", "平均間隔(分)", "最長間隔(分)", "離開士林站平均人數", "最多人數",
-                "擁擠班次", "中等班次", "舒適班次", "沒人數的班次", "天文館→士林國中平均(分)", "士林站→東吳平均(分)"])
+                "擁擠班次", "中等班次", "舒適班次", "沒人數的班次", "天文館→士林國中平均(分)", "士林站→東吳平均(分)", "提醒"])
     slots = defaultdict(list)
     for t in trips:
         ref = t["參考"]
@@ -602,8 +671,9 @@ def write_excel(path, trips, events, crowds, day, incomplete=(), returns=(), eta
         rides = [minutes(t["時間"][MRT], t["時間"][SCHOOL]) for t in ts if MRT in t["時間"] and SCHOOL in t["時間"]]
         st.append([f"{start:%H:%M}–{start + timedelta(minutes=SLOT_MINUTES):%H:%M}", len(ts), avg(gaps),
                    max(gaps) if gaps else "", avg(counts), max(counts) if counts else "",
-                   levels.count(3), levels.count(2), levels.count(1), len(ts) - len(counts), avg(to_jhs), avg(rides)])
-    autosize(st, [14, 7, 12, 12, 16, 10, 10, 10, 10, 12, 18, 18])
+                   levels.count(3), levels.count(2), levels.count(1), len(ts) - len(counts), avg(to_jhs), avg(rides), ""])
+        mark_few(st, len(ts))
+    autosize(st, [14, 7, 12, 12, 16, 10, 10, 10, 10, 12, 18, 18, 18])
 
     rw = wb.create_sheet("回程每班車")
     header(rw, RETURN_HEAD)
@@ -620,14 +690,13 @@ def write_excel(path, trips, events, crowds, day, incomplete=(), returns=(), eta
         if t["備註"]:
             rw[f"{rcol['備註']}{r}"].fill = warn_fill
     rw.row_dimensions[1].height = 45
-    autosize(rw, [5, 10] + [9] * len(R_TIME_COLS) + [9] * (len(R_GAP_COLS) + 1) + [8, 7] * len(R_CROWD_POINTS) + [9, 11, 10, 45])
+    autosize(rw, [5, 10] + [9] * len(R_TIME_COLS) + [9] * (len(R_GAP_COLS) + 1) + [8, 7] * len(R_CROWD_POINTS) + [12, 12, 12, 12, 10, 45])
 
-    rs = wb.create_sheet("回程每15分鐘")
+    rs = wb.create_sheet(f"回程每{SLOT_MINUTES}分鐘")
     rs.append([f"{day:%Y-%m-%d} 依「開到錢穆故居的時間」（≈ 離開校內）每 {SLOT_MINUTES} 分鐘分組。"
-               "到錢穆故居時的人數＝在校內（和錢穆故居）上車的人，網站分不開兩站"])
-    header(rs, ["時段", "班次", "平均間隔(分)", "最長間隔(分)", "到錢穆故居時平均人數", "離開錢穆故居平均人數", "最多人數",
-                "擁擠班次", "中等班次", "舒適班次", "沒人數的班次", "東吳停靠平均(分)", "錢穆故居→士林站平均(分)",
-                "士林站平均淨上車(人)"])
+               "離開東吳人數＝校內和錢穆故居都上完車後車上的人數（網站分不開兩站）"])
+    header(rs, ["時段", "班次", "平均間隔(分)", "最長間隔(分)", "離開東吳平均人數", "最多人數",
+                "擁擠班次", "中等班次", "舒適班次", "沒人數的班次", "東吳停靠平均(分)", "錢穆故居→士林站平均(分)", "提醒"])
     rslots = defaultdict(list)
     for t in returns:
         ref = t["參考"]
@@ -635,17 +704,15 @@ def write_excel(path, trips, events, crowds, day, incomplete=(), returns=(), eta
     for start in sorted(rslots):
         ts = rslots[start]
         gaps = [t["間隔"] for t in ts if t["間隔"] != ""]
-        came = [int(t["錢穆到站人數"]["車上人數"]) for t in ts if t["錢穆到站人數"]]
-        left = [int(t["錢穆人數"]["車上人數"]) for t in ts if t["錢穆人數"]]
-        levels = [level_of(t["錢穆人數"]) for t in ts if t["錢穆人數"]]
+        left = [int(t["東吳人數"]["車上人數"]) for t in ts if t["東吳人數"]]
+        levels = [level_of(t["東吳人數"]) for t in ts if t["東吳人數"]]
         stays = [minutes(t["東吳"], t["時間"][R_QIAN]) for t in ts if t["東吳"] and R_QIAN in t["時間"]]
         rides = [minutes(t["時間"][R_QIAN], t["時間"][R_MRT]) for t in ts if R_QIAN in t["時間"] and R_MRT in t["時間"]]
-        nets = [int(t["士林站人數"]["車上人數"]) - int(t["士林站到站人數"]["車上人數"])
-                for t in ts if t["士林站人數"] and t["士林站到站人數"]]
         rs.append([f"{start:%H:%M}–{start + timedelta(minutes=SLOT_MINUTES):%H:%M}", len(ts), avg(gaps),
-                   max(gaps) if gaps else "", avg(came), avg(left), max(left + came) if left + came else "",
-                   levels.count(3), levels.count(2), levels.count(1), len(ts) - len(left), avg(stays), avg(rides), avg(nets)])
-    autosize(rs, [14, 7, 12, 12, 16, 16, 10, 10, 10, 10, 12, 14, 18, 16])
+                   max(gaps) if gaps else "", avg(left), max(left) if left else "",
+                   levels.count(3), levels.count(2), levels.count(1), len(ts) - len(left), avg(stays), avg(rides), ""])
+        mark_few(rs, len(ts))
+    autosize(rs, [14, 7, 12, 12, 16, 10, 10, 10, 10, 12, 14, 18, 18])
 
     ev_sheet = wb.create_sheet("網站預估準度")
     ev_sheet.append(["網站（網頁上的「5分」「將到站」）每次預估某台車幾分鐘後到站，跟那台車實際到站時間比。"
@@ -702,6 +769,7 @@ def in_window(trips, start, end):
 
 
 def main():
+    global SLOT_MINUTES
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     ap = argparse.ArgumentParser()
     ap.add_argument("--date", help="監測日期 YYYY-MM-DD（預設：下一個 07:00 所在日）")
@@ -711,7 +779,9 @@ def main():
     ap.add_argument("--minutes", type=int, help="搭配 --now：跑幾分鐘")
     ap.add_argument("--outdir", default=os.path.join(root, "data", "557監測"))
     ap.add_argument("--rebuild", metavar="日期", help="只用這一天的原始紀錄重新產生 Excel")
+    ap.add_argument("--slot", type=int, default=SLOT_MINUTES, help="Excel 每幾分鐘一格（預設 10）")
     args = ap.parse_args()
+    SLOT_MINUTES = args.slot
 
     now = datetime.now()
     sh, sm = map(int, args.start.split(":"))

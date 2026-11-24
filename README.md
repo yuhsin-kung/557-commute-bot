@@ -50,7 +50,9 @@
 uv run tools/557監測.py
 ```
 
-預設等到 07:00 開始、19:00 結束；`--now --minutes 10` 立刻測試 10 分鐘；`--rebuild 2026-11-25` 用原始紀錄重新產生 Excel。測試：`uv run --with openpyxl python -m unittest discover -s tests -p "test_*.py"`。
+預設等到 07:00 開始、19:00 結束；`--now --minutes 10` 立刻測試 10 分鐘；`--rebuild 2026-11-25` 用原始紀錄重新產生 Excel；`--slot 5` 把「每 N 分鐘」分頁改成 5 分鐘一格（預設 10，不到 3 班的格子塗灰）。測試：`uv run --with openpyxl python -m unittest discover -s tests -p "test_*.py"`。
+
+**網站人數會高估**：定期票下車可以不刷卡，人數不會減（回程開到終點天文館，網站還顯示 9–45 人）。Excel 用「終點站還顯示的人數」扣回來，算出實際人數的範圍，並以 557 最多 70 人算剩幾個位置。
 
 人數是車「離開」那一站後網站回報的車上人數，所以士林站只看得到「上車 − 下車」的淨值；人數怎麼算的網站沒公開，要用現場觀察核對。
 

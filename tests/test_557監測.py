@@ -244,8 +244,8 @@ class ReturnTest(unittest.TestCase):
         self.assertEqual(row["士林站到站"], datetime(2026, 11, 25, 8, 19))
         self.assertEqual(row["東吳停靠(分)"], 7.0)
         self.assertEqual(row["錢穆故居→士林站總計(分)"], 7.0)
-        self.assertEqual([row[l + "人數"] for _, l in m.R_CROWD_POINTS], [60, 62, 62, 20])
-        self.assertEqual((row["錢穆故居淨上車(人)"], row["士林站淨上車(人，負的＝下車多)"]), (2, -42))
+        self.assertEqual((row["離開東吳人數"], row["離開東吳擁擠"]), (62, "擁擠"), "用離開錢穆故居那次")
+        self.assertNotIn("離開士林站人數", m.RETURN_HEAD, "回程只記東吳一個")
         self.assertEqual(t["備註"], [])
 
     def test_return_sheet_written(self):
@@ -256,11 +256,11 @@ class ReturnTest(unittest.TestCase):
             m.write_excel(path, trips, events, crowds, datetime(2026, 11, 25), (), returns)
             wb = load_workbook(path)
             got = dict(zip(m.RETURN_HEAD, [c.value for c in wb["回程每班車"][2]]))
-            self.assertEqual((got["車牌"], got["到錢穆故居時人數"], got["到錢穆故居時擁擠"]), ("EAA-001", 60, "擁擠"))
-            col = m.RETURN_HEAD.index("離開士林站人數")
-            self.assertEqual(wb["回程每班車"][2][col].fill.fgColor.rgb[-6:], "C6EFCE", "20 人舒適＝綠")
-            slot = [c.value for c in wb["回程每15分鐘"][3]]
-            self.assertEqual(slot[:2], ["08:00–08:15", 1])
+            self.assertEqual((got["車牌"], got["離開東吳人數"], got["離開東吳擁擠"]), ("EAA-001", 62, "擁擠"))
+            col = m.RETURN_HEAD.index("離開東吳人數")
+            self.assertEqual(wb["回程每班車"][2][col].fill.fgColor.rgb[-6:], "FFC7CE", "擁擠＝紅")
+            slot = [c.value for c in wb["回程每10分鐘"][3]]
+            self.assertEqual(slot[:2], ["08:10–08:20", 1])
 
     def test_go_and_return_are_separate(self):
         """同一台車的去程、回程各自一列，互不影響"""
@@ -275,41 +275,59 @@ class ReturnTest(unittest.TestCase):
         self.assertEqual(m.build_returns(events, crowds, incomplete), [])
         self.assertTrue(incomplete[0]["沒列原因"].startswith("回程：監測開始時已經離開東吳"))
 
-    def test_return_mrt_arrival_filled_from_previous_stop(self):
-        """回程進士林站沒回報：用離開福林國小的人數"""
-        steps = [(b[0], b[1], b[2], b[3].replace(f"{m.R_MRT},62,3,261125081902", "171169,62,3,261125081830")) for b in RETURN]
-        events, crowds = run([snapshot(b) for b in steps])
+    def test_dongwu_count_fallbacks(self):
+        """離開錢穆故居沒回報：先用開進梅林新村時；再沒有用開進錢穆故居時，都註記"""
+        no_left = [(b[0], b[1], b[2], b[3].replace(f"{m.R_QIAN},62,3,261125081250", "171165,63,3,261125081302")) for b in RETURN]
+        events, crowds = run([snapshot(b) for b in no_left])
         [t] = m.build_returns(events, crowds)
-        self.assertEqual(t["士林站到站人數"]["車上人數"], "62")
-        self.assertIn("沒回報，用相鄰站的人數（中間沒人上下車）：到士林站時＝離開福林國小", t["備註"])
+        self.assertEqual(t["東吳人數"]["車上人數"], "63")
+        self.assertIn("離開東吳人數用開進梅林新村時的（中間沒人上下車）", t["備註"])
+        only_came = [b for b in RETURN if f"{m.R_QIAN},62,3" not in b[3]]
+        events, crowds = run([snapshot(b) for b in only_came])
+        [t] = m.build_returns(events, crowds)
+        self.assertEqual(t["東吳人數"]["車上人數"], "60")
+        self.assertIn("離開東吳人數用開進錢穆故居時的（沒算到在錢穆故居上車的人）", t["備註"])
 
 
-class EtaTest(unittest.TestCase):
-    def eta(self, data_time, sec, stop=m.MRT):
-        return {"資料時間": "2026-11-25 " + data_time, "站牌ID": stop, "預估秒數": str(sec), "車輛ID": "1", "車牌": "EAA-001", "抓取時間": ""}
+class GhostTest(unittest.TestCase):
+    """網站人數會高估：定期票下車不刷卡，人數不會減。用終點站還顯示的人數扣回來，並以 70 人算剩幾個位置"""
 
-    def test_error_against_actual_arrival(self):
-        """07:50 網站說士林站 2 分鐘後到（07:52），實際 07:53 到 → 晚 1 分；07:51 說 1 分（07:52）→ 晚 1 分"""
-        events, _ = run([snapshot(b) for b in TRIP])
-        scored = m.evaluate_etas([self.eta("07:50:00", 120), self.eta("07:51:00", 60)], events)
-        self.assertEqual([x["誤差分"] for x in scored], [1.0, 1.0])
+    def steps(self, end_shown=5, terminal=8):
+        go = [(b[0], b[1], b[2], b[3].replace("171195,50,3", f"171195,{end_shown},1")) for b in TRIP[:-1]]
+        back = [(b[0], b[1], b[2], b[3].replace("171195,50,3", f"171195,{end_shown},1")) for b in RETURN[2:]]
+        back.append(("1", "EAA-001", a2("1", "1", "199585", "1", "261125083000"), a3("1", "199585", terminal, 1, "261125083010")))
+        return go + back
 
-    def test_skip_special_codes_and_missing(self):
-        """進站中(0)、未發車(-1) 不算；找不到實際到站的留 None"""
-        events, _ = run([snapshot(b) for b in TRIP])
-        scored = m.evaluate_etas([self.eta("07:50:00", 0), self.eta("07:50:00", -1), self.eta("07:50:00", 120, stop="171171")], events)
-        self.assertEqual(len(scored), 1)
-        self.assertIsNone(scored[0]["誤差分"])
+    def test_go_real_range(self):
+        """去程：到士林站顯示 20、終點東吳還顯示 5 → 實際 15–20 人，剩 50–55 個位置"""
+        events, crowds = run([snapshot(b) for b in self.steps()])
+        [t] = m.build_trips(events, crowds)
+        row = dict(zip(m.TRIP_HEAD, m.trip_row(1, t)))
+        self.assertEqual(row["終點東吳還顯示(人，沒刷卡下車)"], 5)
+        self.assertEqual((row["到士林站時實際約(人)"], row["士林站剩幾個位置(以70人算)"]), ("15–20", "50–55"))
 
-    def test_accuracy_sheet(self):
-        events, crowds = run([snapshot(b) for b in TRIP])
-        with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, "x.xlsx")
-            m.write_excel(path, m.build_trips(events, crowds), events, crowds, datetime(2026, 11, 25), (), (),
-                          [self.eta("07:50:00", 120), self.eta("07:45:00", 600)])
-            rows = [[c.value for c in r] for r in load_workbook(path)["網站預估準度"].iter_rows(min_row=3)]
-            self.assertEqual([r[:6] for r in rows], [["往東吳｜捷運士林站", "0–3 分", 1, 1, 1, 1],
-                                                     ["往東吳｜捷運士林站", "10–15 分", 1, 1, -2, 2]])
+    def test_return_real_range(self):
+        """回程：離開東吳顯示 62、出發前已顯示 5（去程沒刷卡）、終點天文館 8 → 實際 54–57，剩 13–16"""
+        events, crowds = run([snapshot(b) for b in self.steps()])
+        [t] = m.build_returns(events, crowds)
+        row = dict(zip(m.RETURN_HEAD, m.return_row(1, t)))
+        self.assertEqual((row["出發前已顯示(人，去程沒刷卡)"], row["終點天文館還顯示(人)"]), (5, 8))
+        self.assertEqual((row["離開東吳實際約(人)"], row["離開東吳剩幾個位置(以70人算)"]), ("54–57", "13–16"))
+
+    def test_contradiction_not_guessed(self):
+        """終點顯示比出發前少（只有沒刷卡下車的話不可能）：不算實際人數，註記（2026/11/24 EAA-063 實際發生）"""
+        events, crowds = run([snapshot(b) for b in self.steps(end_shown=22, terminal=18)])
+        [t] = m.build_returns(events, crowds)
+        row = dict(zip(m.RETURN_HEAD, m.return_row(1, t)))
+        self.assertEqual(row["離開東吳實際約(人)"], "")
+        self.assertIn("終點天文館顯示 18 人比出發前 22 人少，對不起來，沒算實際人數", t["備註"])
+
+    def test_overloaded_shows_negative_seats(self):
+        self.assertEqual(m.seats_left((72, 75)), "超載 2–5 人")
+        self.assertEqual(m.seats_left((66, 73)), "0–4（可能超載）")
+        self.assertEqual(m.seats_left((50, 50)), "20")
+        self.assertEqual(m.seats_left(None), "")
+        self.assertEqual(m.fmt_range((3, 3)), "3")
 
 
 class ExcelTest(unittest.TestCase):
@@ -332,9 +350,10 @@ class ExcelTest(unittest.TestCase):
             color = lambda name: ws[2][col[name]].fill.fgColor.rgb[-6:]
             self.assertEqual((color("離開士林國中人數"), color("離開士林站擁擠")), ("C6EFCE", "FFC7CE"), "綠舒適、紅擁擠")
             self.assertIn("回程每班車", wb.sheetnames)
-            self.assertIn("回程每15分鐘", wb.sheetnames)
-            slot = [c.value for c in wb["每15分鐘"][3]]
-            self.assertEqual(slot[:2] + slot[-2:], ["07:45–08:00", 1, 10.0, 12.0])
+            self.assertIn("回程每10分鐘", wb.sheetnames)
+            slot = wb["每10分鐘"][3]
+            self.assertEqual([c.value for c in slot][:2] + [c.value for c in slot][-3:], ["07:50–08:00", 1, 10.0, 12.0, "只有 1 班，參考就好"])
+            self.assertEqual(slot[0].fill.fgColor.rgb[-6:], "E7E6E6", "班數少整列塗灰")
 
 
 if __name__ == "__main__":
