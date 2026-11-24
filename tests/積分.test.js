@@ -12,7 +12,11 @@ const MON_0900 = '2026-10-12T09:00:00+08:00';
 
 const QIANMU = [25.09727, 121.54160]; // 錢穆故居站
 const CAMPUS = [25.09457, 121.54575]; // 校內 557 站
-const SHILIN = [25.09547, 121.52690]; // 捷運士林站
+const SHILIN = [25.09547, 121.52690]; // 捷運士林站，離校約 1.9 公里
+
+function northOf(at, meters) {
+  return [at[0] + (meters / 6371000) * (180 / Math.PI), at[1]];
+}
 
 function start(now = MON_0900) {
   const env = loadBot(ALL);
@@ -21,16 +25,33 @@ function start(now = MON_0900) {
 }
 const say = (env, uid, text) => env.call('memberReply_', uid, text);
 const user = (env, uid) => env.call('cpUser_', uid);
-const checkin = (env, uid, at, accuracy = 20) => env.call('ptCheckin', user(env, uid).token, at[0], at[1], accuracy);
 const rows = (env, name) => env.sheets[name].rows.slice(1);
+
+function onceCode(env, uid) {
+  const uri = buttonsOf(say(env, uid, '打卡'))[0][1];
+  const m = uri.match(/t=([0-9a-f-]{36})$/);
+  if (!m) throw new Error('打卡網址沒有代碼');
+  return m[1];
+}
+
+/** 第二次定位才是判斷距離的位置；兩次的座標不能完全一樣 */
+function pair(at, accuracy, nowMs) {
+  return [
+    { lat: at[0] + 0.00002, lng: at[1], accuracy: accuracy, ts: nowMs - 3000 },
+    { lat: at[0], lng: at[1], accuracy: accuracy, ts: nowMs },
+  ];
+}
+
+const checkin = (env, uid, at, accuracy = 20) => env.call('ptCheckin', onceCode(env, uid), pair(at, accuracy, env.call('cpNow_').getTime()));
 
 // ===== 打卡、步行、早到 =====
 
-test('「打卡」回一個按鈕，網址帶這個人的代碼', () => {
+test('「打卡」回一個按鈕，網址帶一次性代碼，不是永久 token', () => {
   const env = start();
   const button = say(env, 'A', '打卡');
   assert.equal(buttonsOf(button)[0][0], '打開打卡頁');
   assert.match(buttonsOf(button)[0][1], /\?page=checkin&t=[0-9a-f-]{36}$/);
+  assert.notEqual(buttonsOf(button)[0][1].slice(-36), user(env, 'A').token);
 });
 
 test('錢穆故居站打卡 → 走到校內再打一次：步行 +1 點、記減碳量', () => {
@@ -52,11 +73,45 @@ test('打卡只記打卡點和距離，不記經緯度', () => {
   assert.ok(!all.includes('25.09') && !all.includes('121.54'));
 });
 
-test('超過 25 分鐘才到校，不算步行', () => {
+test('超過 20 分鐘才到校，不算步行', () => {
   const env = start();
   checkin(env, 'A', QIANMU);
-  env.addMinutes(40);
-  assert.doesNotMatch(checkin(env, 'A', CAMPUS).lines.join('\n'), /步行 \+/);
+  env.addMinutes(21);
+  const done = checkin(env, 'A', CAMPUS);
+  assert.doesNotMatch(done.lines.join('\n'), /步行 \+/);
+  assert.match(done.lines.join('\n'), /超過 20 分鐘/);
+  assert.equal(user(env, 'A').points, 0);
+});
+
+test('步行少於 6 分鐘不算', () => {
+  const env = start();
+  checkin(env, 'A', QIANMU);
+  env.addMinutes(5);
+  const done = checkin(env, 'A', CAMPUS);
+  assert.doesNotMatch(done.lines.join('\n'), /步行 \+/);
+  assert.match(done.lines.join('\n'), /6～20/);
+  assert.equal(user(env, 'A').points, 0);
+});
+
+test('步行 6 分鐘和 20 分鐘都算', () => {
+  const env = start();
+  checkin(env, 'A', QIANMU);
+  env.addMinutes(6);
+  assert.match(checkin(env, 'A', CAMPUS).lines.join('\n'), /走了 6 分鐘，步行 \+1 點/);
+  env.addMinutes(24 * 60);
+  checkin(env, 'A', QIANMU);
+  env.addMinutes(20);
+  assert.match(checkin(env, 'A', CAMPUS).lines.join('\n'), /走了 20 分鐘，步行 \+1 點/);
+  assert.equal(user(env, 'A').points, 2);
+});
+
+test('步行起點和到校要同一天，跨過午夜不算', () => {
+  const env = start('2026-10-12T23:55:00+08:00');
+  checkin(env, 'A', QIANMU);
+  env.addMinutes(10); // 10/13 00:05，間隔 10 分鐘但仍跨日
+  const done = checkin(env, 'A', CAMPUS);
+  assert.doesNotMatch(done.lines.join('\n'), /步行 \+/);
+  assert.match(done.lines.join('\n'), /同一天/);
   assert.equal(user(env, 'A').points, 0);
 });
 
@@ -71,8 +126,16 @@ test('步行一天只算一次', () => {
   assert.equal(user(env, 'A').points, 1);
 });
 
-test('7:30 前到校早到 +1 點，一天一次；7:30 以後沒有；不再發早餐券', () => {
+test('7:30 前到校、而且今天先有出門卡，早到 +1 點，一天一次；7:30 以後沒有；不再發早餐券', () => {
   const early = start(MON_0700);
+  const noDepart = checkin(early, 'A', CAMPUS);
+  assert.doesNotMatch(noDepart.lines.join('\n'), /早到 \+/);
+  assert.match(noDepart.lines.join('\n'), /出門/);
+  assert.equal(user(early, 'A').points, 0);
+
+  early.addMinutes(2);
+  assert.match(checkin(early, 'A', SHILIN).title, /出門打卡成功/);
+  early.addMinutes(3);
   const first = checkin(early, 'A', CAMPUS).lines.join('\n');
   assert.match(first, /早到 \+1 點/);
   assert.match(first, /5 點換 30 元學餐折價券/);
@@ -85,14 +148,121 @@ test('7:30 前到校早到 +1 點，一天一次；7:30 以後沒有；不再發
   assert.doesNotMatch(checkin(late, 'B', CAMPUS).lines.join('\n'), /早到 \+/);
 });
 
-test('不在打卡點、定位誤差太大、代碼不對、一分鐘內重複，都不會加分', () => {
+test('校內 50 公尺內才算到校、錢穆故居站 50 公尺內才算起點；舊的 150／300 公尺不算', () => {
   const env = start();
-  assert.match(checkin(env, 'A', SHILIN).title, /不在打卡點附近/);
+  assert.ok(env.call('ptMeters_', northOf(CAMPUS, 49), CAMPUS) <= 50);
+  assert.ok(env.call('ptMeters_', northOf(CAMPUS, 51), CAMPUS) > 50);
+  assert.ok(env.call('ptMeters_', northOf(CAMPUS, 200), CAMPUS) < 300);
+  assert.match(checkin(env, 'A', northOf(CAMPUS, 49)).title, /到校打卡成功/);
+  env.addMinutes(2);
+  assert.match(checkin(env, 'A', northOf(CAMPUS, 51)).title, /不在打卡點附近/);
+  env.addMinutes(2);
+  assert.match(checkin(env, 'A', northOf(CAMPUS, 200)).title, /不在打卡點附近/);
+  assert.match(checkin(env, 'B', northOf(QIANMU, 49)).title, /錢穆故居站打卡成功/);
+  assert.equal(user(env, 'A').points, 0);
+});
+
+test('定位誤差 50 公尺收、超過 50 公尺不收，拒收原因寫進打卡紀錄', () => {
+  const env = start();
+  assert.match(checkin(env, 'A', CAMPUS, 50).title, /到校打卡成功/);
+  env.addMinutes(2);
+  const bad = checkin(env, 'A', CAMPUS, 51);
+  assert.match(bad.title, /定位不夠準/);
+  const row = rows(env, '打卡紀錄').pop();
+  assert.equal(row[5], '誤差太大');
+  assert.match(String(row[6]), /超過 50 公尺/);
+  assert.equal(user(env, 'A').points, 0);
+});
+
+test('離校 500 公尺以外可打出門卡，只記距離不記經緯度；前一天的出門卡不算今天的早到', () => {
+  const env = start('2026-10-11T23:50:00+08:00');
+  const far = checkin(env, 'A', SHILIN);
+  assert.equal(far.ok, true);
+  assert.match(far.title, /出門打卡成功/);
+  const row = rows(env, '打卡紀錄').pop();
+  assert.equal(row[2], '出門');
+  assert.equal(row[5], '出門');
+  assert.ok(row[3] >= 500);
+  assert.equal(JSON.stringify(row).includes('25.09'), false);
+  assert.equal(JSON.stringify(row).includes('121.52'), false);
+  assert.equal(user(env, 'A').points, 0, '出門卡本身不加分');
+
+  env.addMinutes(20); // 10/12 00:10，7:30 前，但出門卡是前一天
+  const next = checkin(env, 'A', CAMPUS);
+  assert.doesNotMatch(next.lines.join('\n'), /早到 \+/);
+  assert.match(next.lines.join('\n'), /今天還沒有出門打卡/);
+  assert.equal(user(env, 'A').points, 0);
+});
+
+test('出門到到校的間隔小於每公里 1 分鐘，不給早到點並說明原因', () => {
+  const env = start(MON_0700);
+  checkin(env, 'A', SHILIN); // 約 1.9 公里，至少要隔 1.9 分鐘
+  env.addMinutes(1);
+  const campus = checkin(env, 'A', CAMPUS);
+  assert.doesNotMatch(campus.lines.join('\n'), /早到 \+/);
+  assert.match(campus.lines.join('\n'), /至少要隔/);
+  assert.equal(user(env, 'A').points, 0);
+  assert.equal(rows(env, '打卡紀錄').pop()[5], '到校');
+});
+
+test('打卡代碼用過即失效、10 分鐘後過期，永久 token 不能打卡', () => {
+  const env = start();
+  const code = onceCode(env, 'A');
+  const nowMs = env.call('cpNow_').getTime();
+  assert.match(env.call('ptCheckin', code, pair(QIANMU, 10, nowMs)).title, /錢穆故居站打卡成功/);
+  env.addMinutes(2); // 過了一分鐘的頻率限制，但代碼已經用過
+  const again = env.call('cpNow_').getTime();
+  assert.match(env.call('ptCheckin', code, pair(QIANMU, 10, again)).title, /連結失效/);
+  assert.match(env.call('ptCheckin', user(env, 'A').token, pair(QIANMU, 10, again)).title, /連結失效/);
+
+  const fresh = onceCode(env, 'B');
+  env.addMinutes(9);
+  assert.match(env.call('ptCheckin', fresh, pair(QIANMU, 10, env.call('cpNow_').getTime())).title, /錢穆故居站打卡成功/);
+  const expired = onceCode(env, 'C');
+  env.addMinutes(10);
+  assert.match(env.call('ptCheckin', expired, pair(QIANMU, 10, env.call('cpNow_').getTime())).title, /連結失效/);
+});
+
+test('兩次定位的座標與誤差完全相同就拒收，並把原因寫進打卡紀錄', () => {
+  const env = start();
+  const ts = env.call('cpNow_').getTime();
+  const fix = { lat: QIANMU[0], lng: QIANMU[1], accuracy: 8, ts: ts };
+  const res = env.call('ptCheckin', onceCode(env, 'A'), [fix, { lat: fix.lat, lng: fix.lng, accuracy: fix.accuracy, ts: ts - 2000 }]);
+  assert.equal(res.ok, false);
+  assert.match(res.title, /兩次定位相同/);
+  const row = rows(env, '打卡紀錄').pop();
+  assert.equal(row[5], '定位重複');
+  assert.match(String(row[6]), /完全相同/);
+  assert.equal(JSON.stringify(row).includes('25.09727'), false);
+  assert.equal(user(env, 'A').points, 0);
+});
+
+test('定位時間比送出早超過 30 秒就拒收，並把原因寫進打卡紀錄', () => {
+  const env = start();
+  const ts = env.call('cpNow_').getTime();
+  const res = env.call('ptCheckin', onceCode(env, 'A'), [
+    { lat: QIANMU[0] + 0.00002, lng: QIANMU[1], accuracy: 8, ts: ts - 31000 },
+    { lat: QIANMU[0], lng: QIANMU[1], accuracy: 9, ts: ts },
+  ]);
+  assert.equal(res.ok, false);
+  assert.match(res.title, /定位太舊/);
+  assert.match(res.lines.join('\n'), /30 秒/);
+  const row = rows(env, '打卡紀錄').pop();
+  assert.equal(row[5], '定位太舊');
+  assert.match(String(row[6]), /超過 30 秒/);
+  assert.equal(user(env, 'A').points, 0);
+});
+
+test('不在打卡點、定位誤差太大、代碼不對、格式不對、一分鐘內重複，都不會加分', () => {
+  const env = start();
+  assert.match(checkin(env, 'A', northOf(CAMPUS, 120)).title, /不在打卡點附近/);
   env.addMinutes(2);
   assert.match(checkin(env, 'A', QIANMU, 500).title, /定位不夠準/);
-  assert.match(env.call('ptCheckin', 'not-a-token', QIANMU[0], QIANMU[1], 10).title, /連結失效/);
-  assert.match(env.call('ptCheckin', '00000000-0000-0000-0000-000000000000', QIANMU[0], QIANMU[1], 10).title, /連結失效/);
-  assert.match(env.call('ptCheckin', user(env, 'A').token, 'x', QIANMU[1], 10).title, /定位資料不正確/);
+  const nowMs = env.call('cpNow_').getTime();
+  assert.match(env.call('ptCheckin', 'not-a-token', pair(QIANMU, 10, nowMs)).title, /連結失效/);
+  assert.match(env.call('ptCheckin', '00000000-0000-0000-0000-000000000000', pair(QIANMU, 10, nowMs)).title, /連結失效/);
+  assert.match(env.call('ptCheckin', user(env, 'A').token, 'x').title, /定位資料不正確/);
+  assert.match(env.call('ptCheckin', onceCode(env, 'A'), [{ lat: 'x', lng: QIANMU[1], accuracy: 10, ts: nowMs }]).title, /定位資料不正確/);
   env.addMinutes(2);
   checkin(env, 'A', QIANMU);
   assert.match(checkin(env, 'A', QIANMU).title, /剛剛打過了/);
@@ -132,6 +302,32 @@ test('騎車到校：傳今天在學校附近還車的 YouBike 騎乘紀錄才�
   say(env, 'B', '騎車到校');
   assert.match(ride(env, 'B', RIDE('2026-10-12')), /這筆騎乘紀錄已經用過了/, '別人的同一張截圖不能用');
   assert.equal(user(env, 'B').points, 0);
+});
+
+test('YouBike 還車站要跟清單完全一樣，舊的關鍵字（外雙溪、至善）不算', () => {
+  const env = start();
+  say(env, 'A', '騎車到校');
+  assert.match(ride(env, 'A', RIDE('2026-10-12', 'YouBike2.0_外雙溪')), /還車站是「YouBike2\.0_外雙溪」/);
+  assert.match(ride(env, 'A', RIDE('2026-10-12', '至善')), /還車站是「至善」/);
+  assert.equal(user(env, 'A').points, 0);
+  say(env, 'B', '騎車到校');
+  const ok = ride(env, 'B', RIDE('2026-10-12', 'YouBike2.0_ 至善臨溪路口'));
+  assert.match(ok, /騎車到校 \+1 點/);
+  assert.match(ok, /至善臨溪路口/);
+  assert.equal(user(env, 'B').points, 1);
+  say(env, 'C', '騎車到校');
+  assert.match(ride(env, 'C', RIDE('2026-10-12', '國立故宮博物院')), /騎車到校 \+1 點/);
+  say(env, 'D', '騎車到校');
+  assert.match(ride(env, 'D', RIDE('2026-10-12', 'YouBike2.0_梅林新村')), /騎車到校 \+1 點/);
+});
+
+test('YouBike 還車時間離現在超過 60 分鐘就拒絕，比現在晚超過 5 分鐘也拒絕', () => {
+  const env = start(); // 09:00
+  say(env, 'A', '騎車到校');
+  assert.match(ride(env, 'A', RIDE('2026-10-12', 'YouBike2.0_東吳大學', '07:50')), /超過 60 分鐘/);
+  assert.match(ride(env, 'A', RIDE('2026-10-12', 'YouBike2.0_東吳大學', '09:06')), /超過 5 分鐘/);
+  assert.equal(user(env, 'A').points, 0);
+  assert.match(ride(env, 'A', RIDE('2026-10-12', 'YouBike2.0_東吳大學', '08:00')), /騎車到校 \+1 點/, '剛好 60 分鐘還可以');
 });
 
 test('騎車到校：AI 不能用的時候不加分，請同學再傳', () => {
@@ -176,9 +372,11 @@ test('兌換學餐折價券：先顯示點數、問要不要換；按確認才�
   assert.match(none.altText, /目前積分：0 點/);
   assert.match(none.altText, /還差：5 點/);
   assert.match(textOf(say(env, 'A', '確認兌換折價券')), /還差：5 點/, '不夠點數按確認也不會扣');
-  for (let day = 0; day < 5; day++) { // 五天都 7:30 前到校，一天 1 點
+  for (let day = 0; day < 5; day++) { // 五天都先出門再於 7:30 前到校，一天 1 點
+    checkin(env, 'A', SHILIN);
+    env.addMinutes(3);
     checkin(env, 'A', CAMPUS);
-    env.addMinutes(24 * 60);
+    env.addMinutes(24 * 60 - 3);
   }
   assert.equal(user(env, 'A').points, 5);
   assert.deepEqual(buttonsOf(say(env, 'A', '我的紀錄'))[0], ['兌換學餐折價券', '兌換折價券']);
@@ -355,4 +553,27 @@ test('每日報表：沒設定收件人就不寄信，但還是會存', () => {
   env.call('每日報表');
   assert.equal(env.mails.length, 0);
   assert.equal(rows(env, '每日報表').length, 1);
+});
+
+test('步行成功但沒有新成就時，打卡紀錄結果是加分', () => {
+  const env = start();
+  checkin(env, 'A', QIANMU);
+  env.addMinutes(12);
+  const done = checkin(env, 'A', CAMPUS);
+  assert.match(done.lines.join('\n'), /步行 \+1 點/);
+  assert.doesNotMatch(done.lines.join('\n'), /解鎖成就/);
+  assert.equal(user(env, 'A').points, 1);
+  const row = rows(env, '打卡紀錄').pop();
+  assert.equal(row[5], '加分');
+  assert.equal(row[6], '');
+});
+
+test('沒有出門卡的早到，原因欄有寫原因', () => {
+  const env = start(MON_0700);
+  const done = checkin(env, 'A', CAMPUS);
+  assert.doesNotMatch(done.lines.join('\n'), /早到 \+/);
+  assert.equal(user(env, 'A').points, 0);
+  const row = rows(env, '打卡紀錄').pop();
+  assert.equal(row[5], '到校');
+  assert.match(String(row[6]), /沒有出門卡/);
 });
