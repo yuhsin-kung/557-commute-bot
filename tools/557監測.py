@@ -85,6 +85,10 @@ EXCEL_EVERY_SECONDS = 60
 A3_WINDOW = timedelta(minutes=3)    # 離站後幾分鐘內回報的人數才算「離開這一站」的
 A3_EARLY = timedelta(seconds=10)    # 進站紀錄可能比人數回報晚幾秒
 A3_SPLIT = timedelta(seconds=5)     # 離站後 5 秒內的回報當成還在站上（進站那次）
+# 在東吳（校內）的回報分兩種，都標成東吳站：剛到站 40–70 秒內那次＝去程剩下的人；
+# 之後停 6–9 分鐘讓學生上車，開走前那次已經包含放學上車的人（EAA-066：到站 6 人 → 開走前 65 人）。
+# 所以抓「剛到東吳時的人數」只看到站後 90 秒內
+SCHOOL_ARRIVE_WINDOW = timedelta(seconds=90)
 TRIP_GAP = timedelta(minutes=30)    # 同一台車去程中隔這麼久沒有新紀錄，就當成下一趟
 VISIT_LIMIT = timedelta(minutes=20) # 開進東吳大學後 20 分鐘內出現的回程才算同一趟（平常停 6–9 分鐘）
 SLOT_MINUTES = 10       # Excel 的「每 N 分鐘」分頁；三天資料每格約 4 班，可用 --slot 改
@@ -391,7 +395,7 @@ def build_trips(events, crowds, incomplete=None):
                 arrive = t["時間"][SCHOOL]
                 t["終點顯示"] = last_report(mine, {"171195"}, t["參考"], arrive + A3_EARLY)
                 if t["終點顯示"] is None:
-                    t["終點顯示"] = last_report(mine, {SCHOOL}, arrive - A3_EARLY, arrive + A3_WINDOW, first=True)
+                    t["終點顯示"] = last_report(mine, {SCHOOL}, arrive - A3_EARLY, arrive + SCHOOL_ARRIVE_WINDOW, first=True)
             came = t["士林站到站人數"] or t["國中人數"]
             t["士林站實際"] = real_range(int(came["車上人數"]) if came else None, 0, t["終點顯示"])
             # 士林國中和士林站中間沒有站：離開國中的人數應該等於開進士林站的人數，不一樣就標出來
@@ -494,7 +498,7 @@ def build_returns(events, crowds, incomplete=None):
             if t["東吳"]:
                 t["出發顯示"] = last_report(mine, {"171195"}, t["東吳"] - TRIP_GAP, t["東吳"] + A3_EARLY)
                 if t["出發顯示"] is None:
-                    t["出發顯示"] = last_report(mine, {SCHOOL}, t["東吳"] - A3_EARLY, t["東吳"] + A3_WINDOW, first=True)
+                    t["出發顯示"] = last_report(mine, {SCHOOL}, t["東吳"] - A3_EARLY, t["東吳"] + SCHOOL_ARRIVE_WINDOW, first=True)
             # 終點天文館還顯示＝去程＋回程所有沒刷卡下車的人
             t["終點顯示"] = last_report(mine, {"199585"}, t["參考"], t["參考"] + 2 * TRIP_GAP)
             t["東吳實際"] = real_range(int(t["東吳人數"]["車上人數"]) if t["東吳人數"] else None, t["出發顯示"], t["終點顯示"])

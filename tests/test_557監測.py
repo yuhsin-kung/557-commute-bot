@@ -322,6 +322,17 @@ class GhostTest(unittest.TestCase):
         self.assertEqual(row["離開東吳實際約(人)"], "")
         self.assertIn("終點天文館顯示 18 人比出發前 22 人少，對不起來，沒算實際人數", t["備註"])
 
+    def test_boarding_count_at_school_not_taken_as_ghosts(self):
+        """去程錢穆故居沒回報、剛到東吳也沒回報，只有學生上車後（到站 4 分鐘）那次標成東吳的 40 人：
+        那是放學上車的人，不是沒刷卡的幽靈，不能拿來扣（2026/11/24 EAA-057 實際發生）"""
+        steps = [(b[0], b[1], b[2], b[3].replace("171195,5,1,261125080300", f"{m.SCHOOL},40,2,261125080900"))
+                 for b in self.steps()]
+        events, crowds = run([snapshot(b) for b in steps])
+        self.assertTrue(any(c["車上人數"] == "40" for c in crowds), "測試資料裡要真的有那筆 40")
+        [t] = m.build_returns(events, crowds)
+        self.assertIsNone(t["出發顯示"])
+        self.assertIsNone(t["東吳實際"])
+
     def test_overloaded_shows_negative_seats(self):
         self.assertEqual(m.seats_left((72, 75)), "超載 2–5 人")
         self.assertEqual(m.seats_left((66, 73)), "0–4（可能超載）")
