@@ -190,7 +190,7 @@ test('超過 6 顆的按鈕排成兩欄，單數的最後一顆自己一列、�
 
 test('出門建議的卡片：換時間是主要按鈕；換出發站先選站；共乘寫明是計程車', () => {
   const env = start();
-  // 用真的時鐘判斷「明天」。釘在週六中午，明天是週日、非尖峰，提醒時間才不會多算 10 分鐘
+  // 固定在週六中午，明天是週日：非尖峰，557 提醒維持 07:50（不改車程公式）
   env.run("const __RealDate = Date; Date = class extends __RealDate { constructor(...a) { super(...(a.length ? a : [__RealDate.parse('2026-10-17T12:00:00+08:00')])); } static now() { return __RealDate.parse('2026-10-17T12:00:00+08:00'); } };");
   const card = send(env, '出門時間 明天 08:10 D')[0];
   assert.deepEqual(buttonsOf(card), [
@@ -199,6 +199,8 @@ test('出門建議的卡片：換時間是主要按鈕；換出發站先選站�
     ['預約計程車共乘', '共乘 去學校 預約'],
     ['557 發車前提醒我', '出門提醒 明天 07:50'],
   ]);
+  assert.match(card.altText, /步行：校園大樓表（估計）/);
+  assert.doesNotMatch(card.altText, /實測/);
   assert.equal(card.contents.footer.contents[0].style, 'primary', '換一個時間是紅色主按鈕');
   const pick = send(env, '出門時間 明天 08:10 D 選出發站')[0];
   assert.deepEqual(buttonsOf(pick).map(b => b[1]), ['出門時間 明天 08:10 D 士林站', '出門時間 明天 08:10 D 劍南路站', '出門時間 明天 08:10 D 大直站']);

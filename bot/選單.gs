@@ -87,9 +87,15 @@ function menuFlow_(text) {
     if (!periods.length) return choices_('今天的課都已經開始了，要改看明天的上課時間嗎？', [['看明天的', '出門時間 明天']]);
     return choices_('你' + day + '第幾節有課？\n\n例如：第一節、第二節', periods.map(k => ['第 ' + k + ' 節 ' + PERIODS[k], '出門時間 ' + day + ' ' + PERIODS[k]]), { title: '出門時間建議', badge: '第 2 步' });
   }
+  // 日期和節次已確定：先查放假／考試週。放假就不用再問大樓、也不出建議卡。
+  const ctx = classContext_({ day: day, arriveTime: time, building: BUILDINGS[building] ? building : '' });
+  if (ctx.holiday) return holidayReply_(ctx);
   if (!BUILDINGS[building] && building !== '不指定') {
-    const items = MENU_BUILDINGS.map(k => [k + ' ' + menuBuildingName_(k), '出門時間 ' + day + ' ' + time + ' ' + k]);
-    return choices_('你在哪一棟上課？\n\n我會幫你估算從下車地點走到教室需要的時間。', items.concat([['不指定', '出門時間 ' + day + ' ' + time + ' 不指定']]), { title: '出門時間建議', badge: '第 3 步' });
+    // 還沒選大樓時，出發站可能佔在大樓那一格（出門時間 明天 08:10 劍南路站）
+    const carried = ORIGINS[building] ? building : (ORIGINS[origin] ? origin : '');
+    const originTail = carried && carried !== '士林站' ? ' ' + carried : '';
+    const items = MENU_BUILDINGS.map(k => [k + ' ' + menuBuildingName_(k), '出門時間 ' + day + ' ' + time + ' ' + k + originTail]);
+    return choices_('你在哪一棟上課？\n\n我會幫你估算從下車地點走到教室需要的時間。', items.concat([['不指定', '出門時間 ' + day + ' ' + time + ' 不指定' + originTail]]), { title: '出門時間建議', badge: '第 3 步' });
   }
   if (origin === '選出發站') {
     const base = ['出門時間', day, time, building].join(' ');
