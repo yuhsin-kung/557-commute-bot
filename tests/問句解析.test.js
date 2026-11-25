@@ -162,3 +162,54 @@ test('AC-9 相關：選單出門時間 … 火星 仍當士林站（既有行為
   assert.equal(card.contents.header.contents[1].text, '明天 08:10 上課');
   assert.match(card.altText, /士林站|搭 557/);
 });
+
+test('B-1: 後天第一節必須交 Gemini 或請改用今天明天，不當今天', () => {
+  const env = boot();
+  freeze(env, '2026-10-12T21:00:00+08:00');
+  env.run('var __g = 0; parseWithGemini_ = function () { __g++; return null; };');
+  const ans = env.call('compareReply_', '後天第一節 D棟要幾點出門');
+  assert.equal(env.run('__g'), 1);
+  const txt = replyText(ans);
+  assert.match(txt, /今天|明天|出門時間|後天/);
+  assert.doesNotMatch(txt, /今天 08:10/);
+  assert.doesNotMatch(txt, /TDX 即時資料/);
+  assert.doesNotMatch(txt, /多路線比較/);
+});
+
+test('B-1: 星期三 8點 必須交 Gemini 或請改用今天明天，不當今天', () => {
+  const env = boot();
+  freeze(env, '2026-10-12T21:00:00+08:00');
+  env.run('var __g = 0; parseWithGemini_ = function () { __g++; return null; };');
+  const ans = env.call('compareReply_', '星期三 8 點在 D 棟上課');
+  assert.equal(env.run('__g'), 1);
+  const txt = replyText(ans);
+  assert.match(txt, /今天|明天|出門時間/);
+  assert.doesNotMatch(txt, /今天 08:00/);
+  assert.doesNotMatch(txt, /TDX 即時資料/);
+});
+
+test('B-2: Gemini 回 origin=台南市 仍走外縣市，不出士林站即時卡', () => {
+  const env = boot();
+  freeze(env, '2026-10-12T21:00:00+08:00');
+  env.run('parseWithGemini_ = function () { return { intent: "去學校", day: "明天", building: "H", origin: "台南市", arriveTime: "" }; };');
+  const ans = env.call('compareReply_', '我現在在台南，要怎麼去學校');
+  const txt = replyText(ans);
+  assert.match(txt, /台南/);
+  assert.match(txt, /高鐵|台鐵/);
+  assert.doesNotMatch(txt, /TDX 即時資料/);
+  assert.doesNotMatch(txt, /士林站 →/);
+  assert.doesNotMatch(txt, /多路線比較/);
+});
+
+test('B-2: Gemini 回 origin="" 時規則遠距優先，不出士林站即時卡', () => {
+  const env = boot();
+  freeze(env, '2026-10-12T21:00:00+08:00');
+  env.run('parseWithGemini_ = function () { return { intent: "去學校", day: "未指定", building: "", origin: "", arriveTime: "" }; };');
+  const ans = env.call('compareReply_', '我現在在台南，要怎麼去學校');
+  const txt = replyText(ans);
+  assert.match(txt, /台南/);
+  assert.match(txt, /高鐵|台鐵/);
+  assert.doesNotMatch(txt, /TDX 即時資料/);
+  assert.doesNotMatch(txt, /士林站 →/);
+  assert.doesNotMatch(txt, /多路線比較/);
+});

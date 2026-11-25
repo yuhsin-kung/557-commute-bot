@@ -61,8 +61,9 @@ function normalizeOrigin_(name) {
   return String(name || '').replace(/臺/g, '台');
 }
 function isFarOrigin_(name) {
-  const n = normalizeOrigin_(name);
-  return FAR_ORIGINS.some(p => normalizeOrigin_(p) === n);
+  const n = normalizeOrigin_(name).replace(/[市縣]$/, '');
+  if (n === '台北' || n === '新北') return false;
+  return FAR_ORIGINS.some(p => normalizeOrigin_(p).replace(/[市縣]$/, '') === n);
 }
 function isLocalNonOrigin_(name) {
   return LOCAL_NON_ORIGINS.includes(String(name || ''));
@@ -112,9 +113,11 @@ function compareQuery_(q, text) {
   });
   if (ctx.holiday) return holidayReply_(ctx);
 
-  // 口頭問句有未來時間但沒有確切時刻：請補時間，不出即時卡（AC-3）
-  if (!isMenuFlow && !q.arriveTime && (q.day === '明天' || q.day === '後天' || q.incompleteFuture || /明天|後天/.test(String(text || '')))) {
-    return incompleteTimeReply_(q);
+  // 口頭問句有未來時間但沒有確切時刻，或後天／星期無法解析成今天明天：請補時間或改用今天明天，不出即時卡（AC-3、B-1）
+  if (!isMenuFlow && (q.incompleteFuture || q.day === '後天' || /後天|星期|週|禮拜/.test(String(text || '')))) {
+    if (!q.arriveTime || (q.day !== '今天' && q.day !== '明天')) {
+      return incompleteTimeReply_(q);
+    }
   }
 
   // 有上課時間但沒說大樓：先問在哪一棟（已選「不指定」才直接給建議）。出發站沿用選單指令，預設士林站可省略。
@@ -162,10 +165,13 @@ function localStationChoiceReply_(place) {
 function incompleteTimeReply_(q) {
   const dayWord = q.day === '明天' ? '明天' : (q.day === '後天' ? '後天' : '那天');
   const bName = q.building && BUILDINGS[q.building] ? BUILDINGS[q.building][0] : '上課';
-  const hint = '你' + dayWord + '在' + bName + '，請告訴我第幾節或幾點上課，我才能幫你算出門時間。';
+  let hint = '你' + dayWord + '在' + bName + '，請告訴我第幾節或幾點上課，我才能幫你算出門時間。';
+  if (q.day === '後天') {
+    hint = '後天或星期幾的時間我目前只能用「今天／明天」規劃。請改用「今天」或「明天」，或直接點選單「出門時間」。';
+  }
   const dayForMenu = q.day === '明天' ? '明天' : '今天';
   const items = ['1', '2', '3', '5', '8'].map(k => ['第 ' + k + ' 節 ' + PERIODS[k], '出門時間 ' + dayForMenu + ' ' + PERIODS[k] + (q.building ? ' ' + q.building : '')]);
-  return choices_(hint, items, { title: '請補上課時間', badge: '時間', primary: false });
+  return choices_(hint, items.concat([['用選單排出門時間', '出門時間']]), { title: '請補上課時間', badge: '時間', primary: false });
 }
 
 /** 即時模式：查出發站所有路線的到站時間，算出各條到教室的時間 */
@@ -309,7 +315,17 @@ function parseQuestion_(text) {
   const fullyHandled = !byRules.farOrigin && !byRules.incompleteFuture && !byRules.localNonOrigin
     && (byRules.arriveTime || byRules.building || byRules.intent !== '其他');
   if (fullyHandled) return byRules;
-  return parseWithGemini_(text) || byRules;
+  const gem = parseWithGemini_(text);
+  if (!gem) return byRules;
+  // Gemini 成功時與規則合併：規則已判定的外縣市／未完成未來時間／北北基非 ORIGINS 優先保留（B-2）
+  if (byRules.farOrigin && (!gem.origin || !isFarOrigin_(gem.origin))) gem.origin = byRules.origin;
+  if (byRules.localNonOrigin && !gem.origin) gem.origin = byRules.origin;
+  if (byRules.incompleteFuture && !gem.arriveTime) gem.incompleteFuture = true;
+  gem.farOrigin = gem.farOrigin || byRules.farOrigin || isFarOrigin_(gem.origin);
+  gem.localNonOrigin = gem.localNonOrigin || byRules.localNonOrigin;
+  gem.incompleteFuture = gem.incompleteFuture || byRules.incompleteFuture;
+  if (!gem.day && byRules.day) gem.day = byRules.day;
+  return gem;
 }
 
 function parseWithGemini_(text) {
@@ -401,9 +417,14 @@ function parseWithRules_(text) {
   else if (arriveTime || building || /上課|學校|出門|東吳|怎麼去/.test(t)) intent = '去學校';
 
   // 規則側偵測外縣市與未完成未來時間（A-5，供分流與失敗退路）
+  // 「後天」或「星期／週／禮拜＋時刻」即使已抓到時刻也視為未完整（B-1）
+  const hasHoutian = /後天/.test(text);
+  const hasWeekday = /星期[一二三四五六日天]|週[一二三四五六日天]|禮拜[一二三四五六日天]/.test(text);
+  const incompleteFuture = (!arriveTime && /明天|後天|明早|下午|早上|晚上|幾點/.test(text))
+    || hasHoutian || hasWeekday;
   let farOrigin = '';
   for (const p of FAR_ORIGINS) {
-    if (text.includes(p)) { farOrigin = normalizeOrigin_(p); break; }
+    if (text.includes(p) || text.includes(p + '市') || text.includes(p + '縣')) { farOrigin = normalizeOrigin_(p); break; }
   }
   let localNon = '';
   if (!farOrigin) {
@@ -411,7 +432,6 @@ function parseWithRules_(text) {
       if (text.includes(p)) { localNon = p; break; }
     }
   }
-  const incompleteFuture = !arriveTime && /明天|後天|明早|下午|早上|晚上|幾點/.test(text);
   let origin = /劍南/.test(t) ? '劍南路站' : /大直/.test(t) ? '大直站' : '';
   if (farOrigin) origin = farOrigin;
   else if (localNon && !origin) origin = localNon;
