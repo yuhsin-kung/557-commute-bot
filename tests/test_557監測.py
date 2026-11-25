@@ -194,7 +194,15 @@ class TripTest(unittest.TestCase):
         events, crowds = run([snapshot(b) for b in TRIP[12:14]])
         incomplete = []
         self.assertEqual(m.build_trips(events, crowds, incomplete), [])
-        self.assertEqual(incomplete[0]["沒列原因"], "監測開始時已經開過士林站")
+        self.assertEqual(incomplete[0]["沒列原因"], "這台車第一次出現時已經開過士林站（監測剛開始、或 GPS 剛開）")
+
+    def test_gps_gap_before_mrt_reason(self):
+        """同一台車早就出現過，下一趟卻從士林站之後才有紀錄：是 GPS 沒回報，不是監測開始時"""
+        later = [(b[0], b[1], b[2].replace("26112507", "26112509").replace("26112508", "26112510"), b[3]) for b in TRIP[12:14]]
+        events, crowds = run([snapshot(b) for b in TRIP[:-1] + later])
+        incomplete = []
+        self.assertEqual(len(m.build_trips(events, crowds, incomplete)), 1)
+        self.assertEqual(incomplete[0]["沒列原因"], "士林站和前面的站都沒抓到（GPS 沒回報）")
 
     def test_not_yet_at_mrt_listed_separately(self):
         """沒有士林站以後紀錄的（GPS 斷線、還在路上）不列進每班車，另外放進資料不完整"""
@@ -273,7 +281,14 @@ class ReturnTest(unittest.TestCase):
         events, crowds = run([snapshot(b) for b in RETURN[9:]])
         incomplete = []
         self.assertEqual(m.build_returns(events, crowds, incomplete), [])
-        self.assertTrue(incomplete[0]["沒列原因"].startswith("回程：監測開始時已經離開東吳"))
+        self.assertTrue(incomplete[0]["沒列原因"].startswith("回程：這台車第一次出現時已經離開東吳"))
+
+    def test_return_gps_gap_reason(self):
+        """監測早就在跑、只是東吳和錢穆故居沒抓到：原因要寫 GPS 沒回報，不能寫監測開始時（2026/11/25 有 4 筆寫錯）"""
+        events, crowds = run([snapshot(b) for b in TRIP[:-1] + RETURN[9:]])
+        incomplete = []
+        self.assertEqual(m.build_returns(events, crowds, incomplete), [])
+        self.assertTrue(incomplete[0]["沒列原因"].startswith("回程：東吳、錢穆故居都沒抓到（GPS 沒回報"))
 
     def test_dongwu_count_fallbacks(self):
         """離開錢穆故居沒回報：先用開進梅林新村時；再沒有用開進錢穆故居時，都註記"""
@@ -290,48 +305,71 @@ class ReturnTest(unittest.TestCase):
 
 
 class GhostTest(unittest.TestCase):
-    """網站人數會高估：定期票下車不刷卡，人數不會減。用終點站還顯示的人數扣回來，並以 70 人算剩幾個位置"""
-
-    def steps(self, end_shown=5, terminal=8):
-        go = [(b[0], b[1], b[2], b[3].replace("171195,50,3", f"171195,{end_shown},1")) for b in TRIP[:-1]]
-        back = [(b[0], b[1], b[2], b[3].replace("171195,50,3", f"171195,{end_shown},1")) for b in RETURN[2:]]
-        back.append(("1", "EAA-001", a2("1", "1", "199585", "1", "261125083000"), a3("1", "199585", terminal, 1, "261125083010")))
-        return go + back
+    """網站人數：東吳學生下車大多有刷卡；沒刷卡的主要是士林國中以前上車、在士林站下車的高商學生（2026/11/25 逐筆看）"""
 
     def test_go_real_range(self):
-        """去程：到士林站顯示 20、終點東吳還顯示 5 → 實際 15–20 人，剩 50–55 個位置"""
-        events, crowds = run([snapshot(b) for b in self.steps()])
+        """去程：離開士林站顯示 55、到國中時已在車上 18 人（可能在士林站沒刷卡下車）→ 實際 37–55 人，剩 15–33 個位置"""
+        events, crowds = run([snapshot(b) for b in TRIP])
         [t] = m.build_trips(events, crowds)
         row = dict(zip(m.TRIP_HEAD, m.trip_row(1, t)))
-        self.assertEqual(row["終點東吳還顯示(人，沒刷卡下車)"], 5)
-        self.assertEqual((row["到士林站時實際約(人)"], row["士林站剩幾個位置(以70人算)"]), ("15–20", "50–55"))
+        self.assertEqual(row["開進東吳時人數(還沒下車)"], 50)
+        self.assertEqual((row["離開士林站實際約(人)"], row["離開士林站剩幾個位置(以70人算)"]), ("37–55", "15–33"))
 
-    def test_return_real_range(self):
-        """回程：離開東吳顯示 62、出發前已顯示 5（去程沒刷卡）、終點天文館 8 → 實際 54–57，剩 13–16"""
-        events, crowds = run([snapshot(b) for b in self.steps()])
+    def test_kaoshang_students_90(self):
+        """2026/11/25 975-U3：高商上 35 人、離開士林站顯示 90 → 實際 55–90，可能超載，不是真的 90 人"""
+        steps = [(b[0], b[1], b[2], b[3].replace(f"{m.JHS},18,1", f"{m.JHS},35,3").replace(f"{m.MRT},55,3", f"{m.MRT},90,3"))
+                 for b in TRIP]
+        events, crowds = run([snapshot(b) for b in steps])
+        [t] = m.build_trips(events, crowds)
+        row = dict(zip(m.TRIP_HEAD, m.trip_row(1, t)))
+        self.assertEqual((row["離開士林站實際約(人)"], row["離開士林站剩幾個位置(以70人算)"]), ("55–90", "0–15（可能超載）"))
+
+    def test_return_seats_at_least(self):
+        """回程：離開東吳顯示 62 → 至少剩 8 個位置；開進東吳時 50 人是去程乘客還沒下車，不拿來扣"""
+        events, crowds = run([snapshot(b) for b in TRIP[:-1] + RETURN])
         [t] = m.build_returns(events, crowds)
         row = dict(zip(m.RETURN_HEAD, m.return_row(1, t)))
-        self.assertEqual((row["出發前已顯示(人，去程沒刷卡)"], row["終點天文館還顯示(人)"]), (5, 8))
-        self.assertEqual((row["離開東吳實際約(人)"], row["離開東吳剩幾個位置(以70人算)"]), ("54–57", "13–16"))
+        self.assertEqual((row["開進東吳時人數(去程乘客還沒下車)"], row["離開東吳至少剩幾個位置(以70人算)"]), (50, 8))
+        self.assertNotIn("終點天文館還顯示(人)", m.RETURN_HEAD)
+        self.assertEqual(m.seats_at_least({"車上人數": "101"}), "網站顯示 101 人，超過 70，含沒刷卡的人")
+        self.assertEqual(m.seats_at_least(None), "")
 
-    def test_contradiction_not_guessed(self):
-        """終點顯示比出發前少（只有沒刷卡下車的話不可能）：不算實際人數，註記（2026/11/24 EAA-063 實際發生）"""
-        events, crowds = run([snapshot(b) for b in self.steps(end_shown=22, terminal=18)])
-        [t] = m.build_returns(events, crowds)
-        row = dict(zip(m.RETURN_HEAD, m.return_row(1, t)))
-        self.assertEqual(row["離開東吳實際約(人)"], "")
-        self.assertIn("終點天文館顯示 18 人比出發前 22 人少，對不起來，沒算實際人數", t["備註"])
-
-    def test_boarding_count_at_school_not_taken_as_ghosts(self):
+    def test_boarding_count_at_school_not_taken_as_arrival(self):
         """去程錢穆故居沒回報、剛到東吳也沒回報，只有學生上車後（到站 4 分鐘）那次標成東吳的 40 人：
-        那是放學上車的人，不是沒刷卡的幽靈，不能拿來扣（2026/11/24 EAA-057 實際發生）"""
-        steps = [(b[0], b[1], b[2], b[3].replace("171195,5,1,261125080300", f"{m.SCHOOL},40,2,261125080900"))
-                 for b in self.steps()]
+        那是放學上車後的人數，不能當成開進東吳時的人數（2026/11/24 EAA-057 實際發生）"""
+        steps = [(b[0], b[1], b[2], b[3].replace("171195,50,3,261125080300", f"{m.SCHOOL},40,2,261125080900"))
+                 for b in TRIP[:-1] + RETURN[2:]]
         events, crowds = run([snapshot(b) for b in steps])
         self.assertTrue(any(c["車上人數"] == "40" for c in crowds), "測試資料裡要真的有那筆 40")
         [t] = m.build_returns(events, crowds)
         self.assertIsNone(t["出發顯示"])
-        self.assertIsNone(t["東吳實際"])
+
+    def test_stale_departure_count_at_mrt(self):
+        """離開士林站那次回報還沒更新（跟到站一樣 20 人），開到 171191 才變 46：用 46，士林站淨上車 26（2026/11/25 有 11 班）"""
+        steps = [(b[0], b[1], b[2], b[3].replace(f"{m.MRT},55,3", f"{m.MRT},20,1")) for b in TRIP]
+        steps.insert(13, ("1", "EAA-001", a2("1", "0", "171191", "1", "261125075600"), a3("1", "171191", 46, 3, "261125075610")))
+        events, crowds = run([snapshot(b) for b in steps])
+        [t] = m.build_trips(events, crowds)
+        self.assertEqual(t["士林站人數"]["車上人數"], "46")
+        row = dict(zip(m.TRIP_HEAD, m.trip_row(1, t)))
+        self.assertEqual(row["士林站淨上車(人)"], 26)
+        self.assertTrue(any("離開士林站時網站還沒更新（20 人，跟到站一樣）" in x for x in t["備註"]))
+
+    def test_departure_count_kept_when_it_went_up(self):
+        """士林站有更新（20 → 55）就照用，不看後面的站"""
+        steps = list(TRIP)
+        steps.insert(13, ("1", "EAA-001", a2("1", "0", "171191", "1", "261125075600"), a3("1", "171191", 60, 3, "261125075610")))
+        events, crowds = run([snapshot(b) for b in steps])
+        [t] = m.build_trips(events, crowds)
+        self.assertEqual(t["士林站人數"]["車上人數"], "55")
+
+    def test_stale_reports_dropped(self):
+        """車剛出現時網站會給好幾天前的人數（2026/11/25 有 8 筆，最早 11/17）：不記"""
+        snap = snapshot(("1", "EAA-001", "", a3("1", m.MRT, 10, 1, "261117164539")))
+        self.assertEqual(m.parse(snap, datetime(2026, 11, 25, 7, 24))[1], [])
+        old = {"回報時間": "2026-11-17 16:45:39", "抓取時間": "2026-11-25 07:24:18"}
+        new = {"回報時間": "2026-11-25 07:24:10", "抓取時間": "2026-11-25 07:24:18"}
+        self.assertEqual(m.fresh([old, new]), [new])
 
     def test_overloaded_shows_negative_seats(self):
         self.assertEqual(m.seats_left((72, 75)), "超載 2–5 人")

@@ -58,6 +58,8 @@ MRT = "171189"      # 捷運士林站(中正)（去程）
 SCHOOL = "171196"   # 東吳大學（去程終點）
 BEFORE_JHS = [START, NEXT, "171175", "187538"]  # 天文科學館 → 國立科教館 → 士林高商 → 士林區行政中心
 ROUTE = BEFORE_JHS + [JHS, MRT, "171190", "171191", "171192", "171193", "171194", "171195", SCHOOL]
+AFTER_MRT = {"171190", "171191"}          # 士林站後兩站：離開士林站的人數晚一站才更新時，看這兩站
+STALE_MRT_WINDOW = timedelta(minutes=5)
 STOP_NAMES = {
     START: "天文科學館", "212024": "國立科教館", "171175": "士林高商", "187538": "士林區行政中心",
     JHS: "士林國中", MRT: "捷運士林站", "171190": "福林國小", "171191": "士林官邸", "171192": "泰北中學",
@@ -71,14 +73,17 @@ SHORT = {START: "天文館", "212024": "科教館", "171175": "士林高商", "1
          JHS: "士林國中", MRT: "士林站", SCHOOL: "東吳"}
 LEVEL_NAMES = {1: "舒適", 2: "中等", 3: "擁擠"}
 CAPACITY = 70           # 557 公車設定最多載 70 人
-# 【網站人數會高估】網站人數看起來是「上車刷卡 − 下車刷卡」，定期票下車可以不刷，
-# 這些人下車了人數也不會減。2026/11/24 實測：
-#   - 回程開到終點天文館（全部人都下車了）網站還顯示 9–45 人 → 這些就是沒刷卡下車的人
-#   - 每趟去程從天文館發車後人數會歸零（科教館都是 0）
-#   - 但在東吳不會歸零：去程沒刷卡的人會帶到回程（EAA-075 東吳 39 → 回程 81）
-# 所以某一站的實際人數 = 網站人數 − 到那時為止沒刷卡下車的人，介在
-#   網站人數 − 這趟終點還顯示的人數（最少）～ 網站人數 − 這趟出發時已經顯示的人數（最多）
-# 去程出發時是 0；回程出發時是去程終點東吳還顯示的人數。
+# 【網站人數】看起來是「上車刷卡 − 下車刷卡」。2026/11/25 整天逐筆看：
+#   - 每趟去程在天文館、科教館會歸零
+#   - 東吳學生下車大多有刷卡：早上車開進東吳 50–63 人，回程離開時剩 8–16 人；
+#     下午回程開到士林站一次少 40–54 人
+#   - 沒刷卡下車的主要是士林高商學生：中午在高商上車、在士林站下車（975-U3 顯示到 90 人），
+#     早上回程在士林站上車、在高商下車（終點天文館還顯示 50 多人）
+#   - 開進東吳時回報的人數是「還沒下車」的人數，不是沒刷卡的人
+# 所以去程：在士林國中以前上車的人（高商等）可能在士林站沒刷卡就下車，
+#   離開士林站的實際人數介在「網站人數 − 到國中時已在車上的人」～「網站人數」
+# 回程：可能還有去程沒刷卡的人，實際人數最多就是網站人數
+STALE_REPORT = timedelta(minutes=30)  # 回報時間比抓取時間早這麼多的是好幾天前的舊資料（車剛出現時網站會給上次的）
 POLL_SECONDS = 15
 TAIL_MINUTES = 30        # 結束時間後再追一下，等最後幾班開到東吳
 EXCEL_EVERY_SECONDS = 60
@@ -106,7 +111,7 @@ TRIP_HEAD = (["編號", "車牌"] + TIME_COLS + GAP_COLS + ["天文館→東吳�
              "到士林國中時人數", "到士林國中時擁擠", "離開士林國中人數", "離開士林國中擁擠",
              "到士林站時人數", "到士林站時擁擠", "離開士林站人數", "離開士林站擁擠",
              "士林國中淨上車(人)", "士林站淨上車(人)",
-             "終點東吳還顯示(人，沒刷卡下車)", "到士林站時實際約(人)", f"士林站剩幾個位置(以{CAPACITY}人算)",
+             "開進東吳時人數(還沒下車)", "離開士林站實際約(人)", f"離開士林站剩幾個位置(以{CAPACITY}人算)",
              "跟前一班到士林站間隔(分)", "備註"])
 
 # ---- 回程（東吳 → 捷運士林站 → 天文館）----
@@ -134,8 +139,8 @@ ETA_MATCH_LATE = timedelta(minutes=30)  # 實際到站最多比預估晚這麼�
 
 RETURN_HEAD = (["編號", "車牌"] + R_TIME_COLS + R_GAP_COLS + ["錢穆故居→士林站總計(分)"]
                + [label + k for _, label in R_CROWD_POINTS for k in ("人數", "擁擠")]
-               + ["出發前已顯示(人，去程沒刷卡)", "終點天文館還顯示(人)", "離開東吳實際約(人)",
-                  f"離開東吳剩幾個位置(以{CAPACITY}人算)", "跟前一班到錢穆故居間隔(分)", "備註"])
+               + ["開進東吳時人數(去程乘客還沒下車)", f"離開東吳至少剩幾個位置(以{CAPACITY}人算)",
+                  "跟前一班到錢穆故居間隔(分)", "備註"])
 
 SSL_CTX = ssl.create_default_context()
 SSL_CTX.verify_flags &= ~getattr(ssl, "VERIFY_X509_STRICT", 0)  # 官方憑證缺 SKI，Python 3.13+ 會擋
@@ -185,7 +190,7 @@ def parse(data, fetched_at):
                            "站牌ID": a2[7], "事件": a2[8], "抓取時間": fmt(fetched_at)})
         a3 = (bus.get("a3") or "").split(",")
         when = stamp(a3[7]) if len(a3) >= 8 else None
-        if when and a3[5].lstrip("-").isdigit():
+        if when and a3[5].lstrip("-").isdigit() and fetched_at - when <= STALE_REPORT:
             crowds.append({"回報時間": fmt(when), "車牌": num, "車輛ID": a3[2], "站牌ID": a3[4],
                            "車上人數": a3[5], "擁擠等級": a3[6], "抓取時間": fmt(fetched_at)})
     return events, crowds
@@ -252,6 +257,12 @@ def load_csv(path, key):
         for row in csv.DictReader(f):
             unique.setdefault(key(row), row)
     return list(unique.values())
+
+
+def fresh(crowds):
+    """拿掉回報時間比抓取時間早 30 分鐘以上的（好幾天前的舊資料）"""
+    stamp_ = lambda s: datetime.strptime(s, "%Y-%m-%d %H:%M:%S")
+    return [c for c in crowds if stamp_(c["抓取時間"]) - stamp_(c["回報時間"]) <= STALE_REPORT]
 
 
 def level_of(c):
@@ -340,7 +351,8 @@ def build_trips(events, crowds, incomplete=None):
                 t["參考"] = t["離站"].get(near) or t["時間"][near]
                 t["備註"].append(f"士林站沒抓到，排序和間隔用{STOP_NAMES[near]}離站時間代替（早約 2 分）")
             elif after:
-                why = "監測開始時已經開過士林站"
+                why = ("這台車第一次出現時已經開過士林站（監測剛開始、或 GPS 剛開）" if seg[0] is evs[0] else
+                       "士林站和前面的站都沒抓到（GPS 沒回報）")
             else:
                 why = "之後沒有士林站或更後面的紀錄（GPS 斷線、或還在路上）"
             if why:
@@ -385,19 +397,30 @@ def build_trips(events, crowds, incomplete=None):
                     filled.append(f"離開士林站＝到{STOP_NAMES[nxt]}時")
             if filled:
                 t["備註"].append("離站人數沒回報，用開進下一站時的人數（中間沒人上下車）：" + "、".join(filled))
+            # 離開士林站那次回報常常還沒算到剛刷卡上車的人：跟到站時一樣（尖峰也是 0 人上車），
+            # 開到福林國小一帶才突然多 8–32 人（2026/11/25 有 11 班）。這時改用士林站後兩站回報的最大人數
+            came = t["士林站到站人數"] or t["國中人數"]
+            left_at = t["離站"].get(MRT) or t["時間"].get(MRT)
+            if t["士林站人數"] and came and left_at and int(t["士林站人數"]["車上人數"]) <= int(came["車上人數"]):
+                later = [c for c in mine if c["站牌ID"] in AFTER_MRT and left_at < crowd_time(c) <= left_at + STALE_MRT_WINDOW]
+                top = max(later, key=lambda c: int(c["車上人數"]), default=None)
+                if top and int(top["車上人數"]) > int(t["士林站人數"]["車上人數"]):
+                    t["備註"].append(f"離開士林站時網站還沒更新（{t['士林站人數']['車上人數']} 人，跟到站一樣），"
+                                    f"改用開到{STOP_NAMES[top['站牌ID']]}時的 {top['車上人數']} 人")
+                    t["士林站人數"] = top
             lacking = [label for key, label in CROWD_POINTS if t[key] is None]
             if lacking:
                 t["備註"].append("沒有人數：" + "、".join(lacking))
-            # 開到終點東吳時網站還顯示的人數＝這趟沒刷卡下車的人（要在校內有人上車前：用去程錢穆故居離站那次，
-            # 沒有才用開進東吳的第一筆）
+            # 開進東吳時的人數（大家還沒下車）：用去程錢穆故居離站那次，沒有才用開進東吳的第一筆
             t["終點顯示"] = None
             if SCHOOL in t["時間"]:
                 arrive = t["時間"][SCHOOL]
                 t["終點顯示"] = last_report(mine, {"171195"}, t["參考"], arrive + A3_EARLY)
                 if t["終點顯示"] is None:
                     t["終點顯示"] = last_report(mine, {SCHOOL}, arrive - A3_EARLY, arrive + SCHOOL_ARRIVE_WINDOW, first=True)
-            came = t["士林站到站人數"] or t["國中人數"]
-            t["士林站實際"] = real_range(int(came["車上人數"]) if came else None, 0, t["終點顯示"])
+            # 到國中時已經在車上的人（士林高商等）可能在士林站沒刷卡下車，所以實際人數是一個範圍
+            upstream = int(t["國中到站人數"]["車上人數"]) if t["國中到站人數"] else None
+            t["士林站實際"] = real_range(int(t["士林站人數"]["車上人數"]) if t["士林站人數"] else None, 0, upstream)
             # 士林國中和士林站中間沒有站：離開國中的人數應該等於開進士林站的人數，不一樣就標出來
             if t["國中人數"] and t["士林站到站人數"] and t["國中人數"]["車上人數"] != t["士林站到站人數"]["車上人數"]:
                 t["備註"].append(f"離開士林國中 {t['國中人數']['車上人數']} 人，到士林站時 {t['士林站到站人數']['車上人數']} 人，對不起來")
@@ -469,7 +492,9 @@ def build_returns(events, crowds, incomplete=None):
                 if incomplete is not None:
                     last = g["events"][-1]
                     t["最後紀錄"] = (when(last), STOP_NAMES.get(last["站牌ID"], last["站牌ID"]))
-                    t["沒列原因"] = f"回程：監測開始時已經離開東吳（第一筆是{R_NAMES.get(first, first)}）"
+                    t["沒列原因"] = (f"回程：這台車第一次出現時已經離開東吳（監測剛開始、或 GPS 剛開；第一筆是{R_NAMES.get(first, first)}）"
+                                     if g["events"][0] is evs[0] else
+                                     f"回程：東吳、錢穆故居都沒抓到（GPS 沒回報，第一筆是{R_NAMES.get(first, first)}）")
                     incomplete.append(t)
                 continue
             if not t["東吳"]:
@@ -493,17 +518,12 @@ def build_returns(events, crowds, incomplete=None):
                 t["備註"].append("離開東吳人數用開進錢穆故居時的（沒算到在錢穆故居上車的人）")
             if t["東吳人數"] is None:
                 t["備註"].append("沒有人數：離開東吳")
-            # 出發前已顯示＝去程開到東吳時還顯示的人數（去程沒刷卡下車，網站在東吳不歸零）
+            # 開進東吳時的人數＝去程乘客還沒下車時（之後大多會刷卡下車，跟離開東吳的人數不能直接相減）
             t["出發顯示"] = None
             if t["東吳"]:
                 t["出發顯示"] = last_report(mine, {"171195"}, t["東吳"] - TRIP_GAP, t["東吳"] + A3_EARLY)
                 if t["出發顯示"] is None:
                     t["出發顯示"] = last_report(mine, {SCHOOL}, t["東吳"] - A3_EARLY, t["東吳"] + SCHOOL_ARRIVE_WINDOW, first=True)
-            # 終點天文館還顯示＝去程＋回程所有沒刷卡下車的人
-            t["終點顯示"] = last_report(mine, {"199585"}, t["參考"], t["參考"] + 2 * TRIP_GAP)
-            t["東吳實際"] = real_range(int(t["東吳人數"]["車上人數"]) if t["東吳人數"] else None, t["出發顯示"], t["終點顯示"])
-            if t["出發顯示"] is not None and t["終點顯示"] is not None and t["終點顯示"] < t["出發顯示"]:
-                t["備註"].append(f"終點天文館顯示 {t['終點顯示']} 人比出發前 {t['出發顯示']} 人少，對不起來，沒算實際人數")
             trips.append(t)
 
     trips.sort(key=lambda t: t["參考"])
@@ -524,8 +544,16 @@ def return_row(n, t):
     for key, _ in R_CROWD_POINTS:
         crowd_cells += [count(t[key]), LEVEL_NAMES[level_of(t[key])] if t[key] else ""]
     return ([n, t["車牌"]] + seq + gaps + [minutes(at.get(R_QIAN), at.get(R_MRT))] + crowd_cells
-            + [t["出發顯示"] if t["出發顯示"] is not None else "", t["終點顯示"] if t["終點顯示"] is not None else "",
-               fmt_range(t["東吳實際"]), seats_left(t["東吳實際"]), t["間隔"], "；".join(t["備註"])])
+            + [t["出發顯示"] if t["出發顯示"] is not None else "", seats_at_least(t["東吳人數"]),
+               t["間隔"], "；".join(t["備註"])])
+
+
+def seats_at_least(c):
+    """回程：網站人數可能含去程沒刷卡的人，實際只會更少，所以位置「至少」剩這麼多"""
+    if not c:
+        return ""
+    n = int(c["車上人數"])
+    return CAPACITY - n if n <= CAPACITY else f"網站顯示 {n} 人，超過 {CAPACITY}，含沒刷卡的人"
 
 
 def last_report(crowds, stops, start, end, first=False):
@@ -694,7 +722,7 @@ def write_excel(path, trips, events, crowds, day, incomplete=(), returns=(), eta
         if t["備註"]:
             rw[f"{rcol['備註']}{r}"].fill = warn_fill
     rw.row_dimensions[1].height = 45
-    autosize(rw, [5, 10] + [9] * len(R_TIME_COLS) + [9] * (len(R_GAP_COLS) + 1) + [8, 7] * len(R_CROWD_POINTS) + [12, 12, 12, 12, 10, 45])
+    autosize(rw, [5, 10] + [9] * len(R_TIME_COLS) + [9] * (len(R_GAP_COLS) + 1) + [8, 7] * len(R_CROWD_POINTS) + [14, 16, 10, 45])
 
     rs = wb.create_sheet(f"回程每{SLOT_MINUTES}分鐘")
     rs.append([f"{day:%Y-%m-%d} 依「開到錢穆故居的時間」（≈ 離開校內）每 {SLOT_MINUTES} 分鐘分組。"
@@ -814,6 +842,7 @@ def main():
     xlsx_path = os.path.join(args.outdir, f"557監測_{tag}{day:%Y-%m-%d}.xlsx")
 
     def save(events, crowds, etas):
+        crowds = fresh(crowds)  # 舊版存下來的 CSV 可能混了好幾天前的回報
         incomplete = []
         trips = in_window(build_trips(events, crowds, incomplete), win_start, win_end)
         returns = in_window(build_returns(events, crowds, incomplete), win_start, win_end)
