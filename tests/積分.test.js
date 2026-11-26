@@ -178,6 +178,16 @@ test('A、B、D、G、H、M、N、R 棟和 557 站都是校內打卡點，記錄
   });
 });
 
+test('到校打卡沒拿到點：第一行寫打卡地點，再一步一步說怎麼拿點', () => {
+  const env = start();
+  const res = checkin(env, 'A', R);
+  assert.equal(res.lines[0], '📍 R 棟第一教學研究大樓');
+  assert.match(res.lines[1], /這次沒有拿到點數/);
+  assert.match(res.lines[2], /^🚶 步行（1 點）：先在錢穆故居站打卡/);
+  assert.match(res.lines[3], /^🌅 早到（1 點）：出門時/);
+  assert.match(res.lines.at(-1), /目前積分：0 點/);
+});
+
 test('一般棟 30 公尺內才算，B 棟 40 公尺內才算', () => {
   const env = start();
   assert.match(checkin(env, 'A', northOf(R, -29)).title, /到校打卡成功/);

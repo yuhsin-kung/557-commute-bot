@@ -554,10 +554,16 @@ function ptArrive_(uid, sheet, now, dCampus, record, campusSpot) {
       }
     }
   }
-  if (!lines.length) lines.push('到校打卡成功。先在錢穆故居站打卡，同一天 ' + PT.WALK_MIN_MIN + '～' + PT.WALK_MAX_MIN + ' 分鐘走進來才有步行積分；7:30 前到校，而且今天先打過出門卡，才有早到積分。');
+  if (!added) {
+    // 沒拿到點：一步一步說怎麼拿，不要一大段
+    lines.push('這次沒有拿到點數。拿點數的方法：');
+    lines.push('🚶 步行（' + PT.WALK + ' 點）：先在錢穆故居站打卡，' + PT.WALK_MIN_MIN + '～' + PT.WALK_MAX_MIN + ' 分鐘內走到校內任一打卡點再打一次。');
+    lines.push('🌅 早到（' + PT.EARLY + ' 點）：出門時（離學校 ' + PT.DEPART_MIN_M + ' 公尺外）先打一次出門卡，' + PT.EARLY_BEFORE + ' 前到校再打一次。');
+  }
   if (fresh.length) lines.push('🏅 解鎖成就：' + fresh.join('、'));
-  record(campusSpot || PT_CAMPUS, dCampus, added ? '加分' : '到校', reasons.join('；'));
-  return { ok: true, title: '到校打卡成功', lines: lines.concat(['目前積分：' + cpUser_(uid).points + ' 點（' + PT.COUPON_POINTS + ' 點換 ' + PT.COUPON_VALUE + ' 元學餐折價券）']) };
+  const spot = campusSpot || PT_CAMPUS;
+  record(spot, dCampus, added ? '加分' : '到校', reasons.join('；'));
+  return { ok: true, title: '到校打卡成功', lines: ['📍 ' + spot].concat(lines, ['目前積分：' + cpUser_(uid).points + ' 點（' + PT.COUPON_POINTS + ' 點換 ' + PT.COUPON_VALUE + ' 元學餐折價券）']) };
 }
 
 function ptMeters_(a, b) {
@@ -594,7 +600,8 @@ const PT_CHECKIN_HTML = `<!doctype html>
 <body>
 <div class="card">
   <h1>到校打卡</h1>
-  <div class="sub">只用你的位置判斷離哪個打卡點最近，不會記錄經緯度。會間隔約 3 秒抓兩次定位，兩次不一樣才收。手機問要不要允許定位時，請按允許。</div>
+  <p>站在錢穆故居站或校內打卡點附近，按下面的「打卡」。手機問要不要允許定位，請按允許。</p>
+  <div class="sub">只看你離哪個打卡點最近，不會記錄你的位置。</div>
   <button id="go" onclick="run()">打卡</button>
 </div>
 <div class="card" id="out" style="display:none"></div>
@@ -609,7 +616,8 @@ function show(ok, title, lines, retry) {
     + '<a class="btn" href="https://line.me/R/oaMessage/' + encodeURIComponent(BOT) + '/?' + encodeURIComponent('我的紀錄') + '">回 LINE 看我的紀錄</a>';
   var btn = document.getElementById('go');
   if (retry) { btn.disabled = false; btn.textContent = '再打一次'; }
-  else { btn.disabled = true; btn.textContent = '請回 LINE 再傳一次「打卡」'; }
+  else if (ok) { btn.disabled = true; btn.textContent = '✓ 已打卡，可以關掉這頁'; }
+  else { btn.disabled = true; btn.textContent = '這個連結用過了，要再打請回 LINE 傳「打卡」'; }
 }
 function locate(done, fail) {
   navigator.geolocation.getCurrentPosition(done, fail, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
