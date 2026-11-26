@@ -216,12 +216,41 @@ test('進校後馬上走出去不給出校點；在學校待滿一節課再走�
   assert.match(JSON.stringify(say(env, 'A', '我的紀錄')), /步行 2 次/);
 });
 
-test('騎車到校的那天不能拿進校點，但可以拿出校點', () => {
+test('騎車到校的那天也能拿走路進學校的點（二選一不擋，交給異常偵測）', () => {
   const env = start();
   env.call('ptAdd_', 'A', '騎車', 1, 0, '');
-  assert.match(text(checkin(env, 'A', QIANMU)), /今天已經記過騎車到校/);
+  assert.equal(checkin(env, 'A', QIANMU).title, '第一次打卡完成 ✓');
+  env.addMinutes(10);
+  assert.equal(checkin(env, 'A', CAMPUS).title, '走路進學校完成');
+  assert.equal(user(env, 'A').points, 2);
+  assert.match(say(env, 'A', '騎車到校'), /今天已經記過騎車到校了/, '同一種還是一天一次');
+});
+
+test('一天最多 3 點：拿滿以後第一次打卡就說拿滿了，騎車、共乘獨行也算進去', () => {
+  const env = start(MON_0700);
+  early_(env, 'A', SHILIN); env.addMinutes(5); early_(env, 'A', CAMPUS); // 早到 +1
   env.addMinutes(2); out_(env, 'A', CAMPUS); env.addMinutes(10);
-  assert.equal(out_(env, 'A', QIANMU).title, '走路出學校完成');
+  assert.equal(out_(env, 'A', QIANMU).title, '走路出學校完成'); // +1
+  env.call('ptAdd_', 'A', '騎車', 1, 0, ''); // 騎車到校 +1 → 3 點
+  assert.equal(user(env, 'A').points, 3);
+  env.addMinutes(2);
+  const full = checkin(env, 'A', QIANMU);
+  assert.equal(full.title, '今天拿過了');
+  assert.match(text(full), /今天已經拿滿 3 點了/);
+  assert.match(say(env, 'A', '騎車回士林'), /今天已經拿滿 3 點了/);
+  assert.equal(user(env, 'A').points, 3);
+
+  // 共乘獨行也算一天的點數
+  const env2 = start();
+  const u = env2.call('cpUser_', 'B');
+  u.soloDay = '2026-10-12'; env2.call('cpSaveUser_', u);
+  env2.call('ptAdd_', 'B', '步行', 1, 0, ''); env2.call('ptAdd_', 'B', '早到', 1, 0, '');
+  assert.equal(env2.call('ptPointsToday_', 'B'), 3);
+  assert.match(say(env2, 'B', '騎車到校'), /今天已經拿滿 3 點了/);
+
+  // 隔天重新算
+  env.addMinutes(24 * 60);
+  assert.equal(env.call('ptPointsToday_', 'A'), 0);
 });
 
 // ----- 早到 -----
@@ -452,7 +481,7 @@ test('YouBike 還車時間離現在超過 60 分鐘就拒絕，比現在晚超�
 const RIDE_OUT = (from, to, time = '17:05') =>
   '{"date":"2026-10-12","time":"' + time + '","from":"YouBike2.0_' + from + '","to":"YouBike2.0_' + to + '"}';
 
-test('騎車回士林：學校附近借、士林站附近還才加 1 點，跟走路出學校一天只算一種', () => {
+test('騎車回士林：學校附近借、士林站附近還才加 1 點，一天一次', () => {
   const env = start('2026-10-12T17:10:00+08:00');
   const ask = say(env, 'A', '騎車回士林');
   assert.match(JSON.stringify(ask), /騎到捷運士林站附近的站還車/);
@@ -463,8 +492,7 @@ test('騎車回士林：學校附近借、士林站附近還才加 1 點，跟�
   assert.match(ok, /騎車回士林 \+1 點/);
   assert.equal(rows(env, '通勤紀錄').pop()[2], '騎車出校');
   assert.equal(user(env, 'A').points, 1);
-  assert.match(say(env, 'A', '騎車回士林'), /今天已經記過出校了/);
-  assert.equal(out_(env, 'A', CAMPUS).title, '今天拿過了', '騎過車就不能再拿走路出學校');
+  assert.match(say(env, 'A', '騎車回士林'), /今天已經記過騎車回士林了/);
 
   // 早上騎車到校、傍晚騎車回士林：各 1 點，我的紀錄騎車 2 次
   say(env, 'B', '騎車到校');
@@ -475,11 +503,11 @@ test('騎車回士林：學校附近借、士林站附近還才加 1 點，跟�
   assert.match(JSON.stringify(say(env, 'B', '我的紀錄')), /騎車 2 次/);
 });
 
-test('走路出學校拿過了，就不能再拿騎車回士林', () => {
+test('走路出學校拿過了，騎車回士林也還能拿（二選一不擋，交給異常偵測）', () => {
   const env = start();
   out_(env, 'A', CAMPUS); env.addMinutes(10); out_(env, 'A', QIANMU);
   assert.equal(user(env, 'A').points, 1);
-  assert.match(say(env, 'A', '騎車回士林'), /今天已經記過出校了/);
+  assert.match(JSON.stringify(say(env, 'A', '騎車回士林')), /騎到捷運士林站附近的站還車/);
 });
 
 test('騎車到校：AI 不能用的時候不加分，請同學再傳', () => {

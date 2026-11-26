@@ -8,7 +8,9 @@
  *   - 走路進學校：錢穆故居站 → 6～20 分鐘內校內打卡點，+1（通勤紀錄寫「步行」）
  *   - 走路出學校：校內打卡點 → 6～20 分鐘內錢穆故居站，+1（「步行出校」，放學分流）。當天拿過進校點的，要在學校待滿 50 分鐘才算
  *   - 早到：離校 500 公尺外打出門卡 → 7:30 前校內打卡點，+1
- *   每種一天一次。打卡紀錄的「結果」欄記第一次是哪一種（進校起點、出校起點、出門），第二次只找同一種的第一次。
+ *   每種一天一次，全部加起來（含騎車、共乘獨行）一天最多 PT.DAILY_MAX 點。
+ *   同方向走路和騎車都拿（例如走路進學校又騎車到校）不擋、也不跟學生講，交給異常偵測（打卡防弊改善.md 第五節）。
+ *   打卡紀錄的「結果」欄記第一次是哪一種（進校起點、出校起點、出門），第二次只找同一種的第一次。
  *   騎車到校是另一個按鈕（傳 YouBike 騎乘紀錄截圖），在下面的 ptBike_。
  * 只記打卡點名稱、距離和誤差，不記經緯度。拒收時多記原因。
  *
@@ -24,6 +26,7 @@ const PT = {
   COUPON_POINTS: 5,     // 幾點換一張學餐折價券
   COUPON_VALUE: 30,     // 折價券面額（元）
   COUPON_DAYS: 30,      // 兌換後幾天內要用
+  DAILY_MAX: 3,         // 一天最多拿幾點（走路、騎車、早到、共乘獨行加起來；新生測驗只有一次，不算）
   WALK_MIN_MIN: 6,       // 起點到校至少要隔這麼久才算步行
   WALK_MAX_MIN: 20,      // 起點打卡後幾分鐘內到校才算步行（要同一天）
   STAY_MIN_MIN: 50,      // 今天拿過進校步行點，要在學校待這麼久（一節課）才能拿出校步行點，避免進校馬上走出去刷點
@@ -119,6 +122,25 @@ function ptDoneToday_(uid, mode) {
     .some(r => r[1] === uid && r[2] === mode && Utilities.formatDate(new Date(r[0]), TZ, 'yyyy-MM-dd') === today);
 }
 
+// 算進一天上限的方式（通勤紀錄的「方式」欄）
+const PT_DAILY_MODES = ['步行', '步行出校', '早到', '騎車', '騎車出校'];
+
+/** 今天已經拿了幾點：打卡、騎車，加上共乘獨行（記在共乘用戶的「上次獨行獎勵」） */
+function ptPointsToday_(uid) {
+  const today = Utilities.formatDate(cpNow_(), TZ, 'yyyy-MM-dd');
+  const logged = cpSheet_('通勤紀錄', PT_LOG_HEAD).getDataRange().getValues().slice(1)
+    .filter(r => r[1] === uid && PT_DAILY_MODES.indexOf(r[2]) >= 0 && Utilities.formatDate(new Date(r[0]), TZ, 'yyyy-MM-dd') === today)
+    .reduce((sum, r) => sum + (Number(r[3]) || 0), 0);
+  return logged + (cpUser_(uid).soloDay === today ? CP.SOLO_POINTS : 0); // 共乘.gs
+}
+
+/** 今天拿滿了沒 */
+function ptFull_(uid) {
+  return ptPointsToday_(uid) >= PT.DAILY_MAX;
+}
+
+const PT_FULL_TEXT = '今天已經拿滿 ' + PT.DAILY_MAX + ' 點了（一天最多 ' + PT.DAILY_MAX + ' 點），明天再來 🙂';
+
 function ptBadgeText_(fresh) {
   return fresh.length ? '\n\n🏅 解鎖成就：' + fresh.join('、') : '';
 }
@@ -165,11 +187,11 @@ function ptCheckinButton_(uid, mode) {
     const pick = k => [PT_MODES[k].name, PT_MODES[k].text];
     const bikeOut = ['🚲 騎車回士林', '騎車回士林'];
     if (mode === '到校') {
-      return choices_('怎麼來學校的？每種一天 1 點。', [pick('進校'), pick('早到'), bike], // 卡片.gs
+      return choices_('怎麼來學校的？每種一天 1 點，一天最多 ' + PT.DAILY_MAX + ' 點。', [pick('進校'), pick('早到'), bike], // 卡片.gs
         { title: '到校打卡', badge: '積分', primary: false });
     }
     if (mode === '離校') {
-      return choices_('怎麼離開學校？走路或騎車一天算一種，1 點。', [pick('出校'), bikeOut],
+      return choices_('怎麼離開學校？每種一天 1 點，一天最多 ' + PT.DAILY_MAX + ' 點。', [pick('出校'), bikeOut],
         { title: '出校打卡', badge: '積分', primary: false });
     }
     return choices_('要打哪一種卡？每種一天 1 點，集滿 ' + PT.COUPON_POINTS + ' 點換 ' + PT.COUPON_VALUE + ' 元學餐折價券。',
@@ -405,14 +427,10 @@ function ptBikeWhen_(ride) {
   return isNaN(stamp.getTime()) ? null : stamp;
 }
 
-/** 今天出校拿過點了沒（走路、騎車一天只算一種） */
-function ptLeftToday_(uid) {
-  return ptDoneToday_(uid, PT_WALK_OUT) || ptDoneToday_(uid, PT_BIKE_OUT);
-}
-
 /** 「騎車回士林」：學校借 YouBike，騎到士林站附近還車，傳騎乘紀錄截圖 */
 function ptBikeOut_(uid) {
-  if (ptLeftToday_(uid)) return '今天已經記過出校了（走路或騎車一天算一種），明天繼續 🚲';
+  if (ptDoneToday_(uid, PT_BIKE_OUT)) return '今天已經記過騎車回士林了，明天繼續 🚲';
+  if (ptFull_(uid)) return PT_FULL_TEXT;
   CacheService.getScriptCache().put('bike_wait_' + uid, '回士林', PT_BIKE_WAIT_MIN * 60);
   return card_({ // 卡片.gs
     badge: '出校打卡',
@@ -428,7 +446,7 @@ function ptBikeOut_(uid) {
 
 function ptBike_(uid) {
   if (ptDoneToday_(uid, '騎車')) return '今天已經記過騎車到校了，明天繼續 🚲';
-  if (ptDoneToday_(uid, '步行')) return '今天已經記過步行到校了，一天記一種方式就好 🙂';
+  if (ptFull_(uid)) return PT_FULL_TEXT;
   CacheService.getScriptCache().put('bike_wait_' + uid, '到校', PT_BIKE_WAIT_MIN * 60);
   return card_({ // 卡片.gs
     badge: '積分與打卡',
@@ -464,10 +482,11 @@ function ptBikePhoto_(uid, messageId) {
   if (lagMin > PT.BIKE_MAX_LAG_MIN) return '🚲 還車時間是 ' + ride.time + '，離現在超過 ' + PT.BIKE_MAX_LAG_MIN + ' 分鐘，請用剛還車的紀錄。';
   const key = [ride.date, ride.time, ride.from, ride.to].join('｜');
   return cpLocked_(() => { // 共乘.gs
-    if (out ? ptLeftToday_(uid) : ptDoneToday_(uid, '騎車')) {
+    if (ptDoneToday_(uid, out ? PT_BIKE_OUT : '騎車')) {
       cache.remove('bike_wait_' + uid);
-      return out ? '今天已經記過出校了，明天繼續 🚲' : '今天已經記過騎車到校了，明天繼續 🚲';
+      return out ? '今天已經記過騎車回士林了，明天繼續 🚲' : '今天已經記過騎車到校了，明天繼續 🚲';
     }
+    if (ptFull_(uid)) { cache.remove('bike_wait_' + uid); return PT_FULL_TEXT; }
     const used = cpSheet_('通勤紀錄', PT_LOG_HEAD).getDataRange().getValues().slice(1)
       .some(r => (r[2] === '騎車' || r[2] === PT_BIKE_OUT) && r[5] === key);
     if (used) return '🚲 這筆騎乘紀錄已經用過了，一筆紀錄只能領一次。';
@@ -670,14 +689,14 @@ function ptWalkEnd_(at, spot, dist, opt) {
 
 function ptWalkInStart_(at) {
   if (ptDoneToday_(at.uid, '步行')) return ptAlreadyDone_(at, PT_START, at.dStart, '今天已經拿過走路進學校的點了，明天再來 🙂');
-  if (ptDoneToday_(at.uid, '騎車')) return ptAlreadyDone_(at, PT_START, at.dStart, '今天已經記過騎車到校，進學校一天只算一種方式。放學可以打「走路出學校」。');
+  if (ptFull_(at.uid)) return ptAlreadyDone_(at, PT_START, at.dStart, PT_FULL_TEXT);
   return ptFirstDone_(at, PT_START, at.dStart, '進校起點',
     ['現在走進學校，' + PT.WALK_MIN_MIN + '～' + PT.WALK_MAX_MIN + ' 分鐘內到校內打卡點（' + PT_CAMPUS_LIST + '），再按一次「走路進學校」打第二次。']);
 }
 
 function ptWalkInEnd_(at) {
   if (ptDoneToday_(at.uid, '步行')) return ptAlreadyDone_(at, at.campusSpot, at.dCampus, '今天已經拿過走路進學校的點了，明天再來 🙂');
-  if (ptDoneToday_(at.uid, '騎車')) return ptAlreadyDone_(at, at.campusSpot, at.dCampus, '今天已經記過騎車到校，進學校一天只算一種方式。');
+  if (ptFull_(at.uid)) return ptAlreadyDone_(at, at.campusSpot, at.dCampus, PT_FULL_TEXT);
   return ptWalkEnd_(at, at.campusSpot, at.dCampus, {
     startResults: ['進校起點', '起點'], // 「起點」是改版前的紀錄
     noStart: '今天還沒在錢穆故居站打第一次。走路進學校要先在錢穆故居站打卡，再走進來。',
@@ -689,13 +708,15 @@ function ptWalkInEnd_(at) {
 // ----- 走路出學校：校內 → 錢穆故居站（放學分流） -----
 
 function ptWalkOutStart_(at) {
-  if (ptLeftToday_(at.uid)) return ptAlreadyDone_(at, at.campusSpot, at.dCampus, '今天已經拿過出校的點了（走路或騎車一天算一種），明天再來 🙂');
+  if (ptDoneToday_(at.uid, PT_WALK_OUT)) return ptAlreadyDone_(at, at.campusSpot, at.dCampus, '今天已經拿過走路出學校的點了，明天再來 🙂');
+  if (ptFull_(at.uid)) return ptAlreadyDone_(at, at.campusSpot, at.dCampus, PT_FULL_TEXT);
   return ptFirstDone_(at, at.campusSpot, at.dCampus, '出校起點',
     ['現在走到錢穆故居站，' + PT.WALK_MIN_MIN + '～' + PT.WALK_MAX_MIN + ' 分鐘內再按一次「走路出學校」打第二次。']);
 }
 
 function ptWalkOutEnd_(at) {
-  if (ptLeftToday_(at.uid)) return ptAlreadyDone_(at, PT_START, at.dStart, '今天已經拿過出校的點了（走路或騎車一天算一種），明天再來 🙂');
+  if (ptDoneToday_(at.uid, PT_WALK_OUT)) return ptAlreadyDone_(at, PT_START, at.dStart, '今天已經拿過走路出學校的點了，明天再來 🙂');
+  if (ptFull_(at.uid)) return ptAlreadyDone_(at, PT_START, at.dStart, PT_FULL_TEXT);
   return ptWalkEnd_(at, PT_START, at.dStart, {
     startResults: ['出校起點'],
     noStart: '今天還沒在學校打第一次。走路出學校要先在校內打卡點打卡，再走出來。',
@@ -722,6 +743,7 @@ function ptEarlyStart_(at) {
   const hhmm = Utilities.formatDate(at.now, TZ, 'HH:mm');
   const spot = '出門（離學校約 ' + Math.round(at.dCampus) + ' 公尺）';
   if (ptDoneToday_(at.uid, '早到')) return ptAlreadyDone_(at, '出門', at.dCampus, '今天已經拿過早到的點了，明天再來 🙂');
+  if (ptFull_(at.uid)) return ptAlreadyDone_(at, '出門', at.dCampus, PT_FULL_TEXT);
   if (hhmm >= PT.EARLY_BEFORE) {
     at.record('出門', at.dCampus, '太晚', '已經 ' + hhmm);
     return { ok: false, title: '已經過 ' + PT.EARLY_BEFORE + ' 了', lines: ['現在 ' + hhmm + '，今天來不及拿早到的點了。明天 ' + PT.EARLY_BEFORE + ' 前到校再試試看。'] };
@@ -737,6 +759,7 @@ function ptEarlyEnd_(at) {
   const hhmm = Utilities.formatDate(at.now, TZ, 'HH:mm');
   const spot = at.campusSpot;
   if (ptDoneToday_(at.uid, '早到')) return ptAlreadyDone_(at, spot, at.dCampus, '今天已經拿過早到的點了，明天再來 🙂');
+  if (ptFull_(at.uid)) return ptAlreadyDone_(at, spot, at.dCampus, PT_FULL_TEXT);
   const departed = ptLastStart_(at, ['出門']);
   if (!departed) {
     at.record(spot, at.dCampus, '沒有第一次', '沒有出門卡');

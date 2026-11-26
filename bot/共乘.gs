@@ -310,7 +310,7 @@ function cpSolo_(g) {
   const m = g.members[0];
   const user = cpUser_(m.id);
   const today = Utilities.formatDate(cpNow_(), TZ, 'yyyy-MM-dd');
-  m.reward = user.soloDay === today ? 0 : CP.SOLO_POINTS;
+  m.reward = user.soloDay === today || ptFull_(m.id) ? 0 : CP.SOLO_POINTS; // 積分.gs：一天最多 3 點
   if (m.reward) {
     user.points += m.reward;
     user.soloDay = today;
