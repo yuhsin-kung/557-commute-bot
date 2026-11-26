@@ -156,12 +156,18 @@ const PT_MODES = {
   },
 };
 
-/** 「打卡」：沒選種類先問要打哪一種；選了就說步驟，發一組 10 分鐘、用過即失效的代碼 */
+/** 「打卡」：沒選種類先問要打哪一種（mode 是「到校」只列到校的三種）；選了就說步驟，發一組 10 分鐘、用過即失效的代碼 */
 function ptCheckinButton_(uid, mode) {
   const m = PT_MODES[mode];
   if (!m) {
-    return choices_('要打哪一種卡？每種一天 1 點，集滿 ' + PT.COUPON_POINTS + ' 點換 ' + PT.COUPON_VALUE + ' 元學餐折價券。', // 卡片.gs
-      Object.keys(PT_MODES).map(k => [PT_MODES[k].name, PT_MODES[k].text]).concat([['🚲 騎車到校', '騎車到校']]),
+    const bike = ['🚲 騎車到校', '騎車到校'];
+    const pick = k => [PT_MODES[k].name, PT_MODES[k].text];
+    if (mode === '到校') {
+      return choices_('怎麼來學校的？每種一天 1 點。', [pick('進校'), pick('早到'), bike], // 卡片.gs
+        { title: '到校打卡', badge: '積分', primary: false });
+    }
+    return choices_('要打哪一種卡？每種一天 1 點，集滿 ' + PT.COUPON_POINTS + ' 點換 ' + PT.COUPON_VALUE + ' 元學餐折價券。',
+      Object.keys(PT_MODES).map(pick).concat([bike]),
       { title: '打卡', badge: '積分', primary: false });
   }
   const code = Utilities.getUuid();

@@ -60,10 +60,19 @@ test('「打卡」先問要打哪一種：走路進學校、走路出學校、�
   assert.deepEqual(menu.map(b => b[0]), ['🚶 走路進學校', '🚶 走路出學校', '🌅 早到', '🚲 騎車到校']);
 });
 
-test('「積分與打卡」選單直接有四顆打卡按鈕', () => {
+test('「積分與打卡」選單：到校打卡、出校打卡在最上面', () => {
   const env = start();
   const btns = buttonsOf(env.call('menuCategory_', '積分與打卡')).map(b => b[1]);
-  assert.deepEqual(btns.slice(0, 4), ['打卡 進校', '打卡 出校', '打卡 早到', '騎車到校']);
+  assert.deepEqual(btns.slice(0, 2), ['到校打卡', '出校打卡']);
+});
+
+test('「到校打卡」再選走路進學校、早到、騎車到校；「出校打卡」直接說走路出學校的步驟', () => {
+  const env = start();
+  const toSchool = buttonsOf(say(env, 'A', '到校打卡'));
+  assert.deepEqual(toSchool, [['🚶 走路進學校', '打卡 進校'], ['🌅 早到', '打卡 早到'], ['🚲 騎車到校', '騎車到校']]);
+  const leave = say(env, 'A', '出校打卡');
+  assert.match(JSON.stringify(leave), /① 在校內打卡點/);
+  assert.equal(buttonsOf(leave)[0][0], '打開打卡頁');
 });
 
 test('每種卡都先說步驟，網址帶一次性代碼，不是永久 token', () => {
