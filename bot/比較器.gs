@@ -109,11 +109,11 @@ function compareQuery_(q, text) {
   if (!isMenuFlow && (q.farDay || q.day === '後天')) {
     return incompleteTimeReply_(q);
   }
-  // 今天或明天但沒有確切時刻：請補時間（AC-3、B-3）
-  if (!isMenuFlow && (q.day === '今天' || q.day === '明天') && !q.arriveTime) {
+  // 明天但沒有確切時刻：請補時間（AC-3）
+  if (!isMenuFlow && q.day === '明天' && !q.arriveTime) {
     return incompleteTimeReply_(q);
   }
-  // 有 incompleteFuture 且無時刻（即使沒說今天／明天／後天）：仍請補時間，不出即時卡
+  // 有 incompleteFuture 且無時刻（即使沒說今天／明天／後天，或今天＋時段）：仍請補時間，不出即時卡（B-3）
   if (!isMenuFlow && q.incompleteFuture && !q.arriveTime) {
     return incompleteTimeReply_(q);
   }

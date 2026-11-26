@@ -290,3 +290,25 @@ test('B-3 回歸: 下午要幾點出門（無今天明天、Gemini null）請補
   assert.doesNotMatch(txt, /多路線比較/);
   assert.doesNotMatch(txt, /士林站 →/);
 });
+
+test('B-4: 我今天要去學校（固定時鐘）不呼叫 Gemini，出士林站即時卡', () => {
+  const env = boot();
+  freeze(env, '2026-10-12T10:00:00+08:00');
+  env.run('var __g = 0; parseWithGemini_ = function () { __g++; return null; };');
+  const ans = env.call('compareReply_', '我今天要去學校');
+  assert.equal(env.run('__g'), 0);
+  const txt = replyText(ans);
+  assert.match(txt, /TDX 即時資料|士林站 →/);
+  assert.doesNotMatch(txt, /請補上課時間|第幾節|幾點上課/);
+});
+
+test('B-4: 今天D棟怎麼去（固定時鐘）不呼叫 Gemini，出士林站即時卡', () => {
+  const env = boot();
+  freeze(env, '2026-10-12T10:00:00+08:00');
+  env.run('var __g = 0; parseWithGemini_ = function () { __g++; return null; };');
+  const ans = env.call('compareReply_', '今天D棟怎麼去');
+  assert.equal(env.run('__g'), 0);
+  const txt = replyText(ans);
+  assert.match(txt, /TDX 即時資料|士林站 → D 棟/);
+  assert.doesNotMatch(txt, /請補上課時間|第幾節|幾點上課/);
+});
