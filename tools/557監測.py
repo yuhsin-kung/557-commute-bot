@@ -453,6 +453,11 @@ def build_returns(events, crowds, incomplete=None):
     for c in crowds:
         crowd_by_bus[c["車輛ID"]].append(c)
 
+    # 去程人數被清掉的班（到士林國中以前一次多上超過 15 人）：那些人多半沒刷卡下車，
+    # 回程網站人數也會一直算著他們（2026/11/26 EAA-077 開進東吳 46 人、離開時 80 人）→ 回程人數也清掉
+    surged = [(t["車輛ID"], t["時間"][SCHOOL]) for t in build_trips(events, crowds)
+              if t["人數不可信"] and SCHOOL in t["時間"]]
+
     trips = []
     for vid, evs in by_bus.items():
         evs.sort(key=lambda e: e["事件時間"])
@@ -533,6 +538,13 @@ def build_returns(events, crowds, incomplete=None):
                 t["出發顯示"] = last_report(mine, {"171195"}, t["東吳"] - TRIP_GAP, t["東吳"] + A3_EARLY)
                 if t["出發顯示"] is None:
                     t["出發顯示"] = last_report(mine, {SCHOOL}, t["東吳"] - A3_EARLY, t["東吳"] + SCHOOL_ARRIVE_WINDOW, first=True)
+            t["人數不可信"] = bool(t["東吳"]) and any(v == vid and abs(t["東吳"] - at) <= timedelta(minutes=1)
+                                                    for v, at in surged)
+            if t["人數不可信"]:
+                t["東吳人數"] = t["出發顯示"] = None
+                t["備註"] = [x for x in t["備註"] if not x.startswith(("離開東吳人數用", "沒有人數"))]
+                t["備註"].append("人數已清除：這班去程到士林國中以前一次多上超過 "
+                                f"{SURGE_LIMIT} 人，多半沒刷卡下車，回程網站人數也不可信")
             trips.append(t)
 
     trips.sort(key=lambda t: t["參考"])

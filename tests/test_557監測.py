@@ -347,6 +347,23 @@ class GhostTest(unittest.TestCase):
         self.assertEqual((row["離開士林站實際約(人)"], row["開進東吳時人數(還沒下車)"]), ("", ""))
         self.assertIn(m.MRT, t["到站"], "時間還在")
 
+    def test_upstream_surge_clears_return_too(self):
+        """去程被清掉的班，回程人數也清掉：高商學生沒刷卡下車，回程還算著他們（2026/11/26 EAA-077 開進東吳 46、離開 80）；
+        時間照留，其他班的回程不受影響"""
+        events, crowds = run([snapshot(b) for b in self._upstream(2, 40)[:-1] + RETURN])
+        [t] = m.build_returns(events, crowds)
+        self.assertTrue(t["人數不可信"])
+        self.assertIsNone(t["東吳人數"])
+        self.assertIsNone(t["出發顯示"])
+        self.assertTrue(any(x.startswith("人數已清除：這班去程") for x in t["備註"]))
+        row = dict(zip(m.RETURN_HEAD, m.return_row(1, t)))
+        self.assertEqual((row["離開東吳人數"], row["離開東吳至少剩幾個位置(以70人算)"]), ("", ""))
+        self.assertEqual(row["士林站到站"], datetime(2026, 11, 25, 8, 19), "時間還在")
+        events, crowds = run([snapshot(b) for b in self._upstream(3, 18)[:-1] + RETURN])
+        [t] = m.build_returns(events, crowds)
+        self.assertFalse(t["人數不可信"])
+        self.assertEqual(t["東吳人數"]["車上人數"], "62")
+
     def test_jump_into_jhs_not_counted(self):
         """行政中心 → 士林國中多上很多人是正常的（國中本來就是上車站），不算；只看國中以前的站彼此之間"""
         steps = [(b[0], b[1], b[2], b[3].replace(f"{m.JHS},18,1", f"{m.JHS},45,3")) for b in self._upstream(16, 18)]
