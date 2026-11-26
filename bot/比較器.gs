@@ -103,6 +103,17 @@ function compareQuery_(q, text) {
   const building = BUILDINGS[q.building] ? q.building : '';
   const unspecified = /(^|\s)不指定(\s|$)/.test(String(text || ''));
   const now = new Date();
+
+  // 口頭問句有後天／星期且無法解析成今天明天：請改用今天明天，不出即時卡、也不查放假（B-1'(b)）
+  // 必須在計算 classAt、呼叫 classContext_ 之前
+  if (!isMenuFlow && (q.day === '後天' || (q.incompleteFuture && q.day !== '今天' && q.day !== '明天'))) {
+    return incompleteTimeReply_(q);
+  }
+  // 明天但沒有確切時刻：請補時間（AC-3）
+  if (!isMenuFlow && q.day === '明天' && !q.arriveTime) {
+    return incompleteTimeReply_(q);
+  }
+
   const classAt = q.arriveTime ? timeOn_(q.day === '明天' ? addMin_(now, 24 * 60) : now, q.arriveTime) : null;
 
   // 先查出門脈絡（放假／考試週／步行）。放假不出建議卡，也不查即時到站。
@@ -112,13 +123,6 @@ function compareQuery_(q, text) {
     building: building,
   });
   if (ctx.holiday) return holidayReply_(ctx);
-
-  // 口頭問句有未來時間但沒有確切時刻，或後天／星期無法解析成今天明天：請補時間或改用今天明天，不出即時卡（AC-3、B-1）
-  if (!isMenuFlow && (q.incompleteFuture || q.day === '後天' || /後天|星期|週|禮拜/.test(String(text || '')))) {
-    if (!q.arriveTime || (q.day !== '今天' && q.day !== '明天')) {
-      return incompleteTimeReply_(q);
-    }
-  }
 
   // 有上課時間但沒說大樓：先問在哪一棟（已選「不指定」才直接給建議）。出發站沿用選單指令，預設士林站可省略。
   if (classAt && !building && !unspecified) {
@@ -166,12 +170,16 @@ function incompleteTimeReply_(q) {
   const dayWord = q.day === '明天' ? '明天' : (q.day === '後天' ? '後天' : '那天');
   const bName = q.building && BUILDINGS[q.building] ? BUILDINGS[q.building][0] : '上課';
   let hint = '你' + dayWord + '在' + bName + '，請告訴我第幾節或幾點上課，我才能幫你算出門時間。';
-  if (q.day === '後天') {
+  let items = [];
+  if (q.day === '後天' || (q.incompleteFuture && q.day !== '今天' && q.day !== '明天')) {
     hint = '後天或星期幾的時間我目前只能用「今天／明天」規劃。請改用「今天」或「明天」，或直接點選單「出門時間」。';
+    items = [['用選單排出門時間', '出門時間']];
+  } else {
+    const dayForMenu = q.day === '明天' ? '明天' : '今天';
+    items = ['1', '2', '3', '5', '8'].map(k => ['第 ' + k + ' 節 ' + PERIODS[k], '出門時間 ' + dayForMenu + ' ' + PERIODS[k] + (q.building ? ' ' + q.building : '')]);
+    items.push(['用選單排出門時間', '出門時間']);
   }
-  const dayForMenu = q.day === '明天' ? '明天' : '今天';
-  const items = ['1', '2', '3', '5', '8'].map(k => ['第 ' + k + ' 節 ' + PERIODS[k], '出門時間 ' + dayForMenu + ' ' + PERIODS[k] + (q.building ? ' ' + q.building : '')]);
-  return choices_(hint, items.concat([['用選單排出門時間', '出門時間']]), { title: '請補上課時間', badge: '時間', primary: false });
+  return choices_(hint, items, { title: '請補上課時間', badge: '時間', primary: false });
 }
 
 /** 即時模式：查出發站所有路線的到站時間，算出各條到教室的時間 */
@@ -324,7 +332,12 @@ function parseQuestion_(text) {
   gem.farOrigin = gem.farOrigin || byRules.farOrigin || isFarOrigin_(gem.origin);
   gem.localNonOrigin = gem.localNonOrigin || byRules.localNonOrigin;
   gem.incompleteFuture = gem.incompleteFuture || byRules.incompleteFuture;
-  if (!gem.day && byRules.day) gem.day = byRules.day;
+  // 規則已偵測後天或星期時，強制保留規則日期（或未指定），不論 Gemini 回今天（B-1'(a)）
+  if (byRules.day === '後天' || (byRules.incompleteFuture && byRules.day !== '明天' && byRules.day !== '今天')) {
+    gem.day = byRules.day || '未指定';
+  } else if (!gem.day && byRules.day) {
+    gem.day = byRules.day;
+  }
   return gem;
 }
 

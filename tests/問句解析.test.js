@@ -213,3 +213,32 @@ test('B-2: Gemini 回 origin="" 時規則遠距優先，不出士林站即時卡
   assert.doesNotMatch(txt, /士林站 →/);
   assert.doesNotMatch(txt, /多路線比較/);
 });
+
+function seedCalendar(env) {
+  const csv = fs.readFileSync(path.join(__dirname, '..', 'bot', '行事曆.csv'), 'utf8').replace(/^\uFEFF/, '').trim();
+  const sheet = env.run("SpreadsheetApp.getActiveSpreadsheet().insertSheet('行事曆')");
+  csv.split(/\r?\n/).forEach(line => sheet.appendRow(line.split(',')));
+}
+
+test('B-1\'(a): Gemini 回 day=今天 時規則後天仍強制保留，不當今天規劃', () => {
+  const env = boot();
+  freeze(env, '2026-10-12T21:00:00+08:00');
+  env.run('parseWithGemini_ = function () { return { intent: "去學校", day: "今天", building: "D", origin: "", arriveTime: "08:10" }; };');
+  const ans = env.call('compareReply_', '後天第一節 D棟要幾點出門');
+  const txt = replyText(ans);
+  assert.match(txt, /今天|明天|出門時間|後天/);
+  assert.doesNotMatch(txt, /今天 08:10/);
+  assert.doesNotMatch(txt, /TDX 即時資料/);
+  assert.doesNotMatch(txt, /多路線比較/);
+});
+
+test('B-1\'(b): 今天放假日時問後天不得回這天不用上學', () => {
+  const env = boot();
+  seedCalendar(env);
+  freeze(env, '2026-11-28T10:00:00+08:00'); // 選舉投票日
+  env.run('parseWithGemini_ = function () { return null; };');
+  const ans = env.call('compareReply_', '後天第一節 D棟要幾點出門');
+  const txt = replyText(ans);
+  assert.doesNotMatch(txt, /這天不用上學/);
+  assert.match(txt, /今天|明天|出門時間|後天/);
+});
