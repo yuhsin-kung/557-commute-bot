@@ -57,7 +57,10 @@ function sampleCards() {
   keep('共乘：現在走', env.call('cpText_', 'A', '共乘 去學校 現在走'));
   keep('共乘：選時間', env.call('cpText_', 'A', '共乘 去學校 預約'));
   keep('共乘：打開等車室', env.call('cpText_', 'A', '共乘 去學校 加入'));
-  keep('打卡', env.call('ptCheckinButton_', 'A'));
+  keep('打卡：選哪一種', env.call('ptCheckinButton_', 'A', ''));
+  keep('打卡：走路進學校', env.call('ptCheckinButton_', 'A', '進校'));
+  keep('打卡：走路出學校', env.call('ptCheckinButton_', 'A', '出校'));
+  keep('打卡：早到', env.call('ptCheckinButton_', 'A', '早到'));
   keep('新生測驗', env.call('nbQuiz_', 'A', '新生測驗'));
   keep('新生教學', env.call('nbIntro_'));
   keep('排隊禮儀短片', env.call('nbEtiquette_'));

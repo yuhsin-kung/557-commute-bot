@@ -81,7 +81,9 @@ function handleEvent_(ev) {
  * 這幾個要比 route_ 先判斷：「借傘」有「傘」字、「排隊禮儀」有「排隊」，不先攔下來會被當成問天氣、問站牌。
  */
 function memberReply_(uid, text) {
-  if (/^(打卡|到校打卡|步行積分)$/.test(text)) return ptCheckinButton_(uid); // 積分.gs
+  if (/^(打卡|到校打卡|步行積分)$/.test(text)) return ptCheckinButton_(uid, ''); // 積分.gs：先選哪一種卡
+  const checkinMode = text.match(/^打卡\s*(進校|出校|早到)$/);
+  if (checkinMode) return ptCheckinButton_(uid, checkinMode[1]);
   if (/^(我的紀錄|我的積分|積分|成就|碳足跡)$/.test(text)) return ptMine_(uid);
   if (text === '全校減碳') return ptSchool_();
   if (text === '騎車到校') return ptBike_(uid);
