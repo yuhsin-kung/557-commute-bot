@@ -162,21 +162,34 @@ test('校內打卡點 30 公尺內才算到校、錢穆故居站 50 公尺內才
   assert.equal(user(env, 'A').points, 0);
 });
 
-test('R 棟、圖書館也是校內打卡點，記錄寫最近的點；離每個點都超過 30 公尺就不算', () => {
-  const env = start();
-  const R = [25.09305, 121.54627];
-  const LIB = [25.09345, 121.54645];
-  assert.match(checkin(env, 'A', northOf(R, 25)).title, /到校打卡成功/);
-  assert.equal(rows(env, '打卡紀錄').pop()[2], '第一教學研究大樓（R 棟）');
-  assert.match(checkin(env, 'B', LIB).title, /到校打卡成功/);
-  assert.equal(rows(env, '打卡紀錄').pop()[2], '中正圖書館');
-  assert.match(checkin(env, 'C', CAMPUS).title, /到校打卡成功/);
-  assert.equal(rows(env, '打卡紀錄').pop()[2], '校內 557 站');
+const R = [25.09305, 121.54627];
+const B = [25.09401, 121.54650];
 
-  const off = checkin(env, 'D', northOf(R, -40)); // R 棟往南 40 公尺
+test('A、B、D、G、H、M、N、R 棟和 557 站都是校內打卡點，記錄寫哪個點', () => {
+  const spots = {
+    'A 棟寵惠堂': [25.09437, 121.54573], 'B 棟綜合大樓': B, 'D 棟第二教研大樓': [25.09453, 121.54717],
+    'G 棟戴蓀堂': [25.09411, 121.54575], 'H 棟哲生樓': [25.09370, 121.54587], 'M 棟超庸館': [25.09404, 121.54463],
+    'N 棟中正圖書館': [25.09345, 121.54645], 'R 棟第一教學研究大樓': R, '校內 557 站': CAMPUS,
+  };
+  const env = start();
+  Object.keys(spots).forEach((name, i) => {
+    assert.match(checkin(env, 'U' + i, spots[name]).title, /到校打卡成功/, name);
+    assert.equal(rows(env, '打卡紀錄').pop()[2], name);
+  });
+});
+
+test('一般棟 30 公尺內才算，B 棟 40 公尺內才算', () => {
+  const env = start();
+  assert.match(checkin(env, 'A', northOf(R, -29)).title, /到校打卡成功/);
+  const off = checkin(env, 'B', northOf(R, -40)); // R 棟往南 40 公尺
   assert.match(off.title, /不在打卡點附近/);
-  assert.match(off.lines[0], /第一教學研究大樓（R 棟）」還有大約 40 公尺/);
-  assert.match(off.lines[1], /30 公尺內/);
+  assert.match(off.lines[0], /R 棟第一教學研究大樓」還有大約 40 公尺/);
+  assert.match(off.lines[1], /B 棟 40 公尺/);
+
+  // B 棟往北：39 公尺算、41 公尺不算（往北 70 公尺內沒有其他打卡點；往南會碰到圖書館）
+  assert.match(checkin(env, 'C', northOf(B, 39)).title, /到校打卡成功/);
+  assert.equal(rows(env, '打卡紀錄').pop()[2], 'B 棟綜合大樓');
+  assert.match(checkin(env, 'D', northOf(B, 41)).title, /不在打卡點附近/);
 });
 
 test('從錢穆故居站走到 R 棟打卡，一樣算步行', () => {

@@ -40,20 +40,28 @@ const PT = {
 
 const PT_START = '錢穆故居站';
 const PT_CAMPUS = '校內 557 站';
-// 校內打卡點：離其中任何一個 PT.CAMPUS_M 公尺內都算到校，記錄寫最近的那個點。
-// R 棟、圖書館是 OpenStreetMap 建築輪廓的中心（2026-11-26 查），還沒有現場實測，要帶手機到現場核對。
-// 校門口還沒有座標，要現場量了再加。
+// 校內打卡點：[緯度, 經度, 範圍公尺（沒寫就用 PT.CAMPUS_M）]。在任何一個點的範圍內都算到校，記錄寫最近的那個點。
+// 大樓座標是 OpenStreetMap 建築輪廓的中心（2026-11-26 查）。D 棟跟 Google 地圖比對差約 24 公尺，其他棟還沒現場核對。
 const PT_CAMPUS_POINTS = {
   [PT_CAMPUS]: [25.09457, 121.54575], // 跟定位測試.gs 的 GEO_POINTS 同一個點（TDX 站牌位置）；不直接引用，因為 Apps Script 檔案載入順序不保證
-  '第一教學研究大樓（R 棟）': [25.09305, 121.54627],
-  '中正圖書館': [25.09345, 121.54645],
+  'A 棟寵惠堂': [25.09437, 121.54573],
+  'B 棟綜合大樓': [25.09401, 121.54650, 40], // 校內最大的一棟，範圍放大
+  'D 棟第二教研大樓': [25.09453, 121.54717],
+  'G 棟戴蓀堂': [25.09411, 121.54575],
+  'H 棟哲生樓': [25.09370, 121.54587],
+  'M 棟超庸館': [25.09404, 121.54463],
+  'N 棟中正圖書館': [25.09345, 121.54645],
+  'R 棟第一教學研究大樓': [25.09305, 121.54627],
 };
 
-/** 離哪一個校內打卡點最近：[名稱, 公尺] */
+/** 離哪一個校內打卡點最近（扣掉各點範圍後最近）：[名稱, 公尺, 範圍] */
 function ptNearestCampus_(here) {
   return Object.keys(PT_CAMPUS_POINTS)
-    .map(name => [name, ptMeters_(here, PT_CAMPUS_POINTS[name])])
-    .sort((a, b) => a[1] - b[1])[0];
+    .map(name => {
+      const p = PT_CAMPUS_POINTS[name];
+      return [name, ptMeters_(here, p), p[2] || PT.CAMPUS_M];
+    })
+    .sort((a, b) => (a[1] - a[2]) - (b[1] - b[2]))[0];
 }
 const PT_COUPON_HEAD = ['時間', '使用者 ID', '券號', '面額', '狀態', '到期日'];
 const PT_LOG_HEAD = ['時間', '使用者 ID', '方式', '積分', '少排放（公克）', '備註'];
@@ -476,13 +484,13 @@ function ptCheckinAt_(uid, fixes) {
     return { ok: false, title: '定位不夠準', lines: ['誤差約 ' + Math.round(accuracy) + ' 公尺。走到室外、打開 GPS 再試一次。'] };
   }
   const dStart = ptMeters_(here, GEO_POINTS[PT_START]);
-  const [campusSpot, dCampus] = ptNearestCampus_(here);
+  const [campusSpot, dCampus, campusRange] = ptNearestCampus_(here);
 
   if (dStart <= PT.NEAR_M) {
     record(PT_START, dStart, '起點', '');
     return { ok: true, title: '錢穆故居站打卡成功', lines: ['開始計時！同一天 ' + PT.WALK_MIN_MIN + '～' + PT.WALK_MAX_MIN + ' 分鐘內走進學校再打一次卡，就有 ' + PT.WALK + ' 點。'] };
   }
-  if (dCampus <= PT.CAMPUS_M) return ptArrive_(uid, sheet, now, dCampus, record, campusSpot);
+  if (dCampus <= campusRange) return ptArrive_(uid, sheet, now, dCampus, record, campusSpot);
   if (dCampus >= PT.DEPART_MIN_M) {
     record('出門', dCampus, '出門', '');
     const need = dCampus / 1000 * PT.DEPART_MIN_PER_KM;
@@ -491,7 +499,7 @@ function ptCheckinAt_(uid, fixes) {
   const nearer = dStart < dCampus ? [PT_START, dStart] : [campusSpot, dCampus];
   record('', nearer[1], '不在打卡點', '離' + nearer[0] + '還有大約 ' + Math.round(nearer[1]) + ' 公尺');
   return { ok: false, title: '不在打卡點附近', lines: ['離最近的打卡點「' + nearer[0] + '」還有大約 ' + Math.round(nearer[1]) + ' 公尺。',
-    '打卡點：錢穆故居站，校內的' + Object.keys(PT_CAMPUS_POINTS).join('、') + '（' + PT.CAMPUS_M + ' 公尺內）。離學校 ' + PT.DEPART_MIN_M + ' 公尺以外可以打出門卡。'] };
+    '打卡點：錢穆故居站，校內 557 站和 A、B、D、G、H、M、N、R 棟（' + PT.CAMPUS_M + ' 公尺內，B 棟 40 公尺）。離學校 ' + PT.DEPART_MIN_M + ' 公尺以外可以打出門卡。'] };
 }
 
 /** 人在校內：步行（同一天 6～20 分鐘）和早到（當天先有出門卡、間隔夠久）分開判斷。
