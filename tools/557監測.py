@@ -126,6 +126,10 @@ R_NAMES = {R_QIAN: "東吳大學(錢穆故居)", "171165": "梅林新村", "1711
            "171172": "士林區行政中心", "199583": "士林高商", "199584": "國立科教館", "199585": "天文科學館"}
 R_SHORT = {R_QIAN: "錢穆故居", "171165": "梅林", "171166": "雙溪", "171167": "泰北", "171168": "官邸",
            "171169": "福林", R_MRT: "士林站"}
+# 錢穆故居和梅林新村都沒記到（GPS 漏站）時，用後面哪一站往回推「參考」：
+# 錢穆故居→這一站的分鐘數（11/24–11/26 約 170 趟：中位數, 10%, 90%）
+R_FROM_QIAN = {"171166": (0.9, 0.6, 1.2), "171167": (3.2, 2.1, 4.6),
+               "171168": (4.8, 3.2, 6.1), "171169": (5.1, 3.5, 6.5)}
 # 回程只記一個人數：離開東吳時車上幾人（＝校內和錢穆故居都上完車、離開錢穆故居時的人數）
 R_CROWD_POINTS = [("東吳人數", "離開東吳")]
 R_TIME_COLS = ["到東吳大學(開始停靠)"] + [R_SHORT[x] + "到站" for x in R_BEFORE_MRT + [R_MRT]]
@@ -502,12 +506,21 @@ def build_returns(events, crowds, incomplete=None):
             elif t["東吳"] and first in R_BEFORE_MRT[:2]:
                 t["參考"] = t["時間"][first]
                 t["備註"].append(f"錢穆故居沒抓到，排序和間隔用{R_NAMES[first]}的時間代替（晚約半分鐘）")
+            elif t["東吳"] and first in R_FROM_QIAN:
+                # 有開進東吳、但錢穆故居和梅林新村都沒記到（GPS 漏站）：用後面那一站的時間往回推
+                mid, lo, hi = R_FROM_QIAN[first]
+                t["參考"] = t["時間"][first] - timedelta(minutes=mid)
+                t["推算"] = True
+                t["備註"].append(f"錢穆故居、梅林新村沒抓到，用{R_NAMES[first]}的時間減 {mid} 分推算"
+                                f"（三天的錢穆故居→{R_NAMES[first]}中位數，八成在 {lo}–{hi} 分）")
             else:
                 if incomplete is not None:
                     last = g["events"][-1]
                     t["最後紀錄"] = (when(last), STOP_NAMES.get(last["站牌ID"], last["站牌ID"]))
                     t["沒列原因"] = (f"回程：這台車第一次出現時已經離開東吳（監測剛開始、或 GPS 剛開；第一筆是{R_NAMES.get(first, first)}）"
                                      if g["events"][0] is evs[0] else
+                                     f"回程：有開進東吳，但到{R_NAMES.get(first, first)}以前都沒記到（GPS 沒回報），推不回離開時間"
+                                     if t["東吳"] else
                                      f"回程：東吳、錢穆故居都沒抓到（GPS 沒回報，第一筆是{R_NAMES.get(first, first)}）")
                     incomplete.append(t)
                 continue
@@ -530,6 +543,14 @@ def build_returns(events, crowds, incomplete=None):
             if t["東吳人數"] is None and came:
                 t["東吳人數"] = came
                 t["備註"].append("離開東吳人數用開進錢穆故居時的（沒算到在錢穆故居上車的人）")
+            if t["東吳人數"] is None and t["東吳"]:
+                # 錢穆故居、梅林新村都沒人數：用離開東吳後、到士林站以前第一筆回報（這幾站很少人上下車）
+                stop_by = t["時間"].get(R_MRT) or t["參考"] + timedelta(minutes=15)
+                early = sorted((c for c in mine if c["站牌ID"] in R_BEFORE_MRT[1:] and t["參考"] - A3_WINDOW <= crowd_time(c) < stop_by),
+                               key=crowd_time)
+                if early:
+                    t["東吳人數"] = early[0]
+                    t["備註"].append(f"離開東吳人數用{R_NAMES[early[0]['站牌ID']]}的回報（中間很少人上下車）")
             if t["東吳人數"] is None:
                 t["備註"].append("沒有人數：離開東吳")
             # 開進東吳時的人數＝去程乘客還沒下車時（之後大多會刷卡下車，跟離開東吳的人數不能直接相減）

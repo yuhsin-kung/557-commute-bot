@@ -284,11 +284,28 @@ class ReturnTest(unittest.TestCase):
         self.assertTrue(incomplete[0]["沒列原因"].startswith("回程：這台車第一次出現時已經離開東吳"))
 
     def test_return_gps_gap_reason(self):
-        """監測早就在跑、只是東吳和錢穆故居沒抓到：原因要寫 GPS 沒回報，不能寫監測開始時（2026/11/25 有 4 筆寫錯）"""
-        events, crowds = run([snapshot(b) for b in TRIP[:-1] + RETURN[9:]])
+        """監測早就在跑、只是 GPS 沒回報：原因要寫 GPS 沒回報，不能寫監測開始時（2026/11/25 有 4 筆寫錯）。
+        第一筆已經在士林站，離開東吳的時間推不回來，照樣不列；有開進東吳就照實寫
+        （第一筆在福林國小以前的，現在會往回推算，見 test_gps_skipped_qian_and_meilin）"""
+        events, crowds = run([snapshot(b) for b in TRIP[:-1] + RETURN[10:]])
         incomplete = []
         self.assertEqual(m.build_returns(events, crowds, incomplete), [])
-        self.assertTrue(incomplete[0]["沒列原因"].startswith("回程：東吳、錢穆故居都沒抓到（GPS 沒回報"))
+        self.assertTrue(incomplete[0]["沒列原因"].startswith("回程：有開進東吳，但到捷運士林站以前都沒記到（GPS 沒回報"))
+
+    def test_gps_skipped_qian_and_meilin(self):
+        """有開進東吳，但 GPS 漏掉錢穆故居和梅林新村、第一筆在泰北中學：用泰北的時間減 3.2 分推算，不要整班漏掉
+        （2026/11/26 12:37 EAA-066 第一筆在雙溪公園，原本沒列，回程看起來 30 分鐘沒車）"""
+        taibei = a3("1", "171167", 62, 3, "261125081510")
+        skipped = [(b[0], b[1], b[2], taibei if ",171164," in b[3] else b[3]) for b in RETURN[6:]]
+        events, crowds = run([snapshot(b) for b in TRIP[:-1] + RETURN[:2] + skipped])
+        incomplete = []
+        [t] = m.build_returns(events, crowds, incomplete)
+        self.assertEqual(incomplete, [])
+        self.assertEqual(t["參考"], datetime(2026, 11, 25, 8, 11, 48), "08:15:00 − 3.2 分")
+        self.assertTrue(t["推算"])
+        self.assertEqual(t["東吳人數"]["車上人數"], "62")
+        self.assertTrue(any("用泰北中學的時間減 3.2 分推算" in x for x in t["備註"]))
+        self.assertTrue(any(x.startswith("離開東吳人數用泰北中學的回報") for x in t["備註"]))
 
     def test_dongwu_count_fallbacks(self):
         """離開錢穆故居沒回報：先用開進梅林新村時；再沒有用開進錢穆故居時，都註記"""
