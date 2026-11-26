@@ -115,7 +115,7 @@ test('步行起點和到校要同一天，跨過午夜不算', () => {
   assert.equal(user(env, 'A').points, 0);
 });
 
-test('步行一天只算一次', () => {
+test('進校步行一天只算一次；進校後馬上走出去不給出校點', () => {
   const env = start();
   for (let i = 0; i < 2; i++) {
     checkin(env, 'A', QIANMU);
@@ -124,6 +124,52 @@ test('步行一天只算一次', () => {
     env.addMinutes(10);
   }
   assert.equal(user(env, 'A').points, 1);
+  const out = rows(env, '打卡紀錄').filter(r => r[2] === '錢穆故居站').pop();
+  assert.match(String(out[6]), /進校後不到 50 分/);
+});
+
+test('出校步行：校內打卡後 6～20 分鐘到錢穆故居站 +1 點，一天一次', () => {
+  const env = start();
+  const inSchool = checkin(env, 'A', R);
+  assert.match(inSchool.lines.join('\n'), /等一下要走出學校的話：6～20 分鐘內在錢穆故居站再打一次/);
+  env.addMinutes(12);
+  const out = checkin(env, 'A', QIANMU);
+  assert.equal(out.title, '出校步行完成');
+  assert.match(out.lines.join('\n'), /從學校走出來 12 分鐘，出校步行 \+1 點/);
+  assert.equal(user(env, 'A').points, 1);
+  assert.equal(rows(env, '通勤紀錄').pop()[2], '步行出校');
+
+  env.addMinutes(30);
+  const again = checkin(env, 'A', R);
+  assert.doesNotMatch(again.lines.join('\n'), /走出學校/, '今天出校拿過了就不再提示');
+  env.addMinutes(10);
+  checkin(env, 'A', QIANMU);
+  assert.equal(user(env, 'A').points, 1);
+});
+
+test('出校步行：少於 6 分鐘、超過 20 分鐘都不算', () => {
+  const env = start();
+  checkin(env, 'A', CAMPUS);
+  env.addMinutes(3);
+  assert.match(checkin(env, 'A', QIANMU).lines.join('\n'), /才 3 分鐘/);
+  env.addMinutes(2);
+  checkin(env, 'B', CAMPUS);
+  env.addMinutes(25);
+  assert.match(checkin(env, 'B', QIANMU).lines.join('\n'), /已經 25 分鐘，超過 20 分鐘/);
+  assert.equal(user(env, 'A').points + user(env, 'B').points, 0);
+});
+
+test('早上走進來、在學校待滿一節課後走出去：進校、出校各 1 點', () => {
+  const env = start();
+  checkin(env, 'A', QIANMU);
+  env.addMinutes(10);
+  checkin(env, 'A', CAMPUS); // 進校 +1
+  env.addMinutes(60);
+  checkin(env, 'A', R);
+  env.addMinutes(10);
+  assert.equal(checkin(env, 'A', QIANMU).title, '出校步行完成');
+  assert.equal(user(env, 'A').points, 2);
+  assert.match(say(env, 'A', '我的紀錄').contents ? JSON.stringify(say(env, 'A', '我的紀錄')) : String(say(env, 'A', '我的紀錄')), /步行 2 次/);
 });
 
 test('7:30 前到校、而且今天先有出門卡，早到 +1 點，一天一次；7:30 以後沒有；不再發早餐券', () => {
@@ -178,14 +224,21 @@ test('A、B、D、G、H、M、N、R 棟和 557 站都是校內打卡點，記錄
   });
 });
 
-test('到校打卡沒拿到點：第一行寫打卡地點，再一步一步說怎麼拿點', () => {
+test('在校內打卡沒拿到點：寫打卡地點，下一步是走出去，不叫他回錢穆故居站', () => {
   const env = start();
   const res = checkin(env, 'A', R);
   assert.equal(res.lines[0], '📍 R 棟第一教學研究大樓');
-  assert.match(res.lines[1], /這次沒有拿到點數/);
-  assert.match(res.lines[2], /^🚶 步行（1 點）：先在錢穆故居站打卡/);
-  assert.match(res.lines[3], /^🌅 早到（1 點）：出門時/);
+  assert.match(res.lines[1], /^等一下要走出學校的話/);
+  assert.doesNotMatch(res.lines.join('\n'), /先在錢穆故居站打卡/);
   assert.match(res.lines.at(-1), /目前積分：0 點/);
+});
+
+test('在錢穆故居站打卡：寫地點，下一步是走進學校', () => {
+  const env = start();
+  const res = checkin(env, 'A', QIANMU);
+  assert.equal(res.title, '錢穆故居站打卡成功');
+  assert.equal(res.lines[0], '📍 錢穆故居站');
+  assert.match(res.lines[1], /^要進學校的話：6～20 分鐘內在校內打卡點再打一次/);
 });
 
 test('一般棟 30 公尺內才算，B 棟 40 公尺內才算', () => {

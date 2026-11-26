@@ -4,8 +4,10 @@
  *
  * 打卡不用 QR code（會被拍照外流），改用手機定位：
  *   在 LINE 傳「打卡」→ 打開打卡頁（一次性代碼，10 分鐘、用過即失效）→ 手機間隔約 3 秒回報兩次位置 → 伺服器用第二次定位算距離。
- *   - 在錢穆故居站打卡：開始計時
- *   - 同一天、6～20 分鐘內走到校內再打一次：步行完成，加分、記減碳量
+ *   - 進校：錢穆故居站打卡 → 同一天 6～20 分鐘內在校內打卡點再打一次：步行 +1
+ *   - 出校：校內打卡點打卡 → 6～20 分鐘內在錢穆故居站再打一次：步行出校 +1（放學分流）。
+ *     兩個方向一天各一次；當天拿過進校點的，要在學校待滿 50 分鐘才算出校
+ *   - 打卡結果依人在哪裡告訴他下一步（在校內就說「走出去再打」，在錢穆故居站就說「走進來再打」）
  *   - 離校 500 公尺以外可打出門卡（只記距離）；7:30 前在校內打卡，而且當天已有出門卡、間隔夠久：早到 1 點（一天一次，不分交通方式）
  * 只記打卡點名稱、距離和誤差，不記經緯度。拒收時多記原因。
  *
@@ -23,6 +25,7 @@ const PT = {
   COUPON_DAYS: 30,      // 兌換後幾天內要用
   WALK_MIN_MIN: 6,       // 起點到校至少要隔這麼久才算步行
   WALK_MAX_MIN: 20,      // 起點打卡後幾分鐘內到校才算步行（要同一天）
+  STAY_MIN_MIN: 50,      // 今天拿過進校步行點，要在學校待這麼久（一節課）才能拿出校步行點，避免進校馬上走出去刷點
   EARLY_BEFORE: '07:30',
   NEAR_M: 50,           // 離錢穆故居站多近算「在站牌」
   CAMPUS_M: 30,         // 離任何一個校內打卡點（PT_CAMPUS_POINTS）多近算「在學校」
@@ -40,6 +43,7 @@ const PT = {
 
 const PT_START = '錢穆故居站';
 const PT_CAMPUS = '校內 557 站';
+const PT_WALK_OUT = '步行出校'; // 通勤紀錄的方式：校內 → 錢穆故居站。進校叫「步行」（舊紀錄沿用），兩個方向一天各一次
 // 校內打卡點：[緯度, 經度, 範圍公尺（沒寫就用 PT.CAMPUS_M）]。在任何一個點的範圍內都算到校，記錄寫最近的那個點。
 // 大樓座標是 OpenStreetMap 建築輪廓的中心（2026-11-26 查）。D 棟跟 Google 地圖比對差約 24 公尺，其他棟還沒現場核對。
 const PT_CAMPUS_POINTS = {
@@ -70,7 +74,7 @@ const PT_CHECKIN_HEAD = ['時間', '使用者 ID', '打卡點', '距離（公尺
 /** 成就：[名稱, 條件說明, 判斷] */
 const PT_BADGES = [
   ['新生上路', '新生測驗全對', s => s.測驗 >= 1],
-  ['走路達人', '從錢穆故居站走進學校 5 次', s => s.步行 >= 5],
+  ['走路達人', '在錢穆故居站和學校之間步行 5 次（進校、出校都算）', s => s.步行 >= 5],
   ['早鳥', '7:30 前到校 3 次', s => s.早到 >= 3],
   ['共乘夥伴', '完成 1 次計程車共乘', s => s.共乘 >= 1],
   ['減碳一公斤', '累積少排放 1 公斤 CO₂', s => s.減碳 >= 1000],
@@ -92,7 +96,8 @@ function ptStats_(uid) {
   const s = { 步行: 0, 騎車: 0, 早到: 0, 測驗: 0, 共乘: 0, 減碳: 0 };
   cpSheet_('通勤紀錄', PT_LOG_HEAD).getDataRange().getValues().slice(1).forEach(r => {
     if (r[1] !== uid) return;
-    if (r[2] in s) s[r[2]] += 1;
+    if (r[2] === PT_WALK_OUT) s.步行 += 1; // 出校也算步行
+    else if (r[2] in s) s[r[2]] += 1;
     s.減碳 += Number(r[4]) || 0;
   });
   // 共乘的紀錄在共乘.gs 自己的分頁，「上車」和「獨行」都算完成一次
@@ -321,7 +326,7 @@ function ptSchool_() {
     title: '大家一起少排放了 ' + (total / 1000).toFixed(2) + ' 公斤 CO₂',
     rows: [
       { label: '參與人數', value: people + ' 人', best: true },
-      { label: '步行到校', value: count('步行') + ' 次' },
+      { label: '步行（進校＋出校）', value: (count('步行') + count(PT_WALK_OUT)) + ' 次' },
       { label: '騎車到校', value: count('騎車') + ' 次' },
     ],
     footer: '少搭的公車距離 × 市區公車每人每公里 ' + PT.BUS_G_PER_KM + ' 公克 CO₂e（環境部產品碳足跡資訊網）',
@@ -486,10 +491,7 @@ function ptCheckinAt_(uid, fixes) {
   const dStart = ptMeters_(here, GEO_POINTS[PT_START]);
   const [campusSpot, dCampus, campusRange] = ptNearestCampus_(here);
 
-  if (dStart <= PT.NEAR_M) {
-    record(PT_START, dStart, '起點', '');
-    return { ok: true, title: '錢穆故居站打卡成功', lines: ['開始計時！同一天 ' + PT.WALK_MIN_MIN + '～' + PT.WALK_MAX_MIN + ' 分鐘內走進學校再打一次卡，就有 ' + PT.WALK + ' 點。'] };
-  }
+  if (dStart <= PT.NEAR_M) return ptAtStart_(uid, sheet, now, dStart, record);
   if (dCampus <= campusRange) return ptArrive_(uid, sheet, now, dCampus, record, campusSpot);
   if (dCampus >= PT.DEPART_MIN_M) {
     record('出門', dCampus, '出門', '');
@@ -500,6 +502,54 @@ function ptCheckinAt_(uid, fixes) {
   record('', nearer[1], '不在打卡點', '離' + nearer[0] + '還有大約 ' + Math.round(nearer[1]) + ' 公尺');
   return { ok: false, title: '不在打卡點附近', lines: ['離最近的打卡點「' + nearer[0] + '」還有大約 ' + Math.round(nearer[1]) + ' 公尺。',
     '打卡點：錢穆故居站，校內 557 站和 A、B、D、G、H、M、N、R 棟（' + PT.CAMPUS_M + ' 公尺內，B 棟 40 公尺）。離學校 ' + PT.DEPART_MIN_M + ' 公尺以外可以打出門卡。'] };
+}
+
+/** 人在錢穆故居站：
+ *  - 今天 6～20 分鐘前在校內打過卡 → 出校步行完成（放學走到校外搭車，分散校內 557 站的人潮）
+ *  - 不管有沒有完成出校，這次打卡也是「進校步行」的起點 */
+function ptAtStart_(uid, sheet, now, dStart, record) {
+  const lines = ['📍 ' + PT_START];
+  const reasons = [];
+  let fresh = [];
+  let added = false;
+  const today = ptDay_(now);
+  if (!ptDoneToday_(uid, PT_WALK_OUT)) {
+    const left = sheet.getDataRange().getValues().slice(1)
+      .filter(r => r[1] === uid && PT_CAMPUS_POINTS[r[2]] && ptDay_(r[0]) === today && new Date(r[0]) <= now).pop();
+    const elapsedMin = left ? (now - new Date(left[0])) / 60000 : Infinity;
+    if (elapsedMin < PT.WALK_MIN_MIN) {
+      reasons.push('出校少於 ' + PT.WALK_MIN_MIN + ' 分');
+      lines.push('🚶 離開校內打卡才 ' + Math.max(1, Math.round(elapsedMin)) + ' 分鐘，出校步行要 ' + PT.WALK_MIN_MIN + '～' + PT.WALK_MAX_MIN + ' 分鐘，這次沒有步行點。');
+    } else if (elapsedMin <= PT.WALK_MAX_MIN && ptMinSinceWalkIn_(uid, now) < PT.STAY_MIN_MIN) {
+      reasons.push('進校後不到 ' + PT.STAY_MIN_MIN + ' 分');
+      lines.push('🚶 今天拿過進校步行點，要在學校待滿 ' + PT.STAY_MIN_MIN + ' 分鐘（一節課）以後走出來，才有出校步行點。');
+    } else if (elapsedMin <= PT.WALK_MAX_MIN) {
+      const minutes = Math.round(elapsedMin);
+      const co2 = PT.WALK_KM * PT.BUS_G_PER_KM;
+      fresh = ptAdd_(uid, PT_WALK_OUT, PT.WALK, co2, minutes + ' 分鐘');
+      added = true;
+      lines.push('🚶 從學校走出來 ' + minutes + ' 分鐘，出校步行 +' + PT.WALK + ' 點');
+      lines.push('少排放 ' + Math.round(co2) + ' 公克 CO₂');
+    } else if (elapsedMin <= 60) {
+      reasons.push('出校超過 ' + PT.WALK_MAX_MIN + ' 分');
+      lines.push('🚶 離開校內打卡已經 ' + Math.round(elapsedMin) + ' 分鐘，超過 ' + PT.WALK_MAX_MIN + ' 分鐘，這次沒有出校步行點。');
+    }
+  }
+  if (!ptDoneToday_(uid, '步行') && !ptDoneToday_(uid, '騎車')) {
+    lines.push('要進學校的話：' + PT.WALK_MIN_MIN + '～' + PT.WALK_MAX_MIN + ' 分鐘內在校內打卡點再打一次，就完成進校步行（' + PT.WALK + ' 點）。');
+  }
+  if (fresh.length) lines.push('🏅 解鎖成就：' + fresh.join('、'));
+  record(PT_START, dStart, added ? '加分' : '起點', reasons.join('；'));
+  if (added) lines.push('目前積分：' + cpUser_(uid).points + ' 點（' + PT.COUPON_POINTS + ' 點換 ' + PT.COUPON_VALUE + ' 元學餐折價券）');
+  return { ok: true, title: added ? '出校步行完成' : '錢穆故居站打卡成功', lines: lines };
+}
+
+/** 今天拿到進校步行點到現在幾分鐘；今天沒拿過就是 Infinity */
+function ptMinSinceWalkIn_(uid, now) {
+  const today = ptDay_(now);
+  const last = cpSheet_('通勤紀錄', PT_LOG_HEAD).getDataRange().getValues().slice(1)
+    .filter(r => r[1] === uid && r[2] === '步行' && ptDay_(r[0]) === today).pop();
+  return last ? (now - new Date(last[0])) / 60000 : Infinity;
 }
 
 /** 人在校內：步行（同一天 6～20 分鐘）和早到（當天先有出門卡、間隔夠久）分開判斷。
@@ -554,11 +604,9 @@ function ptArrive_(uid, sheet, now, dCampus, record, campusSpot) {
       }
     }
   }
-  if (!added) {
-    // 沒拿到點：一步一步說怎麼拿，不要一大段
-    lines.push('這次沒有拿到點數。拿點數的方法：');
-    lines.push('🚶 步行（' + PT.WALK + ' 點）：先在錢穆故居站打卡，' + PT.WALK_MIN_MIN + '～' + PT.WALK_MAX_MIN + ' 分鐘內走到校內任一打卡點再打一次。');
-    lines.push('🌅 早到（' + PT.EARLY + ' 點）：出門時（離學校 ' + PT.DEPART_MIN_M + ' 公尺外）先打一次出門卡，' + PT.EARLY_BEFORE + ' 前到校再打一次。');
+  // 人已經在學校：下一步是走出去，不是叫他回錢穆故居站重來
+  if (!added && !ptDoneToday_(uid, PT_WALK_OUT)) {
+    lines.push('等一下要走出學校的話：' + PT.WALK_MIN_MIN + '～' + PT.WALK_MAX_MIN + ' 分鐘內在錢穆故居站再打一次，就完成出校步行（' + PT.WALK + ' 點）。');
   }
   if (fresh.length) lines.push('🏅 解鎖成就：' + fresh.join('、'));
   const spot = campusSpot || PT_CAMPUS;
