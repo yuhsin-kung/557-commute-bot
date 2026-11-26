@@ -28,9 +28,9 @@ function ybReply_() {
       .concat(mrt.length ? mrt.map(row) : none)
       .concat([{ label: '📍 東吳還車', best: true }])
       .concat(campus.length ? campus.map(row) : none),
-    notes: ['士林站到東吳約 3.5 公里，有一段上坡，電輔車比較輕鬆。還車後按「騎車到校」傳騎乘紀錄截圖，可以拿 1 點。'],
+    notes: ['士林站到東吳約 3.5 公里，有一段上坡，電輔車比較輕鬆。還車後按「騎車到校」或「騎車回士林」傳騎乘紀錄截圖，可以拿 1 點。'],
     footer: '臺北市 YouBike 開放資料・' + nowText_(),
-    buttons: [{ label: '騎車到校', text: '騎車到校' }],
+    buttons: [{ label: '騎車到校', text: '騎車到校' }, { label: '騎車回士林', text: '騎車回士林' }],
   });
 }
 

@@ -83,7 +83,8 @@ function handleEvent_(ev) {
 function memberReply_(uid, text) {
   if (/^(打卡|步行積分)$/.test(text)) return ptCheckinButton_(uid, ''); // 積分.gs：四種卡都列
   if (text === '到校打卡') return ptCheckinButton_(uid, '到校'); // 走路進學校、早到、騎車到校
-  if (text === '出校打卡') return ptCheckinButton_(uid, '出校');
+  if (text === '出校打卡') return ptCheckinButton_(uid, '離校'); // 走路出學校、騎車回士林
+  if (text === '騎車回士林') return ptBikeOut_(uid);
   const checkinMode = text.match(/^打卡\s*(進校|出校|早到)$/);
   if (checkinMode) return ptCheckinButton_(uid, checkinMode[1]);
   if (/^(我的紀錄|我的積分|積分|成就|碳足跡)$/.test(text)) return ptMine_(uid);

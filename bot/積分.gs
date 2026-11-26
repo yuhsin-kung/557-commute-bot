@@ -98,6 +98,7 @@ function ptStats_(uid) {
   cpSheet_('通勤紀錄', PT_LOG_HEAD).getDataRange().getValues().slice(1).forEach(r => {
     if (r[1] !== uid) return;
     if (r[2] === PT_WALK_OUT) s.步行 += 1; // 出校也算步行
+    else if (r[2] === PT_BIKE_OUT) s.騎車 += 1; // 騎車回士林也算騎車
     else if (r[2] in s) s[r[2]] += 1;
     s.減碳 += Number(r[4]) || 0;
   });
@@ -162,12 +163,17 @@ function ptCheckinButton_(uid, mode) {
   if (!m) {
     const bike = ['🚲 騎車到校', '騎車到校'];
     const pick = k => [PT_MODES[k].name, PT_MODES[k].text];
+    const bikeOut = ['🚲 騎車回士林', '騎車回士林'];
     if (mode === '到校') {
       return choices_('怎麼來學校的？每種一天 1 點。', [pick('進校'), pick('早到'), bike], // 卡片.gs
         { title: '到校打卡', badge: '積分', primary: false });
     }
+    if (mode === '離校') {
+      return choices_('怎麼離開學校？走路或騎車一天算一種，1 點。', [pick('出校'), bikeOut],
+        { title: '出校打卡', badge: '積分', primary: false });
+    }
     return choices_('要打哪一種卡？每種一天 1 點，集滿 ' + PT.COUPON_POINTS + ' 點換 ' + PT.COUPON_VALUE + ' 元學餐折價券。',
-      Object.keys(PT_MODES).map(pick).concat([bike]),
+      [pick('進校'), pick('早到'), bike, pick('出校'), bikeOut],
       { title: '打卡', badge: '積分', primary: false });
   }
   const code = Utilities.getUuid();
@@ -367,7 +373,7 @@ function ptSchool_() {
     rows: [
       { label: '參與人數', value: people + ' 人', best: true },
       { label: '步行（進校＋出校）', value: (count('步行') + count(PT_WALK_OUT)) + ' 次' },
-      { label: '騎車到校', value: count('騎車') + ' 次' },
+      { label: '騎車（到校＋回士林）', value: (count('騎車') + count(PT_BIKE_OUT)) + ' 次' },
     ],
     footer: '少搭的公車距離 × 市區公車每人每公里 ' + PT.BUS_G_PER_KM + ' 公克 CO₂e（環境部產品碳足跡資訊網）',
     buttons: board ? [{ label: '看完整看板', uri: board }] : [],
@@ -381,6 +387,10 @@ function ptSchool_() {
  */
 const PT_BIKE_WAIT_MIN = 10;
 const PT_BIKE_STATIONS = ['東吳大學', '至善臨溪路口', '國立故宮博物院', '梅林新村']; // 校內 557 站 700 公尺內的正式站名
+// 捷運士林站 400 公尺內的正式站名（跟 YouBike.gs 的 YB_NEAR_MRT_M 同一個距離；2026-11-26 從臺北市 YouBike 2.0 開放資料查）
+const PT_BIKE_MRT_STATIONS = ['中山中正路口', '福林公園', '捷運士林站(1號出口)', '捷運士林站(2號出口)',
+  '中山北路五段698巷口', '中山北路五段505巷口', '志成中正路口', '捷運線型公園(後街)'];
+const PT_BIKE_OUT = '騎車出校'; // 通勤紀錄的方式：學校借車、士林站附近還車。進校叫「騎車」
 
 /** 去掉截圖站名前的 YouBike2.0_ 與空白，再跟清單完全比對 */
 function ptBikeStop_(name) {
@@ -395,10 +405,31 @@ function ptBikeWhen_(ride) {
   return isNaN(stamp.getTime()) ? null : stamp;
 }
 
+/** 今天出校拿過點了沒（走路、騎車一天只算一種） */
+function ptLeftToday_(uid) {
+  return ptDoneToday_(uid, PT_WALK_OUT) || ptDoneToday_(uid, PT_BIKE_OUT);
+}
+
+/** 「騎車回士林」：學校借 YouBike，騎到士林站附近還車，傳騎乘紀錄截圖 */
+function ptBikeOut_(uid) {
+  if (ptLeftToday_(uid)) return '今天已經記過出校了（走路或騎車一天算一種），明天繼續 🚲';
+  CacheService.getScriptCache().put('bike_wait_' + uid, '回士林', PT_BIKE_WAIT_MIN * 60);
+  return card_({ // 卡片.gs
+    badge: '出校打卡',
+    title: '騎車回士林',
+    rows: [
+      { label: '1', value: '在學校附近的站借 YouBike（東吳大學、至善臨溪路口、故宮、梅林新村）' },
+      { label: '2', value: '騎到捷運士林站附近的站還車' },
+      { label: '3', value: '打開 YouBike App，截圖這次的騎乘紀錄，直接傳給我' },
+    ],
+    notes: ['我會確認是今天、從學校附近借、在士林站附近還，就加 ' + PT.BIKE + ' 點。' + PT_BIKE_WAIT_MIN + ' 分鐘內傳就可以。'],
+  });
+}
+
 function ptBike_(uid) {
   if (ptDoneToday_(uid, '騎車')) return '今天已經記過騎車到校了，明天繼續 🚲';
   if (ptDoneToday_(uid, '步行')) return '今天已經記過步行到校了，一天記一種方式就好 🙂';
-  CacheService.getScriptCache().put('bike_wait_' + uid, '1', PT_BIKE_WAIT_MIN * 60);
+  CacheService.getScriptCache().put('bike_wait_' + uid, '到校', PT_BIKE_WAIT_MIN * 60);
   return card_({ // 卡片.gs
     badge: '積分與打卡',
     title: '騎車到校',
@@ -414,13 +445,18 @@ function ptBike_(uid) {
 /** 收到照片：有在等騎車截圖才處理，不然回傳 null */
 function ptBikePhoto_(uid, messageId) {
   const cache = CacheService.getScriptCache();
-  if (!cache.get('bike_wait_' + uid)) return null;
+  const waiting = cache.get('bike_wait_' + uid);
+  if (!waiting) return null;
+  const out = waiting === '回士林'; // 舊的等待標記是 '1'，當作到校
   const ride = ptReadRide_(messageId);
   if (ride === null) return '🚲 暫時沒辦法辨識截圖，請過一分鐘再傳一次。';
   if (!ride) return '🚲 看不出這是 YouBike 的騎乘紀錄，請截圖 App 裡這次騎乘的紀錄再傳一次。';
   const today = Utilities.formatDate(cpNow_(), TZ, 'yyyy-MM-dd');
   if (ride.date !== today) return '🚲 這筆紀錄是 ' + ride.date + ' 的，要用今天的騎乘紀錄喔。';
-  if (PT_BIKE_STATIONS.indexOf(ptBikeStop_(ride.to)) < 0) return '🚲 還車站是「' + ride.to + '」，要在學校附近還車才算騎車到校。';
+  if (out) {
+    if (PT_BIKE_STATIONS.indexOf(ptBikeStop_(ride.from)) < 0) return '🚲 借車站是「' + ride.from + '」，要從學校附近借車才算騎車回士林。';
+    if (PT_BIKE_MRT_STATIONS.indexOf(ptBikeStop_(ride.to)) < 0) return '🚲 還車站是「' + ride.to + '」，要在捷運士林站附近還車才算騎車回士林。';
+  } else if (PT_BIKE_STATIONS.indexOf(ptBikeStop_(ride.to)) < 0) return '🚲 還車站是「' + ride.to + '」，要在學校附近還車才算騎車到校。';
   const returned = ptBikeWhen_(ride);
   if (!returned) return '🚲 看不出還車時間，請截圖有寫還車時間的紀錄再傳一次。';
   const lagMin = (cpNow_().getTime() - returned.getTime()) / 60000;
@@ -428,13 +464,17 @@ function ptBikePhoto_(uid, messageId) {
   if (lagMin > PT.BIKE_MAX_LAG_MIN) return '🚲 還車時間是 ' + ride.time + '，離現在超過 ' + PT.BIKE_MAX_LAG_MIN + ' 分鐘，請用剛還車的紀錄。';
   const key = [ride.date, ride.time, ride.from, ride.to].join('｜');
   return cpLocked_(() => { // 共乘.gs
-    if (ptDoneToday_(uid, '騎車')) { cache.remove('bike_wait_' + uid); return '今天已經記過騎車到校了，明天繼續 🚲'; }
-    const used = cpSheet_('通勤紀錄', PT_LOG_HEAD).getDataRange().getValues().slice(1).some(r => r[2] === '騎車' && r[5] === key);
+    if (out ? ptLeftToday_(uid) : ptDoneToday_(uid, '騎車')) {
+      cache.remove('bike_wait_' + uid);
+      return out ? '今天已經記過出校了，明天繼續 🚲' : '今天已經記過騎車到校了，明天繼續 🚲';
+    }
+    const used = cpSheet_('通勤紀錄', PT_LOG_HEAD).getDataRange().getValues().slice(1)
+      .some(r => (r[2] === '騎車' || r[2] === PT_BIKE_OUT) && r[5] === key);
     if (used) return '🚲 這筆騎乘紀錄已經用過了，一筆紀錄只能領一次。';
     cache.remove('bike_wait_' + uid);
     const co2 = PT.BIKE_KM * PT.BUS_G_PER_KM;
-    const fresh = ptAdd_(uid, '騎車', PT.BIKE, co2, key);
-    return '🚲 騎車到校 +' + PT.BIKE + ' 點\n' + ride.from + ' → ' + ride.to + '\n少排放 ' + Math.round(co2) + ' 公克 CO₂' + ptBadgeText_(fresh);
+    const fresh = ptAdd_(uid, out ? PT_BIKE_OUT : '騎車', PT.BIKE, co2, key);
+    return '🚲 ' + (out ? '騎車回士林' : '騎車到校') + ' +' + PT.BIKE + ' 點\n' + ride.from + ' → ' + ride.to + '\n少排放 ' + Math.round(co2) + ' 公克 CO₂' + ptBadgeText_(fresh);
   });
 }
 
@@ -649,13 +689,13 @@ function ptWalkInEnd_(at) {
 // ----- 走路出學校：校內 → 錢穆故居站（放學分流） -----
 
 function ptWalkOutStart_(at) {
-  if (ptDoneToday_(at.uid, PT_WALK_OUT)) return ptAlreadyDone_(at, at.campusSpot, at.dCampus, '今天已經拿過走路出學校的點了，明天再來 🙂');
+  if (ptLeftToday_(at.uid)) return ptAlreadyDone_(at, at.campusSpot, at.dCampus, '今天已經拿過出校的點了（走路或騎車一天算一種），明天再來 🙂');
   return ptFirstDone_(at, at.campusSpot, at.dCampus, '出校起點',
     ['現在走到錢穆故居站，' + PT.WALK_MIN_MIN + '～' + PT.WALK_MAX_MIN + ' 分鐘內再按一次「走路出學校」打第二次。']);
 }
 
 function ptWalkOutEnd_(at) {
-  if (ptDoneToday_(at.uid, PT_WALK_OUT)) return ptAlreadyDone_(at, PT_START, at.dStart, '今天已經拿過走路出學校的點了，明天再來 🙂');
+  if (ptLeftToday_(at.uid)) return ptAlreadyDone_(at, PT_START, at.dStart, '今天已經拿過出校的點了（走路或騎車一天算一種），明天再來 🙂');
   return ptWalkEnd_(at, PT_START, at.dStart, {
     startResults: ['出校起點'],
     noStart: '今天還沒在學校打第一次。走路出學校要先在校內打卡點打卡，再走出來。',

@@ -59,7 +59,7 @@ function buildReport_(day) {
     carpoolRiders: count(carpool, 5, '上車'),
     solo: count(carpool, 5, '獨行'),
     walk: count(trips, 2, '步行') + count(trips, 2, '步行出校'),
-    bike: count(trips, 2, '騎車'),
+    bike: count(trips, 2, '騎車') + count(trips, 2, '騎車出校'),
     early: count(trips, 2, '早到'),
     newSubs: subs.length,
     co2: trips.reduce((sum, r) => sum + (Number(r[4]) || 0), 0),
@@ -86,7 +86,7 @@ function reportItems_(r) {
     ['使用 Bot 的同學', r.users + ' 人'], ['訊息', r.messages + ' 則'], ['比較路線', r.compares + ' 次'],
     ['最多人問的上課時間', r.topTime || '—'],
     ['共乘', r.carpoolRiders + ' 人次（' + r.carpoolGroups + ' 團）'], ['一個人也出發（獨行）', r.solo + ' 次'],
-    ['步行（錢穆故居站 ↔ 校內）', r.walk + ' 次'], ['騎 YouBike', r.bike + ' 次'], ['7:30 前到校', r.early + ' 次'],
+    ['步行（錢穆故居站 ↔ 校內）', r.walk + ' 次'], ['騎 YouBike（到校＋回士林）', r.bike + ' 次'], ['7:30 前到校', r.early + ' 次'],
     ['新訂閱提醒', r.newSubs + ' 人'], ['少排放', (r.co2 / 1000).toFixed(2) + ' 公斤 CO₂'],
   ];
 }

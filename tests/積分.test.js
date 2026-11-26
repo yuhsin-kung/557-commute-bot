@@ -53,11 +53,10 @@ const R = [25.09305, 121.54627];
 const B = [25.09401, 121.54650];
 const text = res => res.lines.join('\n');
 
-test('「打卡」先問要打哪一種：走路進學校、走路出學校、早到、騎車到校', () => {
+test('「打卡」五種都列：到校三種在前、出校兩種在後', () => {
   const env = start();
   const menu = buttonsOf(say(env, 'A', '打卡'));
-  assert.deepEqual(menu.map(b => b[1]), ['打卡 進校', '打卡 出校', '打卡 早到', '騎車到校']);
-  assert.deepEqual(menu.map(b => b[0]), ['🚶 走路進學校', '🚶 走路出學校', '🌅 早到', '🚲 騎車到校']);
+  assert.deepEqual(menu.map(b => b[1]), ['打卡 進校', '打卡 早到', '騎車到校', '打卡 出校', '騎車回士林']);
 });
 
 test('「積分與打卡」選單：到校打卡、出校打卡在最上面', () => {
@@ -70,9 +69,7 @@ test('「到校打卡」再選走路進學校、早到、騎車到校；「出�
   const env = start();
   const toSchool = buttonsOf(say(env, 'A', '到校打卡'));
   assert.deepEqual(toSchool, [['🚶 走路進學校', '打卡 進校'], ['🌅 早到', '打卡 早到'], ['🚲 騎車到校', '騎車到校']]);
-  const leave = say(env, 'A', '出校打卡');
-  assert.match(JSON.stringify(leave), /① 在校內打卡點/);
-  assert.equal(buttonsOf(leave)[0][0], '打開打卡頁');
+  assert.deepEqual(buttonsOf(say(env, 'A', '出校打卡')), [['🚶 走路出學校', '打卡 出校'], ['🚲 騎車回士林', '騎車回士林']]);
 });
 
 test('每種卡都先說步驟，網址帶一次性代碼，不是永久 token', () => {
@@ -450,6 +447,39 @@ test('YouBike 還車時間離現在超過 60 分鐘就拒絕，比現在晚超�
   assert.match(ride(env, 'A', RIDE('2026-10-12', 'YouBike2.0_東吳大學', '09:06')), /超過 5 分鐘/);
   assert.equal(user(env, 'A').points, 0);
   assert.match(ride(env, 'A', RIDE('2026-10-12', 'YouBike2.0_東吳大學', '08:00')), /騎車到校 \+1 點/, '剛好 60 分鐘還可以');
+});
+
+const RIDE_OUT = (from, to, time = '17:05') =>
+  '{"date":"2026-10-12","time":"' + time + '","from":"YouBike2.0_' + from + '","to":"YouBike2.0_' + to + '"}';
+
+test('騎車回士林：學校附近借、士林站附近還才加 1 點，跟走路出學校一天只算一種', () => {
+  const env = start('2026-10-12T17:10:00+08:00');
+  const ask = say(env, 'A', '騎車回士林');
+  assert.match(JSON.stringify(ask), /騎到捷運士林站附近的站還車/);
+  assert.match(ride(env, 'A', RIDE_OUT('捷運劍潭站', '捷運士林站(1號出口)')), /借車站是「YouBike2.0_捷運劍潭站」，要從學校附近借車/);
+  assert.match(ride(env, 'A', RIDE_OUT('東吳大學', '捷運劍潭站')), /要在捷運士林站附近還車/);
+  assert.equal(user(env, 'A').points, 0);
+  const ok = ride(env, 'A', RIDE_OUT('東吳大學', '捷運士林站(2號出口)'));
+  assert.match(ok, /騎車回士林 \+1 點/);
+  assert.equal(rows(env, '通勤紀錄').pop()[2], '騎車出校');
+  assert.equal(user(env, 'A').points, 1);
+  assert.match(say(env, 'A', '騎車回士林'), /今天已經記過出校了/);
+  assert.equal(out_(env, 'A', CAMPUS).title, '今天拿過了', '騎過車就不能再拿走路出學校');
+
+  // 早上騎車到校、傍晚騎車回士林：各 1 點，我的紀錄騎車 2 次
+  say(env, 'B', '騎車到校');
+  ride(env, 'B', RIDE('2026-10-12', 'YouBike2.0_東吳大學', '16:30'));
+  say(env, 'B', '騎車回士林');
+  assert.match(ride(env, 'B', RIDE_OUT('至善臨溪路口', '福林公園', '17:00')), /騎車回士林 \+1 點/);
+  assert.equal(user(env, 'B').points, 2);
+  assert.match(JSON.stringify(say(env, 'B', '我的紀錄')), /騎車 2 次/);
+});
+
+test('走路出學校拿過了，就不能再拿騎車回士林', () => {
+  const env = start();
+  out_(env, 'A', CAMPUS); env.addMinutes(10); out_(env, 'A', QIANMU);
+  assert.equal(user(env, 'A').points, 1);
+  assert.match(say(env, 'A', '騎車回士林'), /今天已經記過出校了/);
 });
 
 test('騎車到校：AI 不能用的時候不加分，請同學再傳', () => {
