@@ -347,6 +347,13 @@ class GhostTest(unittest.TestCase):
         self.assertEqual((row["離開士林站實際約(人)"], row["開進東吳時人數(還沒下車)"]), ("", ""))
         self.assertIn(m.MRT, t["到站"], "時間還在")
 
+    def test_jump_into_jhs_not_counted(self):
+        """行政中心 → 士林國中多上很多人是正常的（國中本來就是上車站），不算；只看國中以前的站彼此之間"""
+        steps = [(b[0], b[1], b[2], b[3].replace(f"{m.JHS},18,1", f"{m.JHS},45,3")) for b in self._upstream(16, 18)]
+        events, crowds = run([snapshot(b) for b in steps])
+        [t] = m.build_trips(events, crowds)
+        self.assertFalse(t["人數不可信"], "高商 18 → 國中 45（+27）是在國中上車，不清")
+
     def test_upstream_boarding_15_or_less_kept(self):
         """多上 15 人以內照常保留"""
         events, crowds = run([snapshot(b) for b in self._upstream(3, 18)])
