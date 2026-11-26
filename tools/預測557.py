@@ -35,6 +35,7 @@ STOPS = {"士林站": mon.MRT, "士林國中": mon.JHS}
 SEATS = (5, 10, 20)          # 至少剩幾個位置才算上得去（假設）
 WINDOW = timedelta(minutes=10)
 MAX_WAIT = timedelta(minutes=45)  # 等超過這麼久還沒有車，就當成那天這個時間沒資料
+OUTAGE = timedelta(minutes=5)     # 監測超過這麼久沒抓到任何資料（關機、睡眠、斷網），中間這段當作沒資料
 DAY_START, DAY_END = "07:00", "18:30"
 BOT_RIDE, BOT_PEAK_EXTRA = 12, 10
 BOT_PEAKS = (("07:20", "08:20"), ("09:00", "10:00"))
@@ -50,7 +51,35 @@ def load_day(day, data_dir=DATA_DIR):
         raise SystemExit(f"找不到 {raw}，那天有跑監測嗎？")
     events = mon.load_csv(raw, mon.event_key)
     crowds = mon.fresh(mon.load_csv(crowd, mon.crowd_key))
-    return buses(mon.build_trips(events, crowds))
+    out = Day(buses(mon.build_trips(events, crowds)))
+    out.gaps = load_gaps(day, data_dir)
+    return out
+
+
+class Day(list):
+    """一天的車，另外記著監測斷掉的時段 gaps：[(最後一次抓到, 下一次抓到), …]"""
+    gaps = ()
+
+
+def load_gaps(day, data_dir=DATA_DIR):
+    """三個 CSV 的「抓取時間」合起來，相鄰兩次隔超過 OUTAGE 的就是斷掉的時段。
+    11/26 有三段：14:16–15:03 關機、16:58–17:10 電腦睡眠、17:42–18:44 Wi-Fi 斷線"""
+    stamps = set()
+    for name in ("raw", "人數", "預估"):
+        path = os.path.join(data_dir, f"557_{name}_{day}.csv")
+        if not os.path.exists(path):
+            continue
+        with open(path, encoding="utf-8-sig", newline="") as f:
+            for row in csv.DictReader(f):
+                if row.get("抓取時間"):
+                    stamps.add(datetime.strptime(row["抓取時間"], "%Y-%m-%d %H:%M:%S"))
+    stamps = sorted(stamps)
+    return [(a, b) for a, b in zip(stamps, stamps[1:]) if b - a > OUTAGE]
+
+
+def seen(day_buses, start, end):
+    """start 到 end 之間監測都有在跑（沒有斷掉的時段），這段算出來的等車才可信"""
+    return not any(a < end and b > start for a, b in getattr(day_buses, "gaps", ()))
 
 
 def buses(trips):
@@ -107,7 +136,7 @@ def wait_samples(day_buses, stop, center, seats, window):
     out, t = [], center - window
     while t <= center + window:
         b = first_bus(day_buses, stop, t, seats) if covers(day_buses, stop, t) else None
-        if b:
+        if b and seen(day_buses, t, b["到站"][stop]):  # 等車的那段監測有斷掉，就不知道中間有沒有車
             out.append((b["到站"][stop] - t).total_seconds() / 60)
         t += timedelta(minutes=1)
     return out
@@ -166,9 +195,12 @@ def ride_window(train, stop, center, window):
 
 
 def actual(day_buses, stop, at, seats):
-    """那一天真的在 at 到站，照同樣規則（等到還剩 seats 個位置的車）幾點到東吳"""
+    """那一天真的在 at 到站，照同樣規則（等到還剩 seats 個位置的車）幾點到東吳。
+    等車那段監測有斷掉就回傳 None（不知道中間有沒有車，不拿來對答案）"""
     b = first_bus(day_buses, stop, at, seats)
-    return b["東吳"] if b else None
+    if not b or not seen(day_buses, at, b["到站"][stop]):
+        return None
+    return b["東吳"]
 
 
 def hm(day, s):

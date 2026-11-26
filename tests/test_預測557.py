@@ -91,6 +91,26 @@ class EvaluateTest(unittest.TestCase):
         whole = next(s for s in summary if s["站"] == "士林站" and s["空位門檻"] == 10 and s["時段"] == "全天")
         self.assertEqual(whole["偏晚還是偏早(我們，正的=實際比預測晚)"], 3.0, "實際每班都慢 3 分")
 
+    def test_monitor_gap_not_scored(self):
+        """監測斷掉的時段（關機、斷網）：等車那段有斷就不對答案，不會變成「等了一小時」"""
+        target = p.Day([bus("17:30", 10, day="2026-11-26"), bus("17:40", 10, day="2026-11-26"),
+                        bus("18:50", 10, day="2026-11-26"), bus("19:00", 10, day="2026-11-26")])
+        target.gaps = [(at("17:42", "2026-11-26"), at("18:44", "2026-11-26"))]
+        self.assertIsNone(p.actual(target, "士林站", at("17:45", "2026-11-26"), 5), "17:45 到站，下一班看起來是 18:50，但中間沒在監測")
+        self.assertIsNotNone(p.actual(target, "士林站", at("17:35", "2026-11-26"), 5), "17:40 那班在斷掉前就來了")
+        self.assertIsNotNone(p.actual(target, "士林站", at("18:45", "2026-11-26"), 5), "恢復以後照常")
+        # 訓練也一樣：斷掉那段不拿來算等車
+        self.assertEqual(p.wait_samples(target, "士林站", at("17:50", "2026-11-26"), 5, timedelta(minutes=2)), [])
+
+    def test_load_gaps_from_fetch_times(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "557_raw_2026-11-26.csv"), "w", encoding="utf-8-sig") as f:
+                f.write("事件時間,抓取時間\n")
+                for s in ("17:40:00", "17:41:00", "17:42:00", "18:44:00", "18:46:00"):
+                    f.write(f"2026-11-26 {s},2026-11-26 {s}\n")
+            gaps = p.load_gaps("2026-11-26", d)
+        self.assertEqual(gaps, [(at("17:42", "2026-11-26"), at("18:44", "2026-11-26"))], "隔 2 分鐘不算斷掉，隔 62 分鐘才算")
+
     def test_predictions_file_round_trip(self):
         rows = p.predict({DAY: [bus("08:00", 9), bus("08:10", 9)]}, "2026-11-26")
         with tempfile.TemporaryDirectory() as d:
