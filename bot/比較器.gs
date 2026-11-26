@@ -105,12 +105,16 @@ function compareQuery_(q, text) {
   const now = new Date();
 
   // 口頭問句有後天／星期且無法解析成今天明天：請改用今天明天，不出即時卡、也不查放假（B-1'(b)）
-  // 必須在計算 classAt、呼叫 classContext_ 之前
-  if (!isMenuFlow && (q.day === '後天' || (q.incompleteFuture && q.day !== '今天' && q.day !== '明天'))) {
+  // 必須在計算 classAt、呼叫 classContext_ 之前。用 farDay，不用 incompleteFuture（B-3）
+  if (!isMenuFlow && (q.farDay || q.day === '後天')) {
     return incompleteTimeReply_(q);
   }
-  // 明天但沒有確切時刻：請補時間（AC-3）
-  if (!isMenuFlow && q.day === '明天' && !q.arriveTime) {
+  // 今天或明天但沒有確切時刻：請補時間（AC-3、B-3）
+  if (!isMenuFlow && (q.day === '今天' || q.day === '明天') && !q.arriveTime) {
+    return incompleteTimeReply_(q);
+  }
+  // 有 incompleteFuture 且無時刻（即使沒說今天／明天／後天）：仍請補時間，不出即時卡
+  if (!isMenuFlow && q.incompleteFuture && !q.arriveTime) {
     return incompleteTimeReply_(q);
   }
 
@@ -167,11 +171,11 @@ function localStationChoiceReply_(place) {
 
 /** 未來時間但沒有確切時刻：請補第幾節或幾點，不出即時卡（AC-3） */
 function incompleteTimeReply_(q) {
-  const dayWord = q.day === '明天' ? '明天' : (q.day === '後天' ? '後天' : '那天');
+  const dayWord = q.day === '明天' ? '明天' : (q.day === '後天' ? '後天' : (q.day === '今天' ? '今天' : '那天'));
   const bName = q.building && BUILDINGS[q.building] ? BUILDINGS[q.building][0] : '上課';
   let hint = '你' + dayWord + '在' + bName + '，請告訴我第幾節或幾點上課，我才能幫你算出門時間。';
   let items = [];
-  if (q.day === '後天' || (q.incompleteFuture && q.day !== '今天' && q.day !== '明天')) {
+  if (q.farDay || q.day === '後天') {
     hint = '後天或星期幾的時間我目前只能用「今天／明天」規劃。請改用「今天」或「明天」，或直接點選單「出門時間」。';
     items = [['用選單排出門時間', '出門時間']];
   } else {
@@ -320,7 +324,7 @@ function planReply_(originName, building, classAt, isTomorrow) {
  */
 function parseQuestion_(text) {
   const byRules = parseWithRules_(text);
-  const fullyHandled = !byRules.farOrigin && !byRules.incompleteFuture && !byRules.localNonOrigin
+  const fullyHandled = !byRules.farOrigin && !byRules.incompleteFuture && !byRules.farDay && !byRules.localNonOrigin
     && (byRules.arriveTime || byRules.building || byRules.intent !== '其他');
   if (fullyHandled) return byRules;
   const gem = parseWithGemini_(text);
@@ -332,8 +336,9 @@ function parseQuestion_(text) {
   gem.farOrigin = gem.farOrigin || byRules.farOrigin || isFarOrigin_(gem.origin);
   gem.localNonOrigin = gem.localNonOrigin || byRules.localNonOrigin;
   gem.incompleteFuture = gem.incompleteFuture || byRules.incompleteFuture;
+  gem.farDay = gem.farDay || byRules.farDay;
   // 規則已偵測後天或星期時，強制保留規則日期（或未指定），不論 Gemini 回今天（B-1'(a)）
-  if (byRules.day === '後天' || (byRules.incompleteFuture && byRules.day !== '明天' && byRules.day !== '今天')) {
+  if (byRules.farDay || byRules.day === '後天') {
     gem.day = byRules.day || '未指定';
   } else if (!gem.day && byRules.day) {
     gem.day = byRules.day;
@@ -430,11 +435,11 @@ function parseWithRules_(text) {
   else if (arriveTime || building || /上課|學校|出門|東吳|怎麼去/.test(t)) intent = '去學校';
 
   // 規則側偵測外縣市與未完成未來時間（A-5，供分流與失敗退路）
-  // 「後天」或「星期／週／禮拜＋時刻」即使已抓到時刻也視為未完整（B-1）
+  // farDay：只代表後天或星期／週／禮拜＋一～日／天（B-3，不把下午／早上算進去）
   const hasHoutian = /後天/.test(text);
   const hasWeekday = /星期[一二三四五六日天]|週[一二三四五六日天]|禮拜[一二三四五六日天]/.test(text);
-  const incompleteFuture = (!arriveTime && /明天|後天|明早|下午|早上|晚上|幾點/.test(text))
-    || hasHoutian || hasWeekday;
+  const farDay = hasHoutian || hasWeekday;
+  const incompleteFuture = !arriveTime && /明天|後天|明早|下午|早上|晚上|幾點/.test(text);
   let farOrigin = '';
   for (const p of FAR_ORIGINS) {
     if (text.includes(p) || text.includes(p + '市') || text.includes(p + '縣')) { farOrigin = normalizeOrigin_(p); break; }
@@ -449,14 +454,20 @@ function parseWithRules_(text) {
   if (farOrigin) origin = farOrigin;
   else if (localNon && !origin) origin = localNon;
 
+  let day = '未指定';
+  if (/明天|明早/.test(text)) day = '明天';
+  else if (hasHoutian) day = '後天';
+  else if (/今天/.test(text) && (arriveTime || building || intent === '去學校')) day = '今天';
+
   return {
     intent: intent,
     arriveTime: arriveTime,
     building: building,
-    day: /明天|明早/.test(text) ? '明天' : /後天/.test(text) ? '後天' : '未指定',
+    day: day,
     origin: origin,
     farOrigin: !!farOrigin,
     incompleteFuture: incompleteFuture,
+    farDay: farDay,
     localNonOrigin: !!localNon,
   };
 }

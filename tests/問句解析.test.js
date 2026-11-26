@@ -242,3 +242,51 @@ test('B-1\'(b): 今天放假日時問後天不得回這天不用上學', () => {
   assert.doesNotMatch(txt, /這天不用上學/);
   assert.match(txt, /今天|明天|出門時間|後天/);
 });
+
+test('B-3: 今天下午在H棟上課（Gemini null）請補第幾節，不用後天文案、不出即時卡', () => {
+  const env = boot();
+  freeze(env, '2026-10-12T10:00:00+08:00');
+  env.run('parseWithGemini_ = function () { return null; };');
+  const ans = env.call('compareReply_', '今天下午在H棟上課');
+  const txt = replyText(ans);
+  assert.match(txt, /第幾節|幾點/);
+  assert.doesNotMatch(txt, /後天或星期幾的時間我目前只能用/);
+  assert.doesNotMatch(txt, /TDX 即時資料/);
+  assert.doesNotMatch(txt, /多路線比較/);
+});
+
+test('B-3: 今天下午第五堂在H棟 Gemini 回今天 13:10 走出門建議，不當後天', () => {
+  const env = boot();
+  freeze(env, '2026-10-12T06:00:00+08:00'); // 13:10 距現在 >90min
+  env.run('parseWithGemini_ = function () { return { intent: "去學校", day: "今天", building: "H", origin: "", arriveTime: "13:10" }; };');
+  const ans = env.call('compareReply_', '今天下午第五堂在H棟');
+  assert.equal(ans.contents.header.contents[0].text, '出門建議');
+  assert.match(ans.altText, /13:10/);
+  assert.doesNotMatch(ans.altText, /後天或星期幾/);
+  assert.doesNotMatch(ans.altText, /TDX 即時資料/);
+  assert.doesNotMatch(ans.altText, /多路線比較/);
+});
+
+test('B-3 回歸: 下午在H棟上課（無今天明天、Gemini null）請補時間，不出即時卡', () => {
+  const env = boot();
+  freeze(env, '2026-10-12T10:00:00+08:00');
+  env.run('parseWithGemini_ = function () { return null; };');
+  const ans = env.call('compareReply_', '下午在H棟上課');
+  const txt = replyText(ans);
+  assert.match(txt, /第幾節|幾點/);
+  assert.doesNotMatch(txt, /TDX 即時資料/);
+  assert.doesNotMatch(txt, /多路線比較/);
+  assert.doesNotMatch(txt, /士林站 →/);
+});
+
+test('B-3 回歸: 下午要幾點出門（無今天明天、Gemini null）請補時間，不出即時卡', () => {
+  const env = boot();
+  freeze(env, '2026-10-12T10:00:00+08:00');
+  env.run('parseWithGemini_ = function () { return null; };');
+  const ans = env.call('compareReply_', '下午要幾點出門');
+  const txt = replyText(ans);
+  assert.match(txt, /第幾節|幾點/);
+  assert.doesNotMatch(txt, /TDX 即時資料/);
+  assert.doesNotMatch(txt, /多路線比較/);
+  assert.doesNotMatch(txt, /士林站 →/);
+});
