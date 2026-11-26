@@ -100,7 +100,7 @@ function memberReply_(uid, text) {
   if (text === '排隊禮儀') return nbEtiquette_();
   if (/^包車(\s|$)/.test(text)) return charterText_(); // 新生.gs
   if (/^(出門提醒 |取消出門提醒$)/.test(text)) return lvText_(uid, text); // 發車提醒.gs
-  if (/^回報現場(\s|$)/.test(text)) return rpText_(uid, text); // 現場回報.gs：等到第幾班才上車
+  if (/^回報現場(\s|$)/.test(text)) return rpText_(uid, text); // 現場回報.gs：我在哪一站排隊
   return null;
 }
 
@@ -145,7 +145,7 @@ function bus557Reply_() {
     title: '557 往東吳／往捷運站',
     rows: rows,
     footer: 'TDX 即時資料・' + nowText_(),
-    buttons: [{ label: '比較所有路線', text: '比較所有路線' }, { label: '回報現場（等了幾班）', text: '回報現場' }, { label: '557 站牌資訊', text: '557 站牌資訊' }],
+    buttons: [{ label: '比較所有路線', text: '比較所有路線' }, { label: '回報我在哪裡排隊', text: '回報現場' }, { label: '557 站牌資訊', text: '557 站牌資訊' }],
   });
 }
 
