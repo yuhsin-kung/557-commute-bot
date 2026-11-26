@@ -52,6 +52,23 @@ const PERIODS = {
 // 學校的劍南路站師生專車：上課日 07:50 從捷運劍南路站發車，到 A 棟前（德育中心 115-1 時刻表，不適用 T-PASS）
 const JIANNAN_SHUTTLE = '07:50';
 
+// 外縣市（非台北市、新北市）：要建議先搭高鐵或台鐵回台北
+const FAR_ORIGINS = ['基隆', '桃園', '新竹', '苗栗', '台中', '臺中', '彰化', '南投', '雲林', '嘉義', '台南', '臺南', '高雄', '屏東', '宜蘭', '花蓮', '台東', '臺東', '澎湖', '金門', '馬祖', '連江'];
+// 台北市、新北市裡不在 ORIGINS 的地名：請選三個捷運站，不建議高鐵
+const LOCAL_NON_ORIGINS = ['板橋', '三重', '中和', '永和', '新店', '汐止', '淡水', '土城', '蘆洲', '五股', '林口', '泰山', '新莊', '樹林', '鶯歌', '三峽'];
+
+function normalizeOrigin_(name) {
+  return String(name || '').replace(/臺/g, '台');
+}
+function isFarOrigin_(name) {
+  const n = normalizeOrigin_(name).replace(/[市縣]$/, '');
+  if (n === '台北' || n === '新北') return false;
+  return FAR_ORIGINS.some(p => normalizeOrigin_(p).replace(/[市縣]$/, '') === n);
+}
+function isLocalNonOrigin_(name) {
+  return LOCAL_NON_ORIGINS.includes(String(name || ''));
+}
+
 const BUFFER_MIN = 5;      // 提早幾分鐘到教室
 const PEAK_EXTRA_MIN = 10; // 尖峰 557 可能擠不上，要多等一兩班
 const WEATHER_EXAM_EXTRA_MIN = 20; // 隔天降雨機率 60% 以上或考試週，出門時間再多留
@@ -69,10 +86,38 @@ function compareReply_(text) {
 
 /** q 是整理好的問題：{ arriveTime, building, day, origin }。打字問的和用按鈕點的（選單.gs）都走這裡 */
 function compareQuery_(q, text) {
-  const origin = ORIGINS[q.origin] ? q.origin : '士林站';
+  const isMenuFlow = /^出門時間(\s|$)/.test(String(text || '').trim());
+  let originName = q.origin || '';
+  // 選單「出門時間 … 火星」等未知站名仍當士林站（AC-9）；口頭外縣市／非 ORIGINS 地名不得默成士林站
+  if (isMenuFlow) {
+    originName = ORIGINS[originName] ? originName : '士林站';
+  } else {
+    if (q.farOrigin || isFarOrigin_(originName)) {
+      return farOriginReply_(originName || '外縣市', q);
+    }
+    if (q.localNonOrigin || isLocalNonOrigin_(originName)) {
+      return localStationChoiceReply_(originName);
+    }
+    originName = ORIGINS[originName] ? originName : '士林站';
+  }
   const building = BUILDINGS[q.building] ? q.building : '';
   const unspecified = /(^|\s)不指定(\s|$)/.test(String(text || ''));
   const now = new Date();
+
+  // 口頭問句有後天／星期且無法解析成今天明天：請改用今天明天，不出即時卡、也不查放假（B-1'(b)）
+  // 必須在計算 classAt、呼叫 classContext_ 之前。用 farDay，不用 incompleteFuture（B-3）
+  if (!isMenuFlow && (q.farDay || q.day === '後天')) {
+    return incompleteTimeReply_(q);
+  }
+  // 明天但沒有確切時刻：請補時間（AC-3）
+  if (!isMenuFlow && q.day === '明天' && !q.arriveTime) {
+    return incompleteTimeReply_(q);
+  }
+  // 有 incompleteFuture 且無時刻（即使沒說今天／明天／後天，或今天＋時段）：仍請補時間，不出即時卡（B-3）
+  if (!isMenuFlow && q.incompleteFuture && !q.arriveTime) {
+    return incompleteTimeReply_(q);
+  }
+
   const classAt = q.arriveTime ? timeOn_(q.day === '明天' ? addMin_(now, 24 * 60) : now, q.arriveTime) : null;
 
   // 先查出門脈絡（放假／考試週／步行）。放假不出建議卡，也不查即時到站。
@@ -82,21 +127,63 @@ function compareQuery_(q, text) {
     building: building,
   });
   if (ctx.holiday) return holidayReply_(ctx);
+
   // 有上課時間但沒說大樓：先問在哪一棟（已選「不指定」才直接給建議）。出發站沿用選單指令，預設士林站可省略。
   if (classAt && !building && !unspecified) {
     const dayWord = q.day === '明天' ? '明天' : '今天';
-    const originTail = origin !== '士林站' ? ' ' + origin : '';
+    const originTail = originName !== '士林站' ? ' ' + originName : '';
     return menuFlow_('出門時間 ' + dayWord + ' ' + q.arriveTime + originTail);
   }
 
   // 上課時間還很久（或是明天）→ 給出門建議；快到了 → 查即時到站
   const planAhead = classAt && (classAt - now) > 90 * 60 * 1000;
   const answer = planAhead
-    ? planReply_(origin, building, classAt, q.day === '明天')
-    : liveReply_(origin, building, classAt);
+    ? planReply_(originName, building, classAt, q.day === '明天')
+    : liveReply_(originName, building, classAt);
 
-  logCompare_(text, origin, building, classAt, planAhead ? '出門建議' : '即時');
+  logCompare_(text, originName, building, classAt, planAhead ? '出門建議' : '即時');
   return answer;
+}
+
+/** 外縣市出發：建議先搭高鐵或台鐵回台北再轉捷運，不出即時卡（AC-2、AC-4） */
+function farOriginReply_(originName, q) {
+  const name = normalizeOrigin_(originName);
+  const est = (name === '台南' || name === '高雄') ? name + '搭高鐵回台北約 1.5–2 小時（估計），還要再轉乘。' : '回台北需一些時間（估計）。';
+  const advice = '你目前在' + name + '。建議先搭高鐵或台鐵回台北，再轉捷運（士林站、劍南路站或大直站）接到學校的公車路線。' + est + '請告訴我上課的時間（第幾節或幾點），我可以幫你規劃。';
+  return card_({
+    badge: '外縣市出發',
+    title: '從' + name + '回台北再轉乘',
+    notes: [advice],
+    footer: '估計時間・請補上課時間',
+    buttons: [
+      { label: '我已到台北，從士林站出發', text: '比較所有路線' },
+      { label: '選節次規劃出門時間', text: '出門時間' },
+    ],
+  });
+}
+
+/** 台北市／新北市但不在 ORIGINS：請選三個捷運站，不出即時卡 */
+function localStationChoiceReply_(place) {
+  return choices_('「' + place + '」不在目前的出發站。請選擇士林站、劍南路站或大直站。',
+    [['士林站', '我從士林站出發要去學校'], ['劍南路站', '我從劍南路站出發要去學校'], ['大直站', '我從大直站出發要去學校']],
+    { title: '請選擇出發站', badge: '出發地', primary: false });
+}
+
+/** 未來時間但沒有確切時刻：請補第幾節或幾點，不出即時卡（AC-3） */
+function incompleteTimeReply_(q) {
+  const dayWord = q.day === '明天' ? '明天' : (q.day === '後天' ? '後天' : (q.day === '今天' ? '今天' : '那天'));
+  const bName = q.building && BUILDINGS[q.building] ? BUILDINGS[q.building][0] : '上課';
+  let hint = '你' + dayWord + '在' + bName + '，請告訴我第幾節或幾點上課，我才能幫你算出門時間。';
+  let items = [];
+  if (q.farDay || q.day === '後天') {
+    hint = '後天或星期幾的時間我目前只能用「今天／明天」規劃。請改用「今天」或「明天」，或直接點選單「出門時間」。';
+    items = [['用選單排出門時間', '出門時間']];
+  } else {
+    const dayForMenu = q.day === '明天' ? '明天' : '今天';
+    items = ['1', '2', '3', '5', '8'].map(k => ['第 ' + k + ' 節 ' + PERIODS[k], '出門時間 ' + dayForMenu + ' ' + PERIODS[k] + (q.building ? ' ' + q.building : '')]);
+    items.push(['用選單排出門時間', '出門時間']);
+  }
+  return choices_(hint, items, { title: '請補上課時間', badge: '時間', primary: false });
 }
 
 /** 即時模式：查出發站所有路線的到站時間，算出各條到教室的時間 */
@@ -232,12 +319,31 @@ function planReply_(originName, building, classAt, isTomorrow) {
 
 /**
  * Gemini 免費版每分鐘只能叫幾次（gemini-3.5-flash 是 5 次），尖峰很容易用完，
- * 所以規則看得懂的句子（有時間或大樓、回家、天氣、站牌）就不叫 Gemini，看不懂的才交給它。
+ * 所以規則能完整處理的句子（沒有外縣市、未來時間已收成可用日期＋時刻）就不叫 Gemini，
+ * 有外縣市或未完成的未來時間才交給它。規則結果仍供 Gemini 失敗時退路。
  */
 function parseQuestion_(text) {
   const byRules = parseWithRules_(text);
-  if (byRules.arriveTime || byRules.building || byRules.intent !== '其他') return byRules;
-  return parseWithGemini_(text) || byRules;
+  const fullyHandled = !byRules.farOrigin && !byRules.incompleteFuture && !byRules.farDay && !byRules.localNonOrigin
+    && (byRules.arriveTime || byRules.building || byRules.intent !== '其他');
+  if (fullyHandled) return byRules;
+  const gem = parseWithGemini_(text);
+  if (!gem) return byRules;
+  // Gemini 成功時與規則合併：規則已判定的外縣市／未完成未來時間／北北基非 ORIGINS 優先保留（B-2）
+  if (byRules.farOrigin && (!gem.origin || !isFarOrigin_(gem.origin))) gem.origin = byRules.origin;
+  if (byRules.localNonOrigin && !gem.origin) gem.origin = byRules.origin;
+  if (byRules.incompleteFuture && !gem.arriveTime) gem.incompleteFuture = true;
+  gem.farOrigin = gem.farOrigin || byRules.farOrigin || isFarOrigin_(gem.origin);
+  gem.localNonOrigin = gem.localNonOrigin || byRules.localNonOrigin;
+  gem.incompleteFuture = gem.incompleteFuture || byRules.incompleteFuture;
+  gem.farDay = gem.farDay || byRules.farDay;
+  // 規則已偵測後天或星期時，強制保留規則日期（或未指定），不論 Gemini 回今天（B-1'(a)）
+  if (byRules.farDay || byRules.day === '後天') {
+    gem.day = byRules.day || '未指定';
+  } else if (!gem.day && byRules.day) {
+    gem.day = byRules.day;
+  }
+  return gem;
 }
 
 function parseWithGemini_(text) {
@@ -250,7 +356,8 @@ function parseWithGemini_(text) {
     systemInstruction: { parts: [{ text:
       '你是東吳大學外雙溪校區的通勤小幫手，把學生的訊息整理成 JSON。\n'
       + '大樓代號：' + buildingList + '\n節次：' + periodList + '。早八=08:10。\n'
-      + '說「8點上課」就用 08:00。沒提到的欄位填空字串。出發地只能是：士林站、劍南路站、大直站，沒提到填空字串。\n'
+      + '說「8點上課」就用 08:00。沒提到的欄位填空字串。出發地可以是士林站、劍南路站、大直站，或台灣其他縣市名（例如台南、高雄、板橋）。沒提到填空字串。\n'
+      + '只有「下午」「早上」「晚上」等時段、沒有幾點或節次時，arriveTime 必須留空，不准猜節次。\n'
       + '問公車在哪裡上車、站牌在哪、要去哪裡排隊，intent 填「站牌」。' } ] },
     generationConfig: {
       responseMimeType: 'application/json',
@@ -327,12 +434,41 @@ function parseWithRules_(text) {
   else if (/站牌|上車|排隊|出口|去哪|哪(裡|邊|兒)/.test(t) && !arriveTime && !building) intent = '站牌';
   else if (arriveTime || building || /上課|學校|出門|東吳|怎麼去/.test(t)) intent = '去學校';
 
+  // 規則側偵測外縣市與未完成未來時間（A-5，供分流與失敗退路）
+  // farDay：只代表後天或星期／週／禮拜＋一～日／天（B-3，不把下午／早上算進去）
+  const hasHoutian = /後天/.test(text);
+  const hasWeekday = /星期[一二三四五六日天]|週[一二三四五六日天]|禮拜[一二三四五六日天]/.test(text);
+  const farDay = hasHoutian || hasWeekday;
+  const incompleteFuture = !arriveTime && /明天|後天|明早|下午|早上|晚上|幾點/.test(text);
+  let farOrigin = '';
+  for (const p of FAR_ORIGINS) {
+    if (text.includes(p) || text.includes(p + '市') || text.includes(p + '縣')) { farOrigin = normalizeOrigin_(p); break; }
+  }
+  let localNon = '';
+  if (!farOrigin) {
+    for (const p of LOCAL_NON_ORIGINS) {
+      if (text.includes(p)) { localNon = p; break; }
+    }
+  }
+  let origin = /劍南/.test(t) ? '劍南路站' : /大直/.test(t) ? '大直站' : '';
+  if (farOrigin) origin = farOrigin;
+  else if (localNon && !origin) origin = localNon;
+
+  let day = '未指定';
+  if (/明天|明早/.test(text)) day = '明天';
+  else if (hasHoutian) day = '後天';
+  else if (/今天/.test(text) && (arriveTime || building || intent === '去學校')) day = '今天';
+
   return {
     intent: intent,
     arriveTime: arriveTime,
     building: building,
-    day: /明天|明早/.test(t) ? '明天' : '未指定',
-    origin: /劍南/.test(t) ? '劍南路站' : /大直/.test(t) ? '大直站' : '',
+    day: day,
+    origin: origin,
+    farOrigin: !!farOrigin,
+    incompleteFuture: incompleteFuture,
+    farDay: farDay,
+    localNonOrigin: !!localNon,
   };
 }
 
