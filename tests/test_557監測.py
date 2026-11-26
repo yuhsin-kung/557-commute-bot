@@ -324,6 +324,36 @@ class GhostTest(unittest.TestCase):
         row = dict(zip(m.TRIP_HEAD, m.trip_row(1, t)))
         self.assertEqual((row["離開士林站實際約(人)"], row["離開士林站剩幾個位置(以70人算)"]), ("55–90", "0–15（可能超載）"))
 
+    @staticmethod
+    def _upstream(kejiao, kaoshang):
+        """科教館回報 kejiao 人、士林高商回報 kaoshang 人，其他照 TRIP"""
+        steps = []
+        for b in TRIP:
+            last3 = b[3].replace("171175,18,1", f"171175,{kaoshang},1")
+            if ",212024,0," in b[2]:  # 離開科教館那一步
+                last3 = a3("1", "212024", kejiao, 1, "261125074045")
+            steps.append((b[0], b[1], b[2], last3))
+        return steps
+
+    def test_upstream_surge_clears_counts(self):
+        """到士林國中以前一次多上超過 15 人（2026/11/26 EAA-066 在士林高商 0 → 45）：這班人數全部清掉，只留時間"""
+        events, crowds = run([snapshot(b) for b in self._upstream(2, 40)])
+        [t] = m.build_trips(events, crowds)
+        self.assertTrue(t["人數不可信"])
+        self.assertIsNone(t["士林站人數"])
+        self.assertIsNone(t["國中人數"])
+        self.assertTrue(any("人數已清除：到士林國中以前在士林高商一次多 38 人" in x for x in t["備註"]))
+        row = dict(zip(m.TRIP_HEAD, m.trip_row(1, t)))
+        self.assertEqual((row["離開士林站實際約(人)"], row["開進東吳時人數(還沒下車)"]), ("", ""))
+        self.assertIn(m.MRT, t["到站"], "時間還在")
+
+    def test_upstream_boarding_15_or_less_kept(self):
+        """多上 15 人以內照常保留"""
+        events, crowds = run([snapshot(b) for b in self._upstream(3, 18)])
+        [t] = m.build_trips(events, crowds)
+        self.assertFalse(t["人數不可信"])
+        self.assertEqual(t["士林站人數"]["車上人數"], "55")
+
     def test_return_seats_at_least(self):
         """回程：離開東吳顯示 62 → 至少剩 8 個位置；開進東吳時 50 人是去程乘客還沒下車，不拿來扣"""
         events, crowds = run([snapshot(b) for b in TRIP[:-1] + RETURN])

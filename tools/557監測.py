@@ -411,9 +411,18 @@ def build_trips(events, crowds, incomplete=None):
             lacking = [label for key, label in CROWD_POINTS if t[key] is None]
             if lacking:
                 t["備註"].append("沒有人數：" + "、".join(lacking))
+            # 到士林國中以前（天文館～行政中心）有一次多上超過 15 人：多半是士林高商學生，
+            # 會在士林站沒刷卡下車，網站人數整趟都不可信 → 這班的人數全部清掉，只留時間
+            surge = upstream_surge(mine, t)
+            if surge:
+                t["備註"].append(f"人數已清除：到士林國中以前在{surge[0]}一次多 {surge[1]} 人"
+                                f"（超過 {SURGE_LIMIT} 人，多半是士林高商學生，網站人數不可信）")
+                for key in ("國中到站人數", "國中人數", "士林站到站人數", "士林站人數"):
+                    t[key] = None
+            t["人數不可信"] = bool(surge)
             # 開進東吳時的人數（大家還沒下車）：用去程錢穆故居離站那次，沒有才用開進東吳的第一筆
             t["終點顯示"] = None
-            if SCHOOL in t["時間"]:
+            if SCHOOL in t["時間"] and not surge:
                 arrive = t["時間"][SCHOOL]
                 t["終點顯示"] = last_report(mine, {"171195"}, t["參考"], arrive + A3_EARLY)
                 if t["終點顯示"] is None:
@@ -562,6 +571,24 @@ def last_report(crowds, stops, start, end, first=False):
     if not hits:
         return None
     return int((hits[0] if first else hits[-1])["車上人數"])
+
+
+SURGE_LIMIT = 15  # 到士林國中以前，相鄰兩次回報多上超過這麼多人，就當作這班人數不可信
+
+
+def upstream_surge(crowds, t):
+    """這一趟到士林國中以前（天文館、科教館、士林高商、行政中心）的回報，照時間排，
+    相鄰兩筆多了超過 SURGE_LIMIT 人 → 回傳（哪一站, 多幾人）；沒有就回傳 None。
+    行政中心也算：網站常晚一站才更新，在士林高商上車的人可能到行政中心才算進去"""
+    start = t.get("發車") or min(t["時間"].values(), default=None)
+    end = t["時間"].get(JHS) or t.get("參考")
+    if not start or not end:
+        return None
+    hits = sorted((c for c in crowds if c["站牌ID"] in BEFORE_JHS and start - timedelta(minutes=2) <= crowd_time(c) <= end),
+                  key=crowd_time)
+    jumps = [(int(b["車上人數"]) - int(a["車上人數"]), STOP_NAMES.get(b["站牌ID"], b["站牌ID"])) for a, b in zip(hits, hits[1:])]
+    more, where = max(jumps, default=(0, ""))  # 寫最大的那一次
+    return (where, more) if more > SURGE_LIMIT else None
 
 
 def real_range(shown, ghost_start, ghost_end):
