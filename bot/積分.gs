@@ -25,7 +25,7 @@ const PT = {
   WALK_MAX_MIN: 20,      // 起點打卡後幾分鐘內到校才算步行（要同一天）
   EARLY_BEFORE: '07:30',
   NEAR_M: 50,           // 離錢穆故居站多近算「在站牌」
-  CAMPUS_M: 50,         // 離校內 557 站多近算「在學校」
+  CAMPUS_M: 30,         // 離任何一個校內打卡點（PT_CAMPUS_POINTS）多近算「在學校」
   MAX_ACCURACY_M: 50,   // 定位誤差超過這個數字不收
   DEPART_MIN_M: 500,    // 離校內打卡點至少這麼遠，才算出門卡
   DEPART_MIN_PER_KM: 1, // 出門卡到到校，每公里至少要隔幾分鐘
@@ -40,6 +40,21 @@ const PT = {
 
 const PT_START = '錢穆故居站';
 const PT_CAMPUS = '校內 557 站';
+// 校內打卡點：離其中任何一個 PT.CAMPUS_M 公尺內都算到校，記錄寫最近的那個點。
+// R 棟、圖書館是 OpenStreetMap 建築輪廓的中心（2026-11-26 查），還沒有現場實測，要帶手機到現場核對。
+// 校門口還沒有座標，要現場量了再加。
+const PT_CAMPUS_POINTS = {
+  [PT_CAMPUS]: [25.09457, 121.54575], // 跟定位測試.gs 的 GEO_POINTS 同一個點（TDX 站牌位置）；不直接引用，因為 Apps Script 檔案載入順序不保證
+  '第一教學研究大樓（R 棟）': [25.09305, 121.54627],
+  '中正圖書館': [25.09345, 121.54645],
+};
+
+/** 離哪一個校內打卡點最近：[名稱, 公尺] */
+function ptNearestCampus_(here) {
+  return Object.keys(PT_CAMPUS_POINTS)
+    .map(name => [name, ptMeters_(here, PT_CAMPUS_POINTS[name])])
+    .sort((a, b) => a[1] - b[1])[0];
+}
 const PT_COUPON_HEAD = ['時間', '使用者 ID', '券號', '面額', '狀態', '到期日'];
 const PT_LOG_HEAD = ['時間', '使用者 ID', '方式', '積分', '少排放（公克）', '備註'];
 const PT_CHECKIN_HEAD = ['時間', '使用者 ID', '打卡點', '距離（公尺）', '誤差（公尺）', '結果', '原因'];
@@ -461,27 +476,28 @@ function ptCheckinAt_(uid, fixes) {
     return { ok: false, title: '定位不夠準', lines: ['誤差約 ' + Math.round(accuracy) + ' 公尺。走到室外、打開 GPS 再試一次。'] };
   }
   const dStart = ptMeters_(here, GEO_POINTS[PT_START]);
-  const dCampus = ptMeters_(here, GEO_POINTS[PT_CAMPUS]);
+  const [campusSpot, dCampus] = ptNearestCampus_(here);
 
   if (dStart <= PT.NEAR_M) {
     record(PT_START, dStart, '起點', '');
     return { ok: true, title: '錢穆故居站打卡成功', lines: ['開始計時！同一天 ' + PT.WALK_MIN_MIN + '～' + PT.WALK_MAX_MIN + ' 分鐘內走進學校再打一次卡，就有 ' + PT.WALK + ' 點。'] };
   }
-  if (dCampus <= PT.CAMPUS_M) return ptArrive_(uid, sheet, now, dCampus, record);
+  if (dCampus <= PT.CAMPUS_M) return ptArrive_(uid, sheet, now, dCampus, record, campusSpot);
   if (dCampus >= PT.DEPART_MIN_M) {
     record('出門', dCampus, '出門', '');
     const need = dCampus / 1000 * PT.DEPART_MIN_PER_KM;
     return { ok: true, title: '出門打卡成功', lines: ['已記錄出門，離學校大約 ' + Math.round(dCampus) + ' 公尺（只記距離，不記地點）。', '7:30 前到校再打卡就有早到點。這段約 ' + (dCampus / 1000).toFixed(1) + ' 公里，中間至少要隔 ' + ptShowMin_(need) + ' 分鐘。'] };
   }
-  const nearer = dStart < dCampus ? [PT_START, dStart] : ['學校', dCampus];
+  const nearer = dStart < dCampus ? [PT_START, dStart] : [campusSpot, dCampus];
   record('', nearer[1], '不在打卡點', '離' + nearer[0] + '還有大約 ' + Math.round(nearer[1]) + ' 公尺');
-  return { ok: false, title: '不在打卡點附近', lines: ['離' + nearer[0] + '還有大約 ' + Math.round(nearer[1]) + ' 公尺。', '打卡點：錢穆故居站、校內。離學校 ' + PT.DEPART_MIN_M + ' 公尺以外可以打出門卡。'] };
+  return { ok: false, title: '不在打卡點附近', lines: ['離最近的打卡點「' + nearer[0] + '」還有大約 ' + Math.round(nearer[1]) + ' 公尺。',
+    '打卡點：錢穆故居站，校內的' + Object.keys(PT_CAMPUS_POINTS).join('、') + '（' + PT.CAMPUS_M + ' 公尺內）。離學校 ' + PT.DEPART_MIN_M + ' 公尺以外可以打出門卡。'] };
 }
 
 /** 人在校內：步行（同一天 6～20 分鐘）和早到（當天先有出門卡、間隔夠久）分開判斷。
  *  這次有呼叫 ptAdd_（步行或早到）結果寫「加分」，都沒加才寫「到校」。
  *  新規則沒給點（不是今天、少於 6 分、超過 20 分、沒有出門卡、間隔太短）把簡短原因用「；」寫進原因欄。 */
-function ptArrive_(uid, sheet, now, dCampus, record) {
+function ptArrive_(uid, sheet, now, dCampus, record, campusSpot) {
   const lines = [];
   const reasons = [];
   let fresh = [];
@@ -532,7 +548,7 @@ function ptArrive_(uid, sheet, now, dCampus, record) {
   }
   if (!lines.length) lines.push('到校打卡成功。先在錢穆故居站打卡，同一天 ' + PT.WALK_MIN_MIN + '～' + PT.WALK_MAX_MIN + ' 分鐘走進來才有步行積分；7:30 前到校，而且今天先打過出門卡，才有早到積分。');
   if (fresh.length) lines.push('🏅 解鎖成就：' + fresh.join('、'));
-  record(PT_CAMPUS, dCampus, added ? '加分' : '到校', reasons.join('；'));
+  record(campusSpot || PT_CAMPUS, dCampus, added ? '加分' : '到校', reasons.join('；'));
   return { ok: true, title: '到校打卡成功', lines: lines.concat(['目前積分：' + cpUser_(uid).points + ' 點（' + PT.COUPON_POINTS + ' 點換 ' + PT.COUPON_VALUE + ' 元學餐折價券）']) };
 }
 

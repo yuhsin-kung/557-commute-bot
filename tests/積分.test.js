@@ -148,18 +148,44 @@ test('7:30 前到校、而且今天先有出門卡，早到 +1 點，一天一�
   assert.doesNotMatch(checkin(late, 'B', CAMPUS).lines.join('\n'), /早到 \+/);
 });
 
-test('校內 50 公尺內才算到校、錢穆故居站 50 公尺內才算起點；舊的 150／300 公尺不算', () => {
+test('校內打卡點 30 公尺內才算到校、錢穆故居站 50 公尺內才算起點；舊的 150／300 公尺不算', () => {
   const env = start();
-  assert.ok(env.call('ptMeters_', northOf(CAMPUS, 49), CAMPUS) <= 50);
-  assert.ok(env.call('ptMeters_', northOf(CAMPUS, 51), CAMPUS) > 50);
+  assert.ok(env.call('ptMeters_', northOf(CAMPUS, 29), CAMPUS) <= 30);
+  assert.ok(env.call('ptMeters_', northOf(CAMPUS, 31), CAMPUS) > 30);
   assert.ok(env.call('ptMeters_', northOf(CAMPUS, 200), CAMPUS) < 300);
-  assert.match(checkin(env, 'A', northOf(CAMPUS, 49)).title, /到校打卡成功/);
+  assert.match(checkin(env, 'A', northOf(CAMPUS, 29)).title, /到校打卡成功/);
   env.addMinutes(2);
-  assert.match(checkin(env, 'A', northOf(CAMPUS, 51)).title, /不在打卡點附近/);
+  assert.match(checkin(env, 'A', northOf(CAMPUS, 31)).title, /不在打卡點附近/);
   env.addMinutes(2);
   assert.match(checkin(env, 'A', northOf(CAMPUS, 200)).title, /不在打卡點附近/);
   assert.match(checkin(env, 'B', northOf(QIANMU, 49)).title, /錢穆故居站打卡成功/);
   assert.equal(user(env, 'A').points, 0);
+});
+
+test('R 棟、圖書館也是校內打卡點，記錄寫最近的點；離每個點都超過 30 公尺就不算', () => {
+  const env = start();
+  const R = [25.09305, 121.54627];
+  const LIB = [25.09345, 121.54645];
+  assert.match(checkin(env, 'A', northOf(R, 25)).title, /到校打卡成功/);
+  assert.equal(rows(env, '打卡紀錄').pop()[2], '第一教學研究大樓（R 棟）');
+  assert.match(checkin(env, 'B', LIB).title, /到校打卡成功/);
+  assert.equal(rows(env, '打卡紀錄').pop()[2], '中正圖書館');
+  assert.match(checkin(env, 'C', CAMPUS).title, /到校打卡成功/);
+  assert.equal(rows(env, '打卡紀錄').pop()[2], '校內 557 站');
+
+  const off = checkin(env, 'D', northOf(R, -40)); // R 棟往南 40 公尺
+  assert.match(off.title, /不在打卡點附近/);
+  assert.match(off.lines[0], /第一教學研究大樓（R 棟）」還有大約 40 公尺/);
+  assert.match(off.lines[1], /30 公尺內/);
+});
+
+test('從錢穆故居站走到 R 棟打卡，一樣算步行', () => {
+  const env = start();
+  checkin(env, 'A', QIANMU);
+  env.addMinutes(12);
+  const done = checkin(env, 'A', [25.09305, 121.54627]);
+  assert.match(done.lines.join('\n'), /步行 \+1 點/);
+  assert.equal(user(env, 'A').points, 1);
 });
 
 test('定位誤差 50 公尺收、超過 50 公尺不收，拒收原因寫進打卡紀錄', () => {
