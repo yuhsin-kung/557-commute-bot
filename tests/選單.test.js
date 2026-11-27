@@ -8,7 +8,8 @@ const { plain, saidOf, buttonsOf, hasQuickReply } = require('./helpers');
 
 const ALL = fs.readdirSync(path.join(__dirname, '..', 'bot')).filter(f => f.endsWith('.gs')).sort((a, b) => (a === 'Code.gs' ? -1 : b === 'Code.gs' ? 1 : 0));
 const MON_0700 = '2026-10-12T07:00:00+08:00';
-const CATEGORIES = ['出門前提醒', '557 以外的選擇', '公車站牌與排隊禮儀', '積分與打卡'];
+const CATEGORIES = ['幾點出門、幾點到東吳', '出門前提醒', '557 以外的選擇', '積分與打卡'];
+const MAIN = '幾點出門、幾點到東吳'; // 主打：按了直接是入口卡片，不是一串功能按鈕
 
 /** 會連網路的回覆換成固定的字，測試只看「有沒有走到對的功能」 */
 function start() {
@@ -42,16 +43,19 @@ test('按分類，Bot 把那一類的功能按鈕傳到聊天室', () => {
   const out = send(env, '出門前提醒')[0];
   assert.equal(titleOf(out), '出門前提醒');
   assert.deepEqual(buttonsOf(out), [
-    ['🚇 幾點出門、幾點到東吳', '到校預估'], ['比較所有路線', '比較所有路線'], ['557 即時動態', '557 即時動態'],
+    ['557 即時動態', '557 即時動態'], ['比較所有路線', '比較所有路線'], ['公車站牌與排隊禮儀', '公車站牌與排隊禮儀'],
     ['回報我在哪裡排隊', '回報現場'], ['降雨查詢', '降雨查詢'], ['雨天與考試週訂閱提醒', '訂閱提醒設定'],
   ]);
+  const main = send(env, MAIN)[0];
+  assert.match(main.altText, /幾點出門、幾點到東吳/);
+  assert.deepEqual(buttonsOf(main).map(b => b[1]), ['https://line.me/R/nv/location/', '出門時間', '到校預估 士林站']);
   assert.deepEqual(buttonsOf(send(env, '557 以外的選擇')[0]).map(b => b[1]), ['共乘', 'YouBike', '共享雨傘', '包車']);
   assert.deepEqual(buttonsOf(send(env, '積分與打卡')[0]), [
     ['到校打卡', '到校打卡'], ['出校打卡', '出校打卡'], ['我的紀錄', '我的紀錄'], ['兌換學餐折價券', '兌換折價券'], ['我的折價券', '我的折價券'], ['全校減碳', '全校減碳'],
   ]);
 });
 
-test('「公車站牌與排隊禮儀」只有一顆按鈕：直接左右滑上車地點和排隊禮儀短片', () => {
+test('「公車站牌與排隊禮儀」（現在在出門前提醒裡；舊圖文選單傳的字也認得）：直接左右滑上車地點和排隊禮儀短片', () => {
   const env = start();
   ['公車站牌與排隊禮儀', '公車站牌與排隊'].forEach(text => {
     const out = send(env, text)[0];
@@ -67,16 +71,16 @@ test('「公車站牌與排隊禮儀」只有一顆按鈕：直接左右滑上�
 
 test('每個功能的入口都在某個分類裡', () => {
   const env = start();
-  const all = CATEGORIES.filter(c => c !== '公車站牌與排隊禮儀').flatMap(c => buttonsOf(send(env, c)[0]).map(b => b[1]));
-  ['比較所有路線', '到校預估', '557 即時動態', '降雨查詢', '訂閱提醒設定', // 出門時間在「到校預估」裡（幾點出門、幾點到東吳合併成一個）
+  const all = CATEGORIES.flatMap(c => buttonsOf(send(env, c)[0]).map(b => b[1]));
+  ['比較所有路線', '出門時間', '到校預估 士林站', '557 即時動態', '降雨查詢', '訂閱提醒設定', '公車站牌與排隊禮儀', // 出門時間在主打「幾點出門、幾點到東吳」裡
     '共乘', 'YouBike', '共享雨傘', '包車', '到校打卡', '出校打卡', '我的紀錄', '兌換折價券', '我的折價券', '全校減碳'] // 騎車到校在「到校打卡」裡（積分.test.js）
     .forEach(command => assert.ok(all.includes(command), '沒有「' + command + '」的按鈕'));
 });
 
 test('分類裡每一顆按鈕傳出去的字，Bot 都認得', () => {
   const env = start();
-  CATEGORIES.filter(c => c !== '公車站牌與排隊禮儀').forEach(category => { // 這一類沒有功能按鈕，直接打開
-    buttonsOf(send(env, category)[0]).forEach(([label, text]) => {
+  CATEGORIES.forEach(category => {
+    buttonsOf(send(env, category)[0]).filter(b => !b[1].startsWith('http')).forEach(([label, text]) => {
       assert.equal(isUnknown(send(env, text)), false, '「' + category + '」的「' + label + '」傳出「' + text + '」，Bot 看不懂');
     });
   });
@@ -86,7 +90,7 @@ test('走過兩層：功能回覆裡的按鈕（選方向、測驗…）Bot 也�
   const env = start();
   const seen = [];
   CATEGORIES.forEach(category => {
-    buttonsOf(send(env, category)[0]).forEach(([, first]) => {
+    buttonsOf(send(env, category)[0]).filter(b => !b[1].startsWith('http')).forEach(([, first]) => {
       send(env, first).filter(m => m.type === 'flex').forEach(message => {
         buttonsOf(message).filter(b => typeof b[1] === 'string' && !b[1].startsWith('http')).forEach(([label, text]) => {
           seen.push(text);
@@ -95,7 +99,7 @@ test('走過兩層：功能回覆裡的按鈕（選方向、測驗…）Bot 也�
       });
     });
   });
-  assert.ok(['共乘 去學校', '訂閱提醒', '取消提醒', '出門時間', '到校預估 士林站'].every(t => seen.includes(t)), seen.join('、'));
+  assert.ok(['共乘 去學校', '訂閱提醒', '取消提醒', '出門時間 明天', '到校預估'].every(t => seen.includes(t)), seen.join('、'));
 });
 
 test('全部的回覆都不用輸入框上面那排按鈕（快速回覆）', () => {

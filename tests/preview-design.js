@@ -51,13 +51,14 @@ function cardsPage() {
 <div class="wrap" id="cards">${items}</div>`;
 }
 
-// 圖文選單：四個分類（跟 bot/選單.gs 的 MENU 一樣），按了 Bot 會把那一類的功能按鈕傳到聊天室。
-// 上排左到右、下排左到右。text 是按了以後替使用者傳出去的字，要跟 LINE 後台設定的一樣
+// 圖文選單（2500×1686，11/28 改成「上面一大格＋下面三格」）：主打「幾點出門、幾點到東吳」放最上面整排。
+// 每一格的 text 是按了以後替使用者傳出去的字，要跟 LINE 後台設定的一樣（也要是 bot/選單.gs 認得的分類名稱）。
+// rect 是這一格的位置 [x, y, 寬, 高]，LINE 後台用「上 1 下 3」的版型；用 Messaging API 設定時照這個填 bounds。
 const MENU = [
-  { icon: 'route', label: '出門前提醒', hint: '怎麼去・幾點出門・天氣', text: '出門前提醒', primary: true },
-  { icon: 'car', label: '557 以外的選擇', hint: '共乘・YouBike・共享雨傘', text: '557 以外的選擇' },
-  { icon: 'bus-stop', label: '公車站牌與排隊', hint: '上車地點・排隊禮儀', text: '公車站牌與排隊' },
-  { icon: 'award', label: '積分與打卡', hint: '5 點換 30 元學餐折價券', text: '積分與打卡' },
+  { icon: 'clock-hour-8', label: '幾點出門、幾點到東吳', hint: '傳位置就知道・要趕課幫你倒推・尖峰把排隊算進去', text: '幾點出門、幾點到東吳', primary: true, rect: [0, 0, 2500, 843] },
+  { icon: 'bus', label: '出門前提醒', hint: '557 動態・天氣・上車地點', text: '出門前提醒', rect: [0, 843, 833, 843] },
+  { icon: 'car', label: '557 以外的選擇', hint: '共乘・YouBike・雨傘', text: '557 以外的選擇', rect: [833, 843, 834, 843] },
+  { icon: 'award', label: '積分與打卡', hint: '5 點換 30 元學餐券', text: '積分與打卡', rect: [1667, 843, 833, 843] },
 ];
 
 function menuPage() {
@@ -68,9 +69,9 @@ function menuPage() {
 <script>
 var MENU = ${JSON.stringify(MENU)};
 var UI = { brand: '#A63A2B', brandDark: '#7A2A1F', paper: '#FBF7F0', line: '#E6D9C8', muted: '#6B6257', soft: '#F7DCD5' };
-var COLS = MENU.length === 4 ? 2 : 3;
-var W = 2500, H = 1686, CW = W / COLS, CH = H / 2;
+var W = 2500, H = 1686;
 var canvas = document.getElementById('c'), ctx = canvas.getContext('2d');
+var FONT = '"Noto Sans TC","Microsoft JhengHei",sans-serif';
 
 // 圖示用 Tabler Icons（MIT 授權）。抓 SVG 回來把線條換成指定的顏色，再畫到畫布上
 function icon(name, color) {
@@ -88,24 +89,52 @@ function icon(name, color) {
   });
 }
 
-Promise.all(MENU.map(function (m) { return icon(m.icon, m.primary ? '#FFFFFF' : UI.brand); })).then(function (icons) {
+// 字太長就縮小，左右留 pad
+function fit(text, weight, size, maxW) {
+  ctx.font = weight + ' ' + size + 'px ' + FONT;
+  while (ctx.measureText(text).width > maxW && size > 20) { size -= 4; ctx.font = weight + ' ' + size + 'px ' + FONT; }
+  return size;
+}
+
+document.fonts.ready.then(function () {
+  return Promise.all(MENU.map(function (m) { return icon(m.icon, m.primary ? '#FFFFFF' : UI.brand); }));
+}).then(function (icons) {
   ctx.fillStyle = UI.paper; ctx.fillRect(0, 0, W, H);
   MENU.forEach(function (m, i) {
-    var x = (i % COLS) * CW, y = Math.floor(i / COLS) * CH;
-    if (m.primary) { ctx.fillStyle = UI.brand; ctx.fillRect(x, y, CW, CH); }
-    var s = 300;
-    ctx.drawImage(icons[i], x + (CW - s) / 2, y + 190, s, s);
-    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = m.primary ? '#FFFFFF' : UI.brandDark;
-    ctx.font = '700 132px "Noto Sans TC","Microsoft JhengHei",sans-serif';
-    ctx.fillText(m.label, x + CW / 2, y + 640);
-    ctx.fillStyle = m.primary ? UI.soft : UI.muted;
-    ctx.font = '400 72px "Noto Sans TC","Microsoft JhengHei",sans-serif';
-    ctx.fillText(m.hint, x + CW / 2, y + 745);
+    var x = m.rect[0], y = m.rect[1], w = m.rect[2], h = m.rect[3];
+    ctx.textBaseline = 'alphabetic';
+    if (m.primary) {
+      // 主打：磚紅底，左邊大圖示、右邊兩行字
+      ctx.fillStyle = UI.brand; ctx.fillRect(x, y, w, h);
+      var s = 400, ix = x + 170, iy = y + (h - s) / 2;
+      ctx.drawImage(icons[i], ix, iy, s, s);
+      var tx = ix + s + 110, maxW = x + w - tx - 120;
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#FFFFFF';
+      fit(m.label, 700, 170, maxW);
+      ctx.fillText(m.label, tx, y + h / 2 + 10);
+      ctx.fillStyle = UI.soft;
+      fit(m.hint, 400, 76, maxW);
+      ctx.fillText(m.hint, tx, y + h / 2 + 150);
+      // 右上角小標
+      ctx.font = '700 64px ' + FONT; ctx.textAlign = 'right'; ctx.fillStyle = UI.soft;
+      ctx.fillText('主打', x + w - 80, y + 120);
+    } else {
+      var s2 = 260;
+      ctx.drawImage(icons[i], x + (w - s2) / 2, y + 150, s2, s2);
+      ctx.textAlign = 'center';
+      ctx.fillStyle = UI.brandDark;
+      fit(m.label, 700, 116, w - 90);
+      ctx.fillText(m.label, x + w / 2, y + 560);
+      ctx.fillStyle = UI.muted;
+      fit(m.hint, 400, 64, w - 90);
+      ctx.fillText(m.hint, x + w / 2, y + 660);
+    }
   });
   ctx.fillStyle = UI.line;
-  for (var c = 1; c < COLS; c++) ctx.fillRect(c * CW - 3, 0, 6, H);
-  ctx.fillRect(0, CH - 3, W, 6);
+  ctx.fillRect(0, 843 - 3, W, 6);
+  ctx.fillRect(833 - 3, 843, 6, H - 843);
+  ctx.fillRect(1667 - 3, 843, 6, H - 843);
   document.getElementById('status').textContent = '畫好了';
   document.getElementById('save').disabled = false;
   window.__ready = true;
