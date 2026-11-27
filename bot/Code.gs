@@ -47,7 +47,7 @@ function handleEvent_(ev) {
     // 到校預估.gs：從我這裡出發幾點到校。紀錄裡不寫經緯度
     let answer;
     try {
-      answer = etaFromLocation_(ev.message.latitude, ev.message.longitude);
+      answer = etaFromLocation_(ev.message.latitude, ev.message.longitude, ev.source.userId);
     } catch (err) {
       console.error(err);
       answer = '抱歉，資料暫時抓不到，等一下再試一次 🙏';
@@ -70,9 +70,11 @@ function handleEvent_(ev) {
     } else if (/557\s*以外|替代(路線|方式|交通)|其他的?(通勤|交通)/.test(text)) {
       answer = menuCategory_('557 以外的選擇'); // 「我想找 557 以外的通勤方式」這類說法
     } else if (/^出門時間(\s|$)/.test(text)) {
-      answer = menuFlow_(text); // 選單.gs：用點的排出門時間
-    } else if (/^(到校預估|從我這裡出發幾點到校|幾點到東吳)$/.test(text)) {
-      answer = etaButton_(); // 到校預估.gs：打開定位網頁的按鈕
+      answer = menuFlow_(text, ev.source.userId); // 選單.gs：用點的排出門時間（選好課會記下來，接著傳位置就倒推）
+    } else if (text === '到校預估 士林站') {
+      answer = etaFromShilin_(); // 到校預估.gs：人已經在捷運士林站
+    } else if (/^(到校預估|從我這裡出發幾點到校|幾點到東吳|幾點出門、幾點到東吳|幾點出門)$/.test(text)) {
+      answer = etaButton_(); // 到校預估.gs：主打功能的入口（傳位置、趕課倒推）
     } else if (text === '定位測試') {
       answer = geoTestButton_(); // 定位測試.gs（暫時的）
     } else if (/^(訂閱提醒|取消提醒)$/.test(text)) {

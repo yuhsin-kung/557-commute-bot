@@ -79,13 +79,14 @@ test('考試週仍出建議卡，多留 20 分鐘，並附行事曆與步行來�
   const examCard = env.call('planReply_', '士林站', 'D', new Date('2026-11-10T08:10:00+08:00'), true);
   const normalCard = env.call('planReply_', '士林站', 'D', new Date('2026-10-13T08:10:00+08:00'), true);
   assert.equal(examCard.contents.header.contents[0].text, '出門建議');
-  assert.equal(departMin(normalCard) - departMin(examCard), 20);
+  // 557 改用監測預測倒推：到校目標提早 20 分鐘，但早一點的時段車比較快、比較不用排，出門不一定剛好早 20 分鐘
+  assert.ok(departMin(normalCard) - departMin(examCard) > 0, '考試週要比較早出門');
   assert.match(examCard.altText, /已多算 20 分鐘/);
   assert.match(examCard.altText, /行事曆：期中考試/);
   assert.match(examCard.altText, /步行：校園大樓表（估計）/);
   assert.doesNotMatch(examCard.altText, /實測/);
   assert.doesNotMatch(normalCard.altText, /行事曆：/);
-  assert.deepEqual(buttonsOf(examCard).map(b => b[0]), ['換一個時間', '改從其他捷運站出發', '預約計程車共乘', '557 發車前提醒我']);
+  assert.deepEqual(buttonsOf(examCard).map(b => b[0]), ['換一個時間', '用我的位置算幾點出門', '改從其他捷運站出發', '預約計程車共乘', '557 發車前提醒我']);
 
   freeze(env, '2026-11-09T21:00:00+08:00');
   const viaMenu = env.call('menuFlow_', '出門時間 明天 08:10 D');

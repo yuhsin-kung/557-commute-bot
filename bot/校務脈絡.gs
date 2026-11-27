@@ -71,7 +71,7 @@ function holidayReply_(ctx) {
 
 /** planReply_ 卡片 footer。考試週附行事曆名稱；有大樓才附步行，並標明是估計不是實測。 */
 function contextFooter_(classAt, building) {
-  const base = '依預估車程推算，出門前按「比較所有路線」可以看即時到站';
+  const base = '557 依監測資料預測（平常日），其他車依預估車程推算；出門前按「比較所有路線」可以看即時到站';
   if (!classAt) return base;
   const ctx = classContext_({
     date: Utilities.formatDate(classAt, TZ, 'yyyy-MM-dd'),

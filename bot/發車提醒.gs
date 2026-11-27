@@ -13,7 +13,8 @@ const LV_HEAD = ['建立時間', '使用者 ID', '提醒時間', '建議到站�
 
 /** 「出門提醒 今天|明天 HH:MM」設定、「取消出門提醒」取消。不是這兩種就回傳 null */
 function lvText_(uid, text) {
-  const set = text.match(/^出門提醒 (今天|明天) (\d{2}:\d{2})$/);
+  // 「出門提醒 明天 07:35」：07:35 到士林站，提前 LV_BEFORE_MIN 分鐘提醒；「出門提醒 明天 08:39 出門 08:22」：08:22 提醒出門（從家倒推的，到校預估.gs）
+  const set = text.match(/^出門提醒 (今天|明天) (\d{2}:\d{2})(?: 出門 (\d{2}:\d{2}))?$/);
   if (!set && text !== '取消出門提醒') return null;
   return cpLocked_(() => { // 共乘.gs
     const sheet = cpSheet_('發車提醒', LV_HEAD);
@@ -28,7 +29,7 @@ function lvText_(uid, text) {
     }
     const now = cpNow_();
     const arrive = timeOn_(set[1] === '明天' ? addMin_(now, 24 * 60) : now, set[2]);
-    const at = addMin_(arrive, -LV_BEFORE_MIN);
+    const at = set[3] ? timeOn_(arrive, set[3]) : addMin_(arrive, -LV_BEFORE_MIN);
     if (at <= now) return choices_('快到出門時間了，直接看現在的車比較準。', [['比較所有路線', '比較所有路線']]);
     cancel();
     sheet.appendRow([now, uid, at, arrive, '等待中']);

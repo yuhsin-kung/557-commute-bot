@@ -145,3 +145,64 @@ test('在 LINE 裡完成：傳「到校預估」→ 按鈕打開 LINE 的傳送�
   assert.equal(logged[2], '（傳了位置）', '紀錄裡不寫經緯度');
   assert.doesNotMatch(JSON.stringify(logged), /25\.114|121\.515/);
 });
+
+// ===== 合併「出門時間建議」 =====
+const lastReply = env => env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body.messages[0];
+const sendText = (env, text) => { env.call('handleEvent_', { type: 'message', replyToken: 'r', source: { userId: 'A' }, message: { type: 'text', text } }); return lastReply(env); };
+const sendLoc = (env, lat, lng) => { env.call('handleEvent_', { type: 'message', replyToken: 'r', source: { userId: 'A' }, message: { type: 'location', latitude: lat, longitude: lng } }); return lastReply(env); };
+
+test('合併入口：傳送我的位置、我要趕課、我已經在士林站', () => {
+  const env = loadBot(ALL);
+  const card = env.call('etaButton_');
+  const json = JSON.stringify(card);
+  assert.match(card.altText, /幾點出門、幾點到東吳/);
+  assert.match(json, /line\.me\/R\/nv\/location/);
+  assert.match(json, /"text":"出門時間"/);
+  assert.match(json, /"text":"到校預估 士林站"/);
+});
+
+test('我已經在士林站：走 5 分鐘到站牌，再估幾點到東吳', () => {
+  const env = loadBot(ALL);
+  env.setNow('2026-11-25T09:20:00+08:00');
+  const r = sendText(env, '到校預估 士林站');
+  assert.match(r.altText, /約 09:25 到站牌/);
+  assert.match(r.altText, /建議走去.+站牌：09:\d\d–\d\d:\d\d 到東吳/);
+});
+
+test('趕課：選好明天第 3 節（10:10，尖峰前後）D 棟，接著傳位置 → 倒推最晚幾點出門，可以設出門提醒', () => {
+  const env = loadBot(ALL);
+  env.setNow('2026-11-24T21:00:00+08:00'); // 明天 11/25（三）
+  env.walkSeconds = () => 6 * 60;
+  const plan = sendText(env, '出門時間 明天 10:10 D');
+  assert.match(plan.altText, /出門建議|上課/);
+  assert.match(JSON.stringify(plan), /用我的位置算幾點出門/);
+  const r = sendLoc(env, SHIPAI[0], SHIPAI[1]);
+  assert.match(r.altText, /明天 10:10 上課/);
+  const depart = r.altText.match(/從你這裡出發：(\d\d:\d\d) 前出門/);
+  assert.ok(depart, r.altText);
+  assert.match(r.altText, /走到石牌站約 6 分鐘/);
+  assert.match(r.altText, /557 預計 \d\d:\d\d–\d\d:\d\d 到東吳（尖峰，已把排隊、等下一台算進去）/);
+  assert.match(r.altText, /下車走到 D 棟約 \d+ 分鐘/);
+  // 最晚到東吳 + 走到 D 棟 + 提早 5 分 ≤ 10:10
+  const late = r.altText.match(/557 預計 \d\d:\d\d–(\d\d):(\d\d) 到東吳/);
+  const walk = Number(r.altText.match(/走到 D 棟約 (\d+) 分鐘/)[1]);
+  assert.ok(Number(late[1]) * 60 + Number(late[2]) + walk + 5 <= 10 * 60 + 10);
+  // 出門提醒：到時間提醒「該出門了」
+  const remind = JSON.parse(JSON.stringify(r)).contents.footer.contents.map(c => c.action && c.action.text).find(t => t && t.startsWith('出門提醒'));
+  assert.match(remind, new RegExp('^出門提醒 明天 \\d\\d:\\d\\d 出門 ' + depart[1] + '$'));
+  const set = sendText(env, remind);
+  assert.match(set.altText, new RegExp('明天 ' + depart[1]));
+  const row = env.sheets['發車提醒'].rows.pop();
+  assert.equal(env.run('Utilities.formatDate')(new Date(row[2]), 'Asia/Taipei', 'HH:mm'), depart[1], '提醒時間就是出門時間');
+  // 用過就清掉：再傳一次位置是「現在出發幾點到」
+  assert.match(sendLoc(env, SHIPAI[0], SHIPAI[1]).altText, /🚇/);
+});
+
+test('沒選課直接傳位置：現在出發幾點到（不會被當成趕課）', () => {
+  const env = loadBot(ALL);
+  env.setNow('2026-11-25T09:05:00+08:00');
+  env.walkSeconds = () => 6 * 60;
+  const r = sendLoc(env, SHIPAI[0], SHIPAI[1]);
+  assert.match(r.altText, /幾點到東吳/);
+  assert.doesNotMatch(r.altText, /前出門/);
+});

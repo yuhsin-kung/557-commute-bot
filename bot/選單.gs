@@ -16,7 +16,7 @@ const MENU = [
   {
     name: '出門前提醒',
     hint: '幾點出門才不會趕？選好上課時間和教室，我幫你安排通勤時間。',
-    buttons: [['從我這裡出發幾點到校', '到校預估'], ['比較所有路線', '比較所有路線'], ['出門時間建議', '出門時間'], ['557 即時動態', '557 即時動態'],
+    buttons: [['🚇 幾點出門、幾點到東吳', '到校預估'], ['比較所有路線', '比較所有路線'], ['557 即時動態', '557 即時動態'],
       ['回報我在哪裡排隊', '回報現場'], ['降雨查詢', '降雨查詢'], ['雨天與考試週訂閱提醒', '訂閱提醒設定']],
   },
   {
@@ -74,7 +74,7 @@ function menuUnknown_() {
  * 「出門時間」一步一步點：出門時間 [今天|明天] [HH:MM] [大樓代號|不指定] [出發站]
  * 每一步都把前面選過的帶在按鈕傳出的字裡，所以 Bot 不用記住誰點到哪一步。
  */
-function menuFlow_(text) {
+function menuFlow_(text, uid) {
   const p = text.trim().split(/\s+/);
   const day = p[1], time = p[2], building = p[3], origin = p[4];
   const now = new Date();
@@ -102,6 +102,8 @@ function menuFlow_(text) {
     const base = ['出門時間', day, time, building].join(' ');
     return choices_('要從哪一個捷運站出發？', Object.keys(ORIGINS).map(name => [name, base + ' ' + name]), { title: '出門時間建議', badge: '換出發站', primary: false });
   }
+  // 選好課（從士林站或沒指定出發站）：記下來，接著傳位置就從學生的位置倒推（到校預估.gs）
+  if (!ORIGINS[origin] || origin === '士林站') etaRememberClass_(uid, day, time, building);
   return compareQuery_({ // 比較器.gs
     intent: '去學校',
     arriveTime: time,

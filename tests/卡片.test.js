@@ -88,12 +88,13 @@ test('即時比較：沒有車的時候說明原因，並給共乘的按鈕', ()
   assert.equal(card.contents.footer.contents[0].action.text, '共乘');
 });
 
-test('出門建議：平日早八會多算尖峰的 10 分鐘；劍南路出發會列學校專車', () => {
+test('出門建議：平日早八的 557 用監測預測倒推（尖峰算排隊）；劍南路出發會列學校專車', () => {
   const cards = sampleCards();
-  assert.match(cards.出門建議.altText, /★ 搭 557 進校園：07:38 前到士林站\n　尖峰可能要等一兩班，已多算 10 分鐘/);
+  assert.match(cards.出門建議.altText, /★ 搭 557 進校園：07:30 前到士林站\n　預計 07:54–08:00 到東吳（士林國中站牌），尖峰已把排隊、等下一台算進去/);
   assert.match(cards.出門建議.altText, /・搭其他車：07:42 前到士林站/);
   assert.equal(cards.出門建議.contents.header.contents[1].text, '明天 08:10 上課');
-  assert.equal(cards.出門建議.contents.footer.contents[2].action.text, '共乘 去學校 預約');
+  assert.equal(cards.出門建議.contents.footer.contents[1].action.uri, 'https://line.me/R/nv/location/', '用我的位置算幾點出門');
+  assert.equal(cards.出門建議.contents.footer.contents[3].action.text, '共乘 去學校 預約');
   assert.match(cards.出門建議劍南路.altText, /・學校專車：07:50 發車/);
 });
 

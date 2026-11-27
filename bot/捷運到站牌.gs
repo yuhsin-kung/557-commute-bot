@@ -232,34 +232,50 @@ function mrtTrainToShilin_(code, toShilin, ready) {
   return t === undefined ? null : mrtAtMinute_(ready, t);
 }
 
+/** 這個位置：最近的捷運站和走路時間（Google 地圖只問一次）。定位格式不對回 null */
+function mrtLeg_(here) {
+  if (!isFinite(here[0]) || !isFinite(here[1]) || Math.abs(here[0]) > 90 || Math.abs(here[1]) > 180) return null;
+  const st = mrtNearest_(here);
+  const w = mrtWalk_(here, st.code === 'R16' ? SHILIN_MRT : st.at);
+  return { st, walk: w, nm: /站$/.test(st.name) ? st.name : st.name + '站' }; // 台北車站不要變成「台北車站站」
+}
+
+/** depart 這一刻出門，幾點到 557 站牌（Date）；士林站附近直接走過去。搭不到捷運回 null */
+function mrtAtStop_(leg, depart) {
+  if (leg.st.code === 'R16') return new Date(depart.getTime() + leg.walk.min * 60000);
+  const train = mrtTrain_(leg, depart);
+  return train ? new Date(train.getTime() + MRT_EXIT_TO_STOP_MIN * 60000) : null;
+}
+
+function mrtTrain_(leg, depart) {
+  const ready = new Date(depart.getTime() + (leg.walk.min + MRT_ENTER_MIN) * 60000);
+  return mrtTrainToShilin_(leg.st.code, leg.st.toShilin, ready);
+}
+
+/** 每一步怎麼走（給學生看的字） */
+function mrtSteps_(leg, depart, atStop) {
+  const hm = d => Utilities.formatDate(d, TZ, 'HH:mm');
+  if (leg.st.code === 'R16') return [`你就在士林站附近，走到 557 站牌約 ${leg.walk.min} 分鐘（${leg.walk.source}）`, `約 ${hm(atStop)} 到站牌`];
+  return [`走到${leg.nm}約 ${leg.walk.min} 分鐘（${leg.walk.source}）`, `搭捷運，${hm(mrtTrain_(leg, depart))} 到士林站`,
+    `出站走到 557 站牌約 ${MRT_EXIT_TO_STOP_MIN} 分鐘，約 ${hm(atStop)} 到站牌`];
+}
+
 /**
- * 主流程：從這個位置出發，幾點到 557 站牌（LINE 位置訊息呼叫，到校預估.gs）。
- * 回傳 { ok, station, walkMin, walkSource, trainAtShilin, atStop, lines }，時間是 'HH:mm'
+ * 主流程：從這個位置現在出發，幾點到 557 站牌、幾點到東吳（LINE 位置訊息呼叫，到校預估.gs）。
+ * 回傳 { ok, station, walkMin, walkSource, trainAtShilin, atStop, school, lines }，時間是 'HH:mm'
  */
 function mrtPlan_(lat, lng, nowMs) {
-  const here = [Number(lat), Number(lng)];
-  if (!isFinite(here[0]) || !isFinite(here[1]) || Math.abs(here[0]) > 90 || Math.abs(here[1]) > 180) return { ok: false, lines: ['定位格式不對'] };
+  const leg = mrtLeg_([Number(lat), Number(lng)]);
+  if (!leg) return { ok: false, lines: ['定位格式不對'] };
   const now = nowMs ? new Date(nowMs) : new Date();
   const hm = d => Utilities.formatDate(d, TZ, 'HH:mm');
-  const st = mrtNearest_(here);
-  if (st.code === 'R16') {
-    const w = mrtWalk_(here, SHILIN_MRT);
-    const atStop = new Date(now.getTime() + w.min * 60000);
-    return { ok: true, station: '士林', walkMin: w.min, walkSource: w.source, trainAtShilin: null, atStop: hm(atStop),
-      school: mrtSchool_(atStop),
-      lines: [`你就在士林站附近，走到 557 站牌約 ${w.min} 分鐘（${w.source}）`, `約 ${hm(atStop)} 到站牌`].concat(p557Lines_(atStop)) }; // 到校預估.gs
-  }
-  const nm = /站$/.test(st.name) ? st.name : st.name + '站'; // 台北車站不要變成「台北車站站」
-  const w = mrtWalk_(here, st.at);
-  const ready = new Date(now.getTime() + (w.min + MRT_ENTER_MIN) * 60000);
-  const train = mrtTrainToShilin_(st.code, st.toShilin, ready);
-  if (!train) return { ok: false, station: st.name, walkMin: w.min, walkSource: w.source,
-    lines: [`最近的捷運站是${nm}，走路約 ${w.min} 分鐘`, '這個時間查不到捷運班次（捷運營運時間外）'] };
-  const atStop = new Date(train.getTime() + MRT_EXIT_TO_STOP_MIN * 60000);
-  return { ok: true, station: st.name, walkMin: w.min, walkSource: w.source, trainAtShilin: hm(train), atStop: hm(atStop),
-    school: mrtSchool_(atStop),
-    lines: [`走到${nm}約 ${w.min} 分鐘（${w.source}）`, `搭捷運，${hm(train)} 到士林站`, `出站走到 557 站牌約 ${MRT_EXIT_TO_STOP_MIN} 分鐘，約 ${hm(atStop)} 到站牌`]
-      .concat(p557Lines_(atStop)) }; // 到校預估.gs
+  const atStop = mrtAtStop_(leg, now);
+  const base = { station: leg.st.name, walkMin: leg.walk.min, walkSource: leg.walk.source };
+  if (!atStop) return Object.assign(base, { ok: false,
+    lines: [`最近的捷運站是${leg.nm}，走路約 ${leg.walk.min} 分鐘`, '這個時間查不到捷運班次（捷運營運時間外）'] });
+  const train = leg.st.code === 'R16' ? null : mrtTrain_(leg, now);
+  return Object.assign(base, { ok: true, trainAtShilin: train ? hm(train) : null, atStop: hm(atStop), school: mrtSchool_(atStop),
+    lines: mrtSteps_(leg, now, atStop).concat(p557Lines_(atStop)) }); // 到校預估.gs
 }
 
 /** 推薦的站牌和幾點到東吳（給網頁顯示）：{ stop, early, late }，時間是 'HH:mm'，離峰 late＝null */
