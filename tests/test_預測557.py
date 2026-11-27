@@ -109,7 +109,9 @@ class EvaluateTest(unittest.TestCase):
                 for s in ("17:40:00", "17:41:00", "17:42:00", "18:44:00", "18:46:00"):
                     f.write(f"2026-11-26 {s},2026-11-26 {s}\n")
             gaps = p.load_gaps("2026-11-26", d)
-        self.assertEqual(gaps, [(at("17:42", "2026-11-26"), at("18:44", "2026-11-26"))], "隔 2 分鐘不算斷掉，隔 62 分鐘才算")
+        self.assertEqual(gaps[1:-1], [(at("17:42", "2026-11-26"), at("18:44", "2026-11-26"))], "隔 2 分鐘不算斷掉，隔 62 分鐘才算")
+        self.assertEqual(gaps[0], (at("00:00", "2026-11-26"), at("17:40", "2026-11-26")), "監測開始以前也算沒資料")
+        self.assertEqual(gaps[-1], (at("18:46", "2026-11-26"), at("00:00", "2026-11-27")), "監測結束以後也算沒資料")
 
     def test_predictions_file_round_trip(self):
         rows = p.predict({DAY: [bus("08:00", 9), bus("08:10", 9)]}, "2026-11-26")

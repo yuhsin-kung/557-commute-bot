@@ -54,7 +54,7 @@ def style(ax):
 def read_scores():
     with open(SCORES, encoding="utf-8-sig", newline="") as f:
         lines = [x for x in f.read().splitlines() if not x.startswith("#")]
-    return {(r["模型"], r["情況"], r["方法"]): float(r["平均差"]) for r in csv.DictReader(lines)}
+    return {(r["模型"], r["情況"], r["方法"]): float(r["平均差"]) for r in csv.DictReader(lines) if r.get("考卷", "全部") == "全部"}
 
 
 def chart_errors(s):
@@ -82,7 +82,7 @@ def chart_errors(s):
     c, d = crowd[0][1], crowd[2][1]
     axes[0].text(0, -0.85, f"比 Bot 少差 {round((a - b) / a * 100)}%", color=ML, fontsize=14, fontweight="bold", transform=axes[0].get_yaxis_transform())
     axes[1].text(0, -0.85, f"比歷史少差 {round((c - d) / c * 100)}%", color=ML, fontsize=14, fontweight="bold", transform=axes[1].get_yaxis_transform())
-    fig.text(0.01, 0.01, "輪流考試：11/25、11/26、11/27 輪流當考卷，模型沒看過考卷那天。資料：臺北市公車動態網站，每 15 秒記錄。",
+    fig.text(0.01, 0.01, "輪流考試：11/24（只有傍晚）、11/25、11/26、11/27 輪流當考卷，模型沒看過考卷那天。資料：臺北市公車動態網站，每 15 秒記錄。",
              color=MUTED, fontsize=10)
     fig.tight_layout(rect=(0, 0.05, 1, 1))
     fig.savefig(os.path.join(OUT, "1_誤差比較.png"), dpi=200)

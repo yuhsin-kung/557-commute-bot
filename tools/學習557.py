@@ -312,30 +312,47 @@ def main():
     except (AttributeError, ValueError):
         pass
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--days", nargs="+", default=DAYS, help="用哪幾天；第一天只跑了半天的只拿來訓練")
+    ap.add_argument("--days", nargs="+", default=DAYS, help="用哪幾天")
+    ap.add_argument("--exam", nargs="+", help="哪幾天輪流當考卷（預設每一天；11/24 只有傍晚，就只考傍晚）")
     ap.add_argument("--data", default=p.DATA_DIR)
     ap.add_argument("--out", default=p.OUT_DIR)
     a = ap.parse_args()
-    days, tests = a.days, [d for d in a.days if d != "2026-11-24"]
+    days = a.days
+    tests = a.exam or days
     buses = {d: p.load_day(d, a.data) for d in days}
     trips = {d: load_trips(d, a.data) for d in days}
     events = {d: load_events(d, a.data) for d in days}
     arrivals = {d: mrt_arrivals(events[d]) for d in days}
+    crowds = {d: crowd_rows(trips[d]) for d in days}
 
+    # 每一天各考一次，記下每天的誤差；「全部」是所有考卷合起來
+    errs, betas = {}, {}
+    for test in tests:
+        for (period, k), e in exam_ride(buses, [test]).items():
+            errs.setdefault(("車程（士林站→東吳）", period, k, "分", 3), {})[test] = e
+        betas[test] = exam_ride.betas[test]
+        for k, e in exam_crowd(crowds, [test]).items():
+            errs.setdefault(("擁擠（離開士林站車上幾人）", "全天", k, "人", 10), {})[test] = e
+        for (n, k), e in sorted(exam_home(buses, events, arrivals, [test], a.data).items()):
+            errs.setdefault(("在家預估幾點到東吳", f"提早 {n} 分鐘查", k, "分", 3), {})[test] = e
+    print("塞車時段調整係數 β（每輪用訓練那幾天學）：" + "、".join(f"{d[5:]} 當考卷 {b:.2f}" for d, b in betas.items()))
     rows = []
-    for (period, k), e in exam_ride(buses, tests).items():
-        rows.append({"模型": "車程（士林站→東吳）", "情況": period, "方法": k, **score(e), "容許": "±3 分", "單位": "分"})
-    print("塞車時段調整係數 β（每輪用訓練那幾天學）：" + "、".join(f"{d[5:]} 當考卷 {b:.2f}" for d, b in exam_ride.betas.items()))
-    for k, e in exam_crowd({d: crowd_rows(trips[d]) for d in days}, tests).items():
-        rows.append({"模型": "擁擠（離開士林站車上幾人）", "情況": "全天", "方法": k, **score(e, 10), "容許": "±10 人", "單位": "人"})
-    for (n, k), e in sorted(exam_home(buses, events, arrivals, tests, a.data).items()):
-        rows.append({"模型": "在家預估幾點到東吳", "情況": f"提早 {n} 分鐘查", "方法": k, **score(e), "容許": "±3 分", "單位": "分"})
-    fields = ["模型", "情況", "方法", "平均差", "單位", "容許", "容許內%", "筆數"]
+    for (model, period, k, unit, tol), by_day in errs.items():
+        for exam in ["全部"] + list(by_day):
+            e = [x for v in by_day.values() for x in v] if exam == "全部" else by_day[exam]
+            if e:
+                rows.append({"模型": model, "情況": period, "方法": k, "考卷": exam if exam == "全部" else exam[5:],
+                             **score(e, tol), "容許": f"±{tol} {unit}", "單位": unit})
+    fields = ["模型", "情況", "方法", "考卷", "平均差", "單位", "容許", "容許內%", "筆數"]
     path = os.path.join(a.out, f"557機器學習成績_{days[-1]}.csv")
-    p.write_csv(path, rows, fields, f"# 輪流考試：{'、'.join(d[5:] for d in tests)} 輪流當考卷，其他天訓練；產生時間 {datetime.now():%Y-%m-%d %H:%M}")
+    p.write_csv(path, rows, fields, f"# 輪流考試：{'、'.join(d[5:] for d in tests)} 輪流當考卷，其他天訓練（11/24 只有傍晚）；"
+                                    f"產生時間 {datetime.now():%Y-%m-%d %H:%M}")
     for r in rows:
-        print(f"{r['模型']} | {r['情況']} | {r['方法']}：平均差 {r['平均差']} {r['單位']}，"
-              f"{r['容許']}內 {r['容許內%']}%（{r['筆數']} 筆）")
+        if r["考卷"] == "全部":
+            per = "  ".join(f"{x['考卷']} {x['平均差']}" for x in rows
+                            if x["考卷"] != "全部" and (x["模型"], x["情況"], x["方法"]) == (r["模型"], r["情況"], r["方法"]))
+            print(f"{r['模型']} | {r['情況']} | {r['方法']}：平均差 {r['平均差']} {r['單位']}，"
+                  f"{r['容許']}內 {r['容許內%']}%（{r['筆數']} 筆）  [{per}]")
     print(f"已寫入 {path}")
 
 

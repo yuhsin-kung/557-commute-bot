@@ -63,7 +63,8 @@ class Day(list):
 
 def load_gaps(day, data_dir=DATA_DIR):
     """三個 CSV 的「抓取時間」合起來，相鄰兩次隔超過 OUTAGE 的就是斷掉的時段。
-    11/26 有三段：14:16–15:03 關機、16:58–17:10 電腦睡眠、17:42–18:44 Wi-Fi 斷線"""
+    11/26 有三段：14:16–15:03 關機、16:58–17:10 電腦睡眠、17:42–18:44 Wi-Fi 斷線。
+    監測開始以前、結束以後也算沒資料（11/24 16:57 才開始，之前「沒記到車」不代表沒有車）"""
     stamps = set()
     for name in ("raw", "人數", "預估"):
         path = os.path.join(data_dir, f"557_{name}_{day}.csv")
@@ -74,7 +75,11 @@ def load_gaps(day, data_dir=DATA_DIR):
                 if row.get("抓取時間"):
                     stamps.add(datetime.strptime(row["抓取時間"], "%Y-%m-%d %H:%M:%S"))
     stamps = sorted(stamps)
-    return [(a, b) for a, b in zip(stamps, stamps[1:]) if b - a > OUTAGE]
+    if not stamps:
+        return []
+    start = datetime.strptime(day, "%Y-%m-%d")
+    return ([(start, stamps[0])] + [(a, b) for a, b in zip(stamps, stamps[1:]) if b - a > OUTAGE]
+            + [(stamps[-1], start + timedelta(days=1))])
 
 
 def seen(day_buses, start, end):
