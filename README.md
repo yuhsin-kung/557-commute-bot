@@ -96,6 +96,8 @@ uv run tools/零件模型557.py
 
 回程（東吳 → 捷運士林站）：`uv run tools/零件模型557.py --direction 回程`，成績存在 `預測紀錄/557回程成績_日期.csv`。
 
+士林站排隊模擬（學生到站時前面排幾人、搭得上哪一班）：`uv run tools/排隊模擬557.py`，成績存在 `預測紀錄/557排隊模擬成績_日期.csv`。11/28 試的結果贏不了簡單方法，原因在 `到校時間預測.md`「士林站排隊模擬」。
+
 簡報圖：`uv run tools/畫圖557.py`，存在 `design/簡報圖/`。
 
 測試要加 scikit-learn：`uv run --with openpyxl --with scikit-learn python -m unittest discover -s tests -p "test_*.py"`（沒裝的話模型測試會跳過）。
