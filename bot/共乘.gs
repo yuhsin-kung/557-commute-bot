@@ -324,7 +324,6 @@ function cpSolo_(g) {
 function doGet(e) {
   const token = e && e.parameter && e.parameter.t;
   if (e && e.parameter && e.parameter.page === 'geo') return geoTestPage_(); // 定位測試.gs
-  if (e && e.parameter && e.parameter.page === 'eta') return etaPage_(); // 到校預估.gs：定位 → 捷運 → 557 → 幾點到東吳
   if (e && e.parameter && e.parameter.page === 'survey') return surveyPage_(); // 問卷入口.gs：A／B／C 自動分配
   if (e && e.parameter && e.parameter.page === 'checkin' && /^[0-9a-f-]{36}$/.test(token || '')) return ptCheckinPage_(token); // 積分.gs
   if (e && e.parameter && e.parameter.page === 'coupon' && /^[0-9a-f-]{36}$/.test(token || '') && /^SC\d{4}-\d{4}$/.test(e.parameter.c || '')) return ptCouponPage_(token, e.parameter.c); // 積分.gs

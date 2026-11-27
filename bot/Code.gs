@@ -43,6 +43,19 @@ function handleEvent_(ev) {
     }
     return;
   }
+  if (ev.type === 'message' && ev.message.type === 'location') {
+    // 到校預估.gs：從我這裡出發幾點到校。紀錄裡不寫經緯度
+    let answer;
+    try {
+      answer = etaFromLocation_(ev.message.latitude, ev.message.longitude);
+    } catch (err) {
+      console.error(err);
+      answer = '抱歉，資料暫時抓不到，等一下再試一次 🙏';
+    }
+    reply_(ev.replyToken, answer);
+    log_(ev, '（傳了位置）', answer);
+    return;
+  }
   if (ev.type !== 'message' || ev.message.type !== 'text') return;
 
   const text = ev.message.text.trim();

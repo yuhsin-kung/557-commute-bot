@@ -7,7 +7,7 @@
  *   士林站平常日時刻表（115.8.30 生效）兩個方向，06:00–18:59；假日還沒抄，假日先回「只算平常日」
  *   全部都在 data/捷運站座標.csv、data/捷運士林站平日時刻表.csv
  * 走路時間：Apps Script 內建的 Google 地圖（不用金鑰、不綁信用卡）。查不到（額度用完、沒網路）就用直線距離 × 1.3 ÷ 每分鐘 75 公尺
- * 隱私：定位只用來算走路時間，不存
+ * 隱私：位置只用來算走路時間，不存（訊息紀錄只寫「（傳了位置）」）
  *
  * 已知誤差：
  *   復興崗～淡水往南：有些班從北投才發車（時刻表加底線的區間車），這裡還沒排除，可能少算一班的等車
@@ -19,7 +19,7 @@ const MRT_EXIT_TO_STOP_MIN = 5; // 出士林站走到 557 站牌（國中、捷�
 const MRT_TRANSFER_WAIT_MIN = 3;
 const WALK_M_PER_MIN = 75;
 const WALK_DETOUR = 1.3;        // 直線距離換成實際走的路
-const MRT_MAPS_PER_MIN = 30;    // 這個函式是公開的（網頁會呼叫），被亂按時保護 Google 地圖額度：
+const MRT_MAPS_PER_MIN = 30;    // 被一直傳位置時保護 Google 地圖額度：
 const MRT_MAPS_PER_DAY = 800;   //   超過就改用距離估，不會擋掉學生（一般帳號每天約 1,000 次，上線前再確認）
 const SHILIN_MRT = [25.09547, 121.52690]; // 捷運士林站（跟 YouBike.gs、定位測試.gs 同一個座標）
 
@@ -217,10 +217,10 @@ function mrtTrainToShilin_(code, toShilin, ready) {
 }
 
 /**
- * 主流程：從這個位置出發，幾點到 557 站牌。網頁用 google.script.run 呼叫（名稱不能底線結尾）。
+ * 主流程：從這個位置出發，幾點到 557 站牌（LINE 位置訊息呼叫，到校預估.gs）。
  * 回傳 { ok, station, walkMin, walkSource, trainAtShilin, atStop, lines }，時間是 'HH:mm'
  */
-function mrtPlanFromHere(lat, lng, nowMs) {
+function mrtPlan_(lat, lng, nowMs) {
   const here = [Number(lat), Number(lng)];
   if (!isFinite(here[0]) || !isFinite(here[1]) || Math.abs(here[0]) > 90 || Math.abs(here[1]) > 180) return { ok: false, lines: ['定位格式不對'] };
   const now = nowMs ? new Date(nowMs) : new Date();

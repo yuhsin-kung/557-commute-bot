@@ -6,8 +6,7 @@ const { loadBot } = require('./gas-env');
 const { cardsPage, menuPage, saveMenu } = require('./preview-design');
 
 const PORT = 4557;
-const env = loadBot(['Code.gs', '卡片.gs', '選單.gs', '共乘.gs', '等車室.gs', '定位測試.gs', '問卷入口.gs', '捷運到站牌.gs', '預測表557.gs', '到校預估.gs']);
-// 到校預估預覽：走路時間用距離估（不連 Google）；/eta?lat=&lng=&now= 假裝手機定位和時間
+const env = loadBot(['Code.gs', '卡片.gs', '選單.gs', '共乘.gs', '等車室.gs', '定位測試.gs', '問卷入口.gs']);
 // 問卷入口：三份假表單，已交卷人數照 2026/10/15 的實際情況（A 版大二特別多）
 const SURVEY_COUNTS = { A: [1, 31, 2, 1, 1], B: [7, 3, 7, 7, 1], C: [7, 23, 8, 4, 3] };
 const GRADES = ['大一', '大二', '大三', '大四', '碩博士班'];
@@ -49,13 +48,12 @@ function home(result) {
 <style>body{font:15px/1.7 sans-serif;padding:20px;max-width:900px}th{text-align:left;padding-right:12px;white-space:nowrap}pre{background:#f3f4f6;padding:12px;border-radius:8px;white-space:pre-wrap}</style>
 <h1>共乘預覽</h1>
 <p>現在時間：${env.call('cpNow_').toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}
-｜ <a href="/skip?min=1">快轉 1 分鐘</a> ｜ <a href="/skip?min=5">快轉 5 分鐘</a> ｜ <a href="/eta">到校預估頁</a> ｜ <a href="/geo">定位測試頁</a> ｜ <a href="/survey">問卷入口</a> ｜ <a href="/cards">卡片預覽</a> ｜ <a href="/menu">圖文選單</a></p>
+｜ <a href="/skip?min=1">快轉 1 分鐘</a> ｜ <a href="/skip?min=5">快轉 5 分鐘</a> ｜ <a href="/geo">定位測試頁</a> ｜ <a href="/survey">問卷入口</a> ｜ <a href="/cards">卡片預覽</a> ｜ <a href="/menu">圖文選單</a></p>
 <table>${users}</table>
 ${result ? '<h2>Bot 回覆</h2><pre id="reply">' + result.replace(/</g, '&lt;') + '</pre>' : ''}
 <h2>共乘團</h2><pre id="groups">${JSON.stringify(env.call('cpLoadGroups_').map(g => ({ 團號: g.id, 方向: g.dir, 類型: g.type, 狀態: g.status, 成員: g.members.map(m => m.name) })), null, 1)}</pre>`;
 }
 
-let etaNow = null;
 http.createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const send = (body, type = 'text/html; charset=utf-8') => { res.writeHead(200, { 'Content-Type': type }); res.end(body); };
@@ -65,8 +63,7 @@ http.createServer((req, res) => {
     req.on('data', c => { raw += c; });
     req.on('end', () => {
       const { fn, args } = JSON.parse(raw);
-      if (!/^(cpRoomState|cpRoomAction|geoTestLog|surveyPick|mrtPlanFromHere)$/.test(fn)) { res.writeHead(400); return res.end(); }
-      if (fn === 'mrtPlanFromHere' && etaNow) args[2] = etaNow;
+      if (!/^(cpRoomState|cpRoomAction|geoTestLog|surveyPick)$/.test(fn)) { res.writeHead(400); return res.end(); }
       send(JSON.stringify(env.call(fn, ...args)), 'application/json');
     });
   } else if (url.pathname === '/room') {
@@ -82,13 +79,6 @@ http.createServer((req, res) => {
     req.on('end', () => send(saveMenu(Buffer.concat(chunks)), 'text/plain; charset=utf-8'));
   } else if (url.pathname === '/survey') {
     send(env.call('doGet', { parameter: { page: 'survey' } }).content.replace('<script>', SHIM + '<script>'));
-  } else if (url.pathname === '/eta') {
-    // 假裝手機定位（預設石牌站附近）和時間（預設平常日 09:05）
-    const lat = Number(url.searchParams.get('lat') || 25.1144), lng = Number(url.searchParams.get('lng') || 121.5154);
-    etaNow = new Date(url.searchParams.get('now') || '2026-11-25T09:05:00+08:00').getTime();
-    const geo = `<script>navigator.geolocation.getCurrentPosition = function (ok) { setTimeout(function () { ok({ coords: { latitude: ${lat}, longitude: ${lng}, accuracy: 20 } }); }, 300); };</script>`;
-    // Apps Script 的 addMetaTag 不在 content 裡，預覽自己補 viewport，手機寬度才準
-    send(env.call('doGet', { parameter: { page: 'eta' } }).content.replace('<head>', '<head><meta name="viewport" content="width=device-width, initial-scale=1">').replace('<script>', SHIM + geo + '<script>'));
   } else if (url.pathname === '/geo') {
     send(env.call('doGet', { parameter: { page: 'geo' } }).content.replace('<script>', SHIM + '<script>'));
   } else if (url.pathname === '/say') {

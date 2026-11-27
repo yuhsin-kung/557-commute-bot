@@ -59,85 +59,19 @@ function p557Lines_(atStop) {
   return lines;
 }
 
-// ===== 到校預估網頁：按一個按鈕 → 手機定位 → mrtPlanFromHere（捷運到站牌.gs）→ 顯示幾點到東吳 =====
+// ===== 在 LINE 裡完成：按按鈕 → LINE 自己的「傳送位置」畫面 → Bot 收到位置訊息 → 直接回幾點到東吳（不開外部網頁） =====
 
-/** LINE 裡傳「到校預估」→ 打開網頁的按鈕 */
+/** LINE 裡傳「到校預估」→ 按鈕打開 LINE 的傳送位置畫面（line.me/R/nv/location/，LINE 內建，不是外部網頁） */
 function etaButton_() {
-  return choices_('按下面的按鈕，用你現在的位置算：走到哪個捷運站、搭哪班捷運、走去哪個 557 站牌，幾點到東吳。\n\n手機問要不要允許定位，請按允許。位置只用來算時間，不會記錄。', // 卡片.gs
-    [{ label: '用我的位置查', uri: cpWebAppUrl_() + '?page=eta' }], { title: '🚇 從我這裡出發幾點到校', badge: '出門前提醒' }); // 共乘.gs
+  return choices_('按下面的按鈕，選你現在的位置傳給我，我幫你算：走到哪個捷運站、搭哪班捷運、走去哪個 557 站牌，幾點到東吳。\n\n也可以按輸入框左邊的「＋」→「位置資訊」。位置只用來算時間，不會記錄。', // 卡片.gs
+    [{ label: '傳送我的位置', uri: 'https://line.me/R/nv/location/' }], { title: '🚇 從我這裡出發幾點到校', badge: '出門前提醒' });
 }
 
-function etaPage_() {
-  return HtmlService.createHtmlOutput(ETA_HTML.replace('__BOT__', CP_BOT_ID)) // 共乘.gs
-    .setTitle('幾點到東吳')
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
+/** 收到 LINE 位置訊息：算好直接回一張卡片 */
+function etaFromLocation_(lat, lng) {
+  const r = mrtPlan_(lat, lng, cpNow_().getTime()); // 捷運到站牌.gs；時間用共乘.gs 的時鐘（測試可以調）
+  const again = [['再查一次', '到校預估'], ['557 即時動態', '557 即時動態']];
+  if (!r.ok || !r.school) return choices_(r.lines.join('\n'), again, { title: '🚇 算不出來', badge: '從我這裡出發幾點到校' });
+  const head = `建議走去${r.school.stop}站牌\n${r.school.late ? r.school.early + '–' + r.school.late : '約 ' + r.school.early} 到東吳`;
+  return choices_(head + '\n\n' + r.lines.map(l => '・' + l).join('\n'), again, { title: '🚇 幾點到東吳', badge: '從我這裡出發幾點到校' });
 }
-
-const ETA_HTML = `<!doctype html>
-<html lang="zh-Hant">
-<head>
-<meta charset="utf-8">
-<base target="_top">
-<style>
-  body { margin:0; padding:16px; font:16px/1.6 -apple-system,"PingFang TC","Noto Sans TC","Microsoft JhengHei",sans-serif; background:#f4f5f7; color:#1c2330; }
-  .card { background:#fff; border:1px solid #e4e7ec; border-radius:14px; padding:18px; max-width:440px; margin:0 auto 12px; }
-  h1 { font-size:22px; margin:0 0 6px; }
-  button, a.btn { display:block; width:100%; box-sizing:border-box; text-align:center; text-decoration:none; padding:14px; border-radius:12px; border:0; background:#0b6e4f; color:#fff; font-size:17px; font-weight:700; margin-top:12px; }
-  a.btn { background:#fff; color:#0b6e4f; border:1px solid #0b6e4f; }
-  button:disabled { opacity:.5; }
-  .big { font-size:26px; font-weight:700; color:#0b6e4f; margin:4px 0; }
-  .bad { color:#b42318; font-weight:700; font-size:20px; }
-  .sub { color:#667085; font-size:14px; }
-  .step { padding:8px 0; border-bottom:1px solid #f0f1f3; }
-  .step:last-child { border-bottom:0; }
-  p { margin:4px 0; }
-</style>
-</head>
-<body>
-<div class="card">
-  <h1>從我這裡出發，幾點到東吳？</h1>
-  <p>用你現在的位置，算走到哪個捷運站、搭哪班捷運、走去哪個 557 站牌、幾點到東吳。</p>
-  <div class="sub">位置只用來算時間，不會記錄。尖峰時段 557 可能要排隊，所以會給一個範圍。</div>
-  <button id="go" onclick="run()">用我的位置查</button>
-</div>
-<div class="card" id="out" style="display:none"></div>
-<script>
-var BOT = '__BOT__';
-function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
-function toLine(text) { return 'https://line.me/R/oaMessage/' + encodeURIComponent(BOT) + '/?' + encodeURIComponent(text); }
-function done(msg) {
-  var btn = document.getElementById('go');
-  btn.disabled = false; btn.textContent = '重新查一次';
-  var out = document.getElementById('out');
-  out.style.display = 'block';
-  out.innerHTML = msg + '<a class="btn" href="' + toLine('出門前提醒') + '">回 LINE</a>';
-}
-function render(r) {
-  if (!r || !r.lines) return done('<div class="bad">算不出來</div><p>請等一下再試一次。</p>');
-  var head = '';
-  if (r.ok && r.school) {
-    head = '<div class="sub">建議走去' + esc(r.school.stop) + '站牌</div>'
-      + '<div class="big">' + esc(r.school.late ? r.school.early + '–' + r.school.late : '約 ' + r.school.early) + ' 到東吳</div>';
-  } else if (!r.ok) {
-    head = '<div class="bad">算不出來</div>';
-  }
-  done(head + r.lines.map(function (l) { return '<div class="step">' + esc(l) + '</div>'; }).join(''));
-}
-function run() {
-  var btn = document.getElementById('go');
-  if (!('geolocation' in navigator)) return done('<div class="bad">拿不到定位</div><p>這個瀏覽器不支援定位。</p>');
-  btn.disabled = true; btn.textContent = '定位中…';
-  navigator.geolocation.getCurrentPosition(function (pos) {
-    btn.textContent = '計算中…';
-    google.script.run
-      .withSuccessHandler(render)
-      .withFailureHandler(function () { done('<div class="bad">連線失敗</div><p>請等一下再試一次。</p>'); })
-      .mrtPlanFromHere(pos.coords.latitude, pos.coords.longitude);
-  }, function (err) {
-    var why = { 1: '沒有允許定位。請到手機設定打開 LINE 的定位權限。', 2: '手機抓不到位置，走到窗邊或室外再試一次。', 3: '等太久了，再試一次。' }[err.code] || '不明原因';
-    done('<div class="bad">拿不到定位</div><p>' + esc(why) + '</p>');
-  }, { enableHighAccuracy: false, timeout: 20000, maximumAge: 60000 });
-}
-</script>
-</body>
-</html>`;
