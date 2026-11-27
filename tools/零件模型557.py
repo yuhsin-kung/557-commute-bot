@@ -21,6 +21,7 @@
 
   uv run tools/零件模型557.py                    去程、回程都考
   uv run tools/零件模型557.py --direction 回程
+  uv run tools/零件模型557.py --direction 國中    士林國中上車
 """
 import argparse
 import math
@@ -153,12 +154,12 @@ def pick(sims_out, n, fallback, sims=SIMS):
     return np.where(ok.any(axis=0), S[idx, np.arange(M.shape[1])], fallback)
 
 
-def hist_wait(buses, train, go):
+def hist_wait(buses, train, go, stop="士林站"):
     ws = []
     for d in train:
         at = p.on_day(go.strftime("%H:%M"), d)
-        if p.covers(buses[d], "士林站", at):
-            ws += p.wait_samples(buses[d], "士林站", at, -999, p.WINDOW)
+        if p.covers(buses[d], stop, at):
+            ws += p.wait_samples(buses[d], stop, at, -999, p.WINDOW)
     return statistics.median(ws) if ws else 8
 
 
@@ -253,6 +254,64 @@ def exam(days, tests, data_dir=p.DATA_DIR, seed=0):
                 add(n, "第一班要排（比例）", test, (float(real_q is not None and real_q != real), None, peak))
             t += timedelta(minutes=1)
         print(f"{test} 考完", file=sys.stderr)
+    return out
+
+
+JHS_POS = L.POS[(0, mon.JHS)]   # 去程士林國中
+
+
+def hist_ride(buses, train, at, stop="士林國中"):
+    """訓練那幾天、前後 SEG_WINDOW 分鐘內，從這一站到東吳幾分鐘（中位數）"""
+    xs = [(b["東吳"] - b["到站"][stop]).total_seconds() / 60 for d in train for b in buses[d]
+          if stop in b["到站"] and abs(L.tod(b["到站"][stop]) - L.tod(at)) <= SEG_WINDOW]
+    return statistics.median(xs) if xs else 14.0
+
+
+def exam_jhs(days, tests, data_dir=p.DATA_DIR, seed=0):
+    """從士林國中上車：每一分鐘、每個提早幾分鐘，幾點到東吳。國中離開時最多 59 人（四天沒有一班到 60），
+    照容量推國中的人都上得去，所以答案就是第一班。回傳 {(n, 方法): {考卷: [(誤差, 是不是尖峰)]}}"""
+    rng = np.random.default_rng(seed)
+    buses = {d: p.load_day(d, data_dir) for d in days}
+    events = {d: L.load_events(d, data_dir) for d in days}
+    vis = {d: {v: visits(xs) for v, xs in events[d].items()} for d in days}
+    segs = {d: segments(vis[d], buses[d]) for d in days}
+    out = {}
+
+    def add(n, k, test, v):
+        out.setdefault((n, k), {}).setdefault(test, []).append(v)
+    for test in tests:
+        train = [d for d in days if d != test]
+        table = Table([s for d in train for s in segs[d]])
+        tb = buses[test]
+        jhs = sorted((b["到站"]["士林國中"], b) for b in tb if "士林國中" in b["到站"])
+        etas = L.load_site_etas(test, data_dir, mon.JHS)
+        t, end = p.on_day(p.DAY_START, test), p.on_day(p.DAY_END, test)
+        while t <= end:
+            sims_out = simulate(vis[test], t, table, today_factor(segs[test], t, table), rng, board=JHS_POS, alight=SCHOOL)
+            site = L.site_next(etas, t)
+            for n in L.AHEAD:
+                go = t + timedelta(minutes=n)
+                act = next((b for a, b in jhs if a >= go), None)
+                if not act or act["到站"]["士林國中"] - go > p.MAX_WAIT or not p.seen(tb, t, act["到站"]["士林國中"]):
+                    continue
+                real = act["東吳"]
+                peak = in_out_peak(go)
+                hist = go + timedelta(minutes=hist_wait(buses, train, go, "士林國中"))
+                v0 = hist + timedelta(minutes=hist_ride(buses, train, hist))
+                web_at = site if site and site >= go else hist
+                web = web_at + timedelta(minutes=hist_ride(buses, train, web_at))
+                school = pick(sims_out, n, (v0 - t).total_seconds() / 60)
+                part = t + timedelta(minutes=float(np.median(school)))
+                both = part + (v0 - part) / 2 if n >= BLEND_FROM else part
+                for k, pr in (("Bot 現行", p.bot_estimate(go)), ("v0 歷史", v0), ("網站下一班", web),
+                              ("零件模型", part), ("結合（零件＋v0，提早 10 分鐘以上才平均）", both)):
+                    add(n, k, test, ((pr - real).total_seconds() / 60, peak))
+                p20 = t + timedelta(minutes=float(np.percentile(school, 20)))
+                p80 = t + timedelta(minutes=float(np.percentile(school, 80)))
+                add(n, "零件模型 P80 涵蓋", test, (float(real <= p80), peak))
+                add(n, "零件模型 P20–P80 涵蓋", test, (float(p20 <= real <= p80), peak))
+            t += timedelta(minutes=1)
+        print(f"{test} 考完（國中）", file=sys.stderr)
     return out
 
 
@@ -394,8 +453,8 @@ def main():
         pass
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--days", nargs="+", default=L.DAYS)
-    ap.add_argument("--direction", choices=["去程", "回程", "全部"], default="全部",
-                    help="去程：在家 → 東吳；回程：東吳 → 捷運士林站")
+    ap.add_argument("--direction", choices=["去程", "國中", "回程", "全部"], default="全部",
+                    help="去程：捷運士林站上車 → 東吳；國中：士林國中上車 → 東吳；回程：東吳 → 捷運士林站")
     ap.add_argument("--data", default=p.DATA_DIR)
     ap.add_argument("--out", default=p.OUT_DIR)
     a = ap.parse_args()
@@ -412,6 +471,11 @@ def main():
         rows = score_rows(exam(a.days, a.days, a.data), out_scopes)
         write_and_print(rows, os.path.join(a.out, f"557零件模型成績_{a.days[-1]}.csv"),
                         f"# 在家預估幾點到東吳，{days_note}。「要排就等下一班」：第一班照顏色規則要排隊，就當作上不去、改搭下一班")
+    if a.direction in ("國中", "全部"):
+        rows = score_rows(exam_jhs(a.days, a.days, a.data),
+                          lambda e: [("全天", e[0])] + ([("尖峰（07:30–08:00、09:15–10:00）", e[0])] if e[1] else []))
+        write_and_print(rows, os.path.join(a.out, f"557國中上車成績_{a.days[-1]}.csv"),
+                        f"# 士林國中上車，在家預估幾點到東吳。國中離開時最多 59 人（沒有一班滿），答案是第一班。{days_note}")
     if a.direction in ("回程", "全部"):
         rows = score_rows(exam_return(a.days, a.days, a.data),
                           lambda e: [("全天", e[0])] + ([("回程尖峰", e[0])] if e[1] else []))

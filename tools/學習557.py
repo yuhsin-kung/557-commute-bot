@@ -142,13 +142,13 @@ def site_next(etas, t):
     return last[0] + timedelta(seconds=last[1]) if last and t - last[0] <= timedelta(minutes=1) else None
 
 
-def load_site_etas(day, data_dir=p.DATA_DIR):
+def load_site_etas(day, data_dir=p.DATA_DIR, stop=None):
     path = os.path.join(data_dir, f"557_預估_{day}.csv")
     if not os.path.exists(path):
         return []
     with open(path, encoding="utf-8-sig", newline="") as f:
         return sorted((datetime.strptime(r["資料時間"], F), int(r["預估秒數"])) for r in csv.DictReader(f)
-                      if r["站牌ID"] == mon.MRT and int(r["預估秒數"]) > 0)
+                      if r["站牌ID"] == (stop or mon.MRT) and int(r["預估秒數"]) > 0)
 
 
 def score(errs, tol=3):

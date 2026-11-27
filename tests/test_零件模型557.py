@@ -115,6 +115,15 @@ class PartsTest(unittest.TestCase):
         self.assertEqual((whole["平均差"], whole["筆數"]), (2.0, 2))
         self.assertEqual((peak["平均差"], peak["筆數"]), (1.0, 1))
 
+    def test_hist_ride_from_jhs(self):
+        """訓練那天 08:00 前後從國中開到東吳都 14 分；附近沒有樣本就用預設"""
+        day = "2026-11-25"
+        bs = {day: [{"到站": {"士林國中": at(f"08:{m:02d}")}, "東吳": at(f"08:{m:02d}") + timedelta(minutes=14)} for m in range(0, 30, 5)]}
+        self.assertEqual(Z.hist_ride(bs, [day], at("08:10")), 14.0)
+        self.assertEqual(Z.hist_ride(bs, [day], at("12:00")), 14.0, "附近沒有樣本：預設 14 分")
+        bs[day][0]["東吳"] = at("08:00") + timedelta(minutes=30)
+        self.assertEqual(Z.hist_ride(bs, [day], at("08:10")), 14.0, "中位數不被一班塞車拉走")
+
     def test_simulate_drops_vanished_bus(self):
         table = Z.Table([(q, 480 + i, 1.0, None) for q in range(Z.C) for i in range(5)])
         vis = {"1": [(at("08:00"), 5)]}
