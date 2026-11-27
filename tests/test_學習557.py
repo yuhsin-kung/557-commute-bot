@@ -78,6 +78,19 @@ class FeatureTest(unittest.TestCase):
         self.assertEqual(rows[1]["head"], 10.0)
         self.assertEqual(rows[1]["jhs"], 20)
 
+    def test_fit_beta_through_origin(self):
+        self.assertAlmostEqual(L.fit_beta([(1, 0.8), (2, 1.6), (-1, -0.8)]), 0.8)
+        self.assertEqual(L.fit_beta([]), 0.0)
+
+    def test_today_delay_uses_last_arrived_bus_and_other_days(self):
+        """平常 08:00 開 10 分（另一天）；今天 07:50 那班開了 14 分、08:04 已到東吳 → 08:10 到士林站的車，今天慢 4 分"""
+        today, other = "2026-11-26", "2026-11-25"
+        buses = {other: [bus("07:50", 10, vid="a", day=other)],
+                 today: [bus("07:50", 14, vid="b", day=today), bus("08:10", 15, vid="c", day=today)]}
+        self.assertAlmostEqual(L.today_delay(buses, today, buses[today][1], set()), 4)
+        self.assertIsNone(L.today_delay(buses, today, buses[today][0], set()), "還沒有車開到東吳，不知道今天塞不塞")
+        self.assertIsNone(L.today_delay(buses, today, buses[today][1], {other}), "平常的資料不能用考卷那天")
+
     def test_site_next_only_fresh(self):
         etas = [(at("08:00"), 300)]
         self.assertEqual(L.site_next(etas, at("08:00")), at("08:05"))

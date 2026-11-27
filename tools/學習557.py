@@ -7,7 +7,7 @@
   1. 車輛位置 → 幾分鐘後到士林站：路上每台車（含還在跑回程、等一下掉頭的車）現在在哪一站、
      多久前回報、現在幾點、星期幾 → 這台車幾分鐘後開到捷運士林站。學生在家提早 N 分鐘查，
      就挑「N 分鐘後第一台到站的車」
-  2. 車程：士林站 → 東吳幾分鐘（幾點、星期幾）
+  2. 車程：士林站 → 東吳幾分鐘（幾點、星期幾）；塞車時段再依「今天最近一班比平常慢多少」線性調整
   3. 擁擠：這班離開士林站時網站顯示車上幾人（幾點、星期幾、跟前一班隔多久、前一班幾人；
      車快到時再加上離開士林國中的人數）
 
@@ -38,7 +38,8 @@ POS = {(1, s): i for i, s in enumerate(mon.R_ROUTE)} | {(0, s): len(mon.R_ROUTE)
 MRT_POS = POS[(0, mon.MRT)]
 STALE = timedelta(minutes=10)    # 超過這麼久沒回報的車，不知道在哪，不拿來算
 HORIZON = timedelta(minutes=90)  # 位置模型只學 90 分鐘內會到士林站的車
-PEAK = (450, 525)                # 07:30–08:45 塞車時段（從當天 0 點算第幾分鐘）
+PEAK = (450, 525)
+LIVE = (1, 3)                    # 車程模型加「今天最近幾班的車程」：試最近 1 班、3 班                # 07:30–08:45 塞車時段（從當天 0 點算第幾分鐘）
 
 
 def tod(t):
@@ -95,13 +96,18 @@ def position_samples(events, arrivals, day_buses, start, end, step=2):
     return X, y
 
 
+def ride(b):
+    return (b["東吳"] - b["到站"]["士林站"]).total_seconds() / 60
+
+
 def ride_samples(day_buses):
+    """車程的訓練資料：幾點、星期幾 → 士林站到東吳幾分鐘"""
     X, y = [], []
     for b in day_buses:
         at = b["到站"].get("士林站")
         if at:
             X.append([tod(at), at.weekday()])
-            y.append((b["東吳"] - at).total_seconds() / 60)
+            y.append(ride(b))
     return X, y
 
 
@@ -160,22 +166,79 @@ def gbr(**kw):
     return HistGradientBoostingRegressor(**args)
 
 
+def usual_ride(buses, skip, at_tod, window=10):
+    """「平常」這個時間的車程：skip 以外那幾天，前後 window 分鐘內的車程中位數"""
+    w = [ride(b) for d, bs in buses.items() if d not in skip for b in bs
+         if "士林站" in b["到站"] and abs(tod(b["到站"]["士林站"]) - at_tod) <= window]
+    return statistics.median(w) if w else None
+
+
+def today_delay(buses, day, b, skip):
+    """這班到士林站時，今天最近一班已經到東吳的車比「平常」慢幾分鐘（今天塞不塞的即時線索）"""
+    at = b["到站"]["士林站"]
+    done = [u for u in buses[day] if "士林站" in u["到站"] and u["東吳"] <= at]
+    if not done:
+        return None
+    last = max(done, key=lambda u: u["東吳"])
+    usual = usual_ride(buses, skip | {day}, tod(last["到站"]["士林站"]))
+    return None if usual is None else ride(last) - usual
+
+
+def fit_beta(pairs):
+    """這班慢多少 ≈ β × 上一班慢多少（最小平方法，過原點：今天不塞就不調整）"""
+    den = sum(x * x for x, _ in pairs)
+    return sum(x * y for x, y in pairs) / den if den else 0.0
+
+
+def in_peak(b):
+    return PEAK[0] <= tod(b["到站"]["士林站"]) < PEAK[1]
+
+
+def ride_predictions(buses, test):
+    """用 test 以外的天訓練，預測 test 那天每班的車程。回傳 (那天的車, {方法: 預測}, β)
+    「今天比平常慢多少」只在塞車時段用：塞車時段裡，上一班比平常慢、這班多半也慢（三天相關係數約 0.76）；
+    梯度提升樹在塞車時段只有約 20 班可學，學不起來，所以用最簡單的線性調整，只學一個係數 β"""
+    train = [b for d, bs in buses.items() if d != test for b in bs]
+    X, y = ride_samples(train)
+    tb = [b for b in buses[test] if "士林站" in b["到站"]]
+    Xt, _ = ride_samples(tb)
+    med = statistics.median(y)
+    ml = list(gbr().fit(X, y).predict(Xt))
+    # β 只用訓練那幾天學：「平常」不能用到考卷那天，也不能用到這班自己那天
+    pairs = []
+    for d, bs in buses.items():
+        if d == test:
+            continue
+        for b in bs:
+            if "士林站" not in b["到站"] or not in_peak(b):
+                continue
+            dev = today_delay(buses, d, b, {test})
+            usual = usual_ride(buses, {test, d}, tod(b["到站"]["士林站"]))
+            if dev is not None and usual is not None:
+                pairs.append((dev, ride(b) - usual))
+    beta = fit_beta(pairs)
+    adj = []
+    for b, base in zip(tb, ml):
+        dev = today_delay(buses, test, b, {test}) if in_peak(b) else None
+        adj.append(base + beta * dev if dev is not None else base)
+    return tb, {"固定車程": [med] * len(tb),
+                "v0 滑動窗": [statistics.median([v for a, v in zip(X, y) if abs(a[0] - x[0]) <= 10] or [med]) for x in Xt],
+                "機器學習": ml,
+                "機器學習＋今天比平常慢多少": adj}, beta
+
+
 def exam_ride(buses, tests):
-    """車程：固定（整天中位數）、v0 滑動窗、ML"""
+    """車程：固定（整天中位數）、v0 滑動窗、ML（幾點、星期幾）、ML＋今天比平常慢多少（塞車時段線性調整）"""
     out = {}
+    exam_ride.betas = {}
     for test in tests:
-        train = [b for d, bs in buses.items() if d != test for b in bs]
-        X, y = ride_samples(train)
-        Xt, yt = ride_samples(buses[test])
-        m = gbr().fit(X, y)
-        med = statistics.median(y)
-        for k, preds in (("固定車程", [med] * len(yt)),
-                         ("v0 滑動窗", [statistics.median([b for a, b in zip(X, y) if abs(a[0] - x[0]) <= 10] or [med]) for x in Xt]),
-                         ("機器學習", list(m.predict(Xt)))):
-            for x, pr, real in zip(Xt, preds, yt):
-                out.setdefault(("全天", k), []).append(pr - real)
-                if PEAK[0] <= x[0] < PEAK[1]:
-                    out.setdefault(("07:30–08:45 塞車", k), []).append(pr - real)
+        tb, preds, exam_ride.betas[test] = ride_predictions(buses, test)
+        for k, ps in preds.items():
+            for b, pr in zip(tb, ps):
+                e = pr - ride(b)
+                out.setdefault(("全天", k), []).append(e)
+                if in_peak(b):
+                    out.setdefault(("07:30–08:45 塞車", k), []).append(e)
     return out
 
 
@@ -262,6 +325,7 @@ def main():
     rows = []
     for (period, k), e in exam_ride(buses, tests).items():
         rows.append({"模型": "車程（士林站→東吳）", "情況": period, "方法": k, **score(e), "容許": "±3 分", "單位": "分"})
+    print("塞車時段調整係數 β（每輪用訓練那幾天學）：" + "、".join(f"{d[5:]} 當考卷 {b:.2f}" for d, b in exam_ride.betas.items()))
     for k, e in exam_crowd({d: crowd_rows(trips[d]) for d in days}, tests).items():
         rows.append({"模型": "擁擠（離開士林站車上幾人）", "情況": "全天", "方法": k, **score(e, 10), "容許": "±10 人", "單位": "人"})
     for (n, k), e in sorted(exam_home(buses, events, arrivals, tests, a.data).items()):

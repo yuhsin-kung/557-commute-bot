@@ -32,7 +32,7 @@ SHOW_DAY = "2026-11-25"  # 折線圖、例子用哪一天（模型用其他天�
 
 # 顏色：機器學習用藍色強調，比較對象用灰色（資料視覺化預設色票）
 INK, INK2, MUTED, GRID, SURFACE = "#0b0b0b", "#52514e", "#8a8984", "#e4e3df", "#fcfcfb"
-ML, BASE_DARK, BASE_LIGHT, REAL = "#2a78d6", "#6b6a65", "#b5b4ae", "#0b0b0b"
+ML, ML_LIGHT, BASE_DARK, BASE_LIGHT, REAL = "#2a78d6", "#9ec5f4", "#6b6a65", "#b5b4ae", "#0b0b0b"
 
 for f in ("msjh.ttc", "msjhbd.ttc"):
     path = os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", f)
@@ -94,25 +94,32 @@ def chart_ride(buses):
     X, y = L.ride_samples(train)
     model = L.gbr().fit(X, y)
     fixed = statistics.median(y)
-    day = sorted((b for b in buses[SHOW_DAY] if "士林站" in b["到站"]), key=lambda b: b["到站"]["士林站"])
-    day = [b for b in day if 7 * 60 <= L.tod(b["到站"]["士林站"]) <= 10 * 60]
+    tb, preds, beta = L.ride_predictions(buses, SHOW_DAY)
+    keep = [i for i, b in enumerate(tb) if 7 * 60 <= L.tod(b["到站"]["士林站"]) <= 10 * 60]
+    day = [tb[i] for i in keep]
+    adj = [preds["機器學習＋今天比平常慢多少"][i] for i in keep]
     xs = [L.tod(b["到站"]["士林站"]) for b in day]
-    real = [(b["東吳"] - b["到站"]["士林站"]).total_seconds() / 60 for b in day]
+    real = [L.ride(b) for b in day]
     grid = list(range(7 * 60, 10 * 60 + 1))
     wd = day[0]["到站"]["士林站"].weekday()
     pred = model.predict([[t, wd] for t in grid])
     fig, ax = plt.subplots(figsize=(13, 5.2))
+    ax.axvspan(L.PEAK[0], L.PEAK[1], color=GRID, alpha=0.5, lw=0)
+    ax.text(L.PEAK[0] + 1, 1, "塞車時段：再看今天前一班比平常慢多少", color=MUTED, fontsize=11)
     ax.plot(grid, [fixed] * len(grid), color=BASE_DARK, lw=2, ls="--")
-    ax.plot(grid, pred, color=ML, lw=2.5)
+    ax.plot(grid, pred, color=ML_LIGHT, lw=2.5)
+    pk = [(x, a) for x, a, b in zip(xs, adj, day) if L.in_peak(b)]
+    ax.plot([x for x, _ in pk], [a for _, a in pk], color=ML, lw=2.5, marker="o", ms=8, markeredgecolor=SURFACE, markeredgewidth=2, zorder=4)
+    ax.text(pk[-1][0] + 3, pk[-1][1] + 0.6, "AI＋今天路況", color=ML, fontsize=13, fontweight="bold")
     ax.scatter(xs, real, s=60, color=REAL, zorder=3, edgecolor=SURFACE, linewidth=2)
     # 兩條線結尾很近，標籤一個放上、一個放下，避免疊在一起
     hi, lo = (fixed, pred[-1]) if fixed >= pred[-1] else (pred[-1], fixed)
-    ax.text(grid[-1] + 2, hi + 0.9, f"固定車程 {fixed:.0f} 分" if hi == fixed else "機器學習",
-            color=BASE_DARK if hi == fixed else ML, va="center", fontsize=13, fontweight="normal" if hi == fixed else "bold")
-    ax.text(grid[-1] + 2, lo - 0.9, "機器學習" if hi == fixed else f"固定車程 {fixed:.0f} 分",
-            color=ML if hi == fixed else BASE_DARK, va="center", fontsize=13, fontweight="bold" if hi == fixed else "normal")
+    ax.text(grid[-1] + 2, hi + 0.9, f"固定車程 {fixed:.0f} 分" if hi == fixed else "AI（只看幾點）",
+            color=INK2, va="center", fontsize=13)
+    ax.text(grid[-1] + 2, lo - 0.9, "AI（只看幾點）" if hi == fixed else f"固定車程 {fixed:.0f} 分",
+            color=INK2, va="center", fontsize=13)
     peak = max(range(len(real)), key=lambda i: real[i])
-    ax.annotate(f"塞車：實際 {real[peak]:.0f} 分", (xs[peak], real[peak]), (xs[peak] + 18, real[peak] + 1.2),
+    ax.annotate(f"實際 {real[peak]:.0f} 分", (xs[peak], real[peak]), (xs[peak] + 18, real[peak] + 1.2),
                 color=INK, fontsize=12, arrowprops=dict(arrowstyle="-", color=MUTED))
     ax.scatter([], [], s=60, color=REAL, label="每班車實際車程")
     ax.legend(loc="upper right", frameon=False, fontsize=12)
@@ -124,7 +131,7 @@ def chart_ride(buses):
     ax.grid(axis="y", color=GRID, lw=1)
     style(ax)
     m, d = SHOW_DAY[5:7].lstrip("0"), SHOW_DAY[8:].lstrip("0")
-    ax.set_title(f"早上塞車時，機器學習跟著把車程算長（{m}/{d} 早上，模型沒看過這天）", loc="left", fontsize=15, pad=12)
+    ax.set_title(f"早上塞車時，AI 看今天的路況把車程算長（{m}/{d} 早上，模型沒看過這天）", loc="left", fontsize=15, pad=12)
     fig.tight_layout()
     fig.savefig(os.path.join(OUT, "2_塞車車程.png"), dpi=200)
     plt.close(fig)
