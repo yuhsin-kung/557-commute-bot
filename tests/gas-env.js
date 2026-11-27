@@ -83,7 +83,7 @@ function loadBot(files, props = {}) {
   const sheets = {};
   const store = Object.assign({ LINE_CHANNEL_ACCESS_TOKEN: 'test-token' }, props);
   const cache = {};
-  const env = { sheets, fetches: [], quotaLeft: 200, triggers: [], names: {}, forms: [], props: store, respond: {}, mails: [], surveys: {} };
+  const env = { sheets, fetches: [], quotaLeft: 200, triggers: [], names: {}, forms: [], props: store, respond: {}, mails: [], surveys: {}, mapsCalls: [], walkSeconds: null };
 
   const fetch = (url, options = {}) => {
     env.fetches.push({ url, options, body: options.payload && typeof options.payload === 'string' ? JSON.parse(options.payload) : options.payload });
@@ -166,6 +166,24 @@ function loadBot(files, props = {}) {
       },
     },
     ContentService: { createTextOutput: text => ({ text }) },
+    // 假的 Google 地圖路線：env.walkSeconds = (起點, 終點) => 秒數；沒設定或丟錯 → 模擬查不到。呼叫記在 env.mapsCalls
+    Maps: {
+      DirectionFinder: { Mode: { WALKING: 'walking', TRANSIT: 'transit' } },
+      newDirectionFinder: () => {
+        const q = {};
+        const b = {
+          setOrigin: (lat, lng) => { q.from = [lat, lng]; return b; },
+          setDestination: (lat, lng) => { q.to = [lat, lng]; return b; },
+          setMode: m => { q.mode = m; return b; },
+          getDirections: () => {
+            env.mapsCalls.push(q);
+            if (!env.walkSeconds) throw new Error('Service invoked too many times for one day: route');
+            return { routes: [{ legs: [{ duration: { value: env.walkSeconds(q.from, q.to) } }] }] };
+          },
+        };
+        return b;
+      },
+    },
   };
   vm.createContext(context);
   for (const file of files) vm.runInContext(fs.readFileSync(path.join(BOT_DIR, file), 'utf8'), context, { filename: file });
