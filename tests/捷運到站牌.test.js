@@ -52,17 +52,39 @@ test('台北車站：搭往北的車（12 分）', () => {
   assert.equal(r.atStop, '07:54');
 });
 
-test('就在士林站附近：直接走去站牌；假日、晚上查不到班次', () => {
+test('就在士林站附近：直接走去站牌；半夜查就搭早上第一班', () => {
   const env = loadBot(ALL);
   env.walkSeconds = () => 4 * 60;
   let r = plain(env.call('mrtPlan_', 25.0955, 121.5270, ms('2026-11-25T08:00:00+08:00')));
   assert.equal(r.station, '士林');
   assert.equal(r.atStop, '08:04');
-  r = plain(env.call('mrtPlan_', SHIPAI[0], SHIPAI[1], ms('2026-11-28T09:05:00+08:00')));
-  assert.equal(r.ok, false, '星期六');
-  assert.match(r.lines.join('\n'), /平常日/);
+  r = plain(env.call('mrtPlan_', SHIPAI[0], SHIPAI[1], ms('2026-11-28T03:00:00+08:00')));
+  assert.equal(r.trainAtShilin, '06:05', '週六往南第一班');
   r = plain(env.call('mrtPlan_', 'abc', 121.5));
   assert.equal(r.ok, false);
+});
+
+test('週六用週六的時刻表；557 預測只有平常日，會說還沒有', () => {
+  const env = loadBot(ALL);
+  env.walkSeconds = () => 6 * 60;
+  // 星期六 09:05 石牌：09:13 在月台 + 5 分 = 09:18 → 週六往南 09:20
+  const r = plain(env.call('mrtPlan_', SHIPAI[0], SHIPAI[1], ms('2026-11-28T09:05:00+08:00')));
+  assert.equal(r.ok, true);
+  assert.equal(r.trainAtShilin, '09:20');
+  assert.equal(r.school, null);
+  assert.match(r.lines.join('\n'), /還沒有 557 的預測/);
+  // 星期日 08:00 在石牌月台：08:00 + 5 分 = 08:05 以後 → 週日往南 08:06
+  const hm = d => env.run('Utilities.formatDate')(d, 'Asia/Taipei', 'HH:mm');
+  assert.equal(hm(env.call('mrtTrainToShilin_', 'R19', 5, new Date('2026-11-29T08:00:00+08:00'))), '08:06');
+});
+
+test('竹圍（復興崗～淡水）搭不到從北投發車的區間車', () => {
+  const env = loadBot(ALL);
+  const hm = d => env.run('Utilities.formatDate')(d, 'Asia/Taipei', 'HH:mm');
+  // 平常日 10:00 在竹圍月台 + 21 分 = 10:21 以後：10:25 是區間車（底線）→ 竹圍要等 10:29
+  assert.equal(hm(env.call('mrtTrainToShilin_', 'R26', 21, new Date('2026-11-25T10:00:00+08:00'))), '10:29');
+  // 石牌（北投以南）搭得到區間車：10:00 + 5 = 10:05 → 10:07（區間車）
+  assert.equal(hm(env.call('mrtTrainToShilin_', 'R19', 5, new Date('2026-11-25T10:00:00+08:00'))), '10:07');
 });
 
 test('被亂按：Google 地圖每分鐘最多 30 次，超過改用距離估（不會擋掉學生）', () => {

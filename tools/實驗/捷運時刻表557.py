@@ -5,9 +5,10 @@ from datetime import datetime, timedelta
 spec=importlib.util.spec_from_file_location('Q','tools/排隊模擬557.py');Q=importlib.util.module_from_spec(spec);spec.loader.exec_module(Q)
 L,p=Q.L,Q.p
 tt={"往北投淡水":[], "往大安廣慈":[]}
-with open("data/捷運士林站平日時刻表.csv",encoding="utf-8-sig") as f:
+with open("data/捷運士林站時刻表.csv",encoding="utf-8-sig") as f:
     next(f)
     for r in csv.DictReader(f):
+        if r["日別"] != "平常日": continue
         h,m=r["離站時間"].split(":"); tt[r["方向"]].append(int(h)*60+int(m))
 pairs=[]
 for d in L.DAYS:
