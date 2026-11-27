@@ -88,6 +88,14 @@ uv run tools/預測557.py evaluate --target 2026-11-26
 uv run tools/學習557.py
 ```
 
+**零件模型**（`tools/零件模型557.py`，11/28）：把路線切成一段一段，每段的開車時間、在總站停多久、今天路況都從資料學，再模擬 200 次預測「在家提早 N 分鐘查，幾點到東吳」，還能給範圍。四天考試裡最準（現在出門平均差 2.1 分），成績存在 `預測紀錄/557零件模型成績_日期.csv`：
+
+```powershell
+uv run tools/零件模型557.py
+```
+
+簡報圖：`uv run tools/畫圖557.py`，存在 `design/簡報圖/`。
+
 測試要加 scikit-learn：`uv run --with openpyxl --with scikit-learn python -m unittest discover -s tests -p "test_*.py"`（沒裝的話模型測試會跳過）。
 
 ## 注意

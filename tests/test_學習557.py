@@ -130,6 +130,7 @@ class ModelTest(unittest.TestCase):
         out = L.exam_crowd(rows, ["2026-11-26"])
         mae = lambda k: sum(map(abs, out[k])) / len(out[k])
         self.assertLess(mae("機器學習（車快到，知道國中人數）"), mae("同時段歷史"))
+        self.assertLess(mae("國中人數＋同時段士林站淨上車"), 0.5, "公平的比較對象也知道國中人數，這裡剛好完全猜中")
 
 
 if __name__ == "__main__":

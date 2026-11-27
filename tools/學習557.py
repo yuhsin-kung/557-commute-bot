@@ -8,8 +8,8 @@
      多久前回報、現在幾點、星期幾 → 這台車幾分鐘後開到捷運士林站。學生在家提早 N 分鐘查，
      就挑「N 分鐘後第一台到站的車」
   2. 車程：士林站 → 東吳幾分鐘（幾點、星期幾）；塞車時段再依「今天最近一班比平常慢多少」線性調整
-  3. 擁擠：這班離開士林站時網站顯示車上幾人（幾點、星期幾、跟前一班隔多久、前一班幾人；
-     車快到時再加上離開士林國中的人數）
+  3. 擁擠：這班離開士林站時網站顯示車上幾人（幾點、跟前一班隔多久、前一班幾人；
+     車快到時再加上離開士林國中的人數）。車快到時公平的比較對象是「國中人數＋同時段士林站淨上車」
 
 怎麼證明有效（輪流考試）：每次留一天當考卷、用其他天訓練，模型沒看過考卷那天；
 每個模型都跟 v0（預測557.py 的統計方法）、Bot 現行算法比。
@@ -243,15 +243,21 @@ def exam_ride(buses, tests):
 
 
 def exam_crowd(rows, tests):
-    """擁擠：同時段歷史中位數 vs ML（提早、車快到）"""
+    """擁擠：同時段歷史、國中人數＋同時段士林站淨上車（車快到時公平的比較對象）vs ML（提早、車快到）。
+    不用「星期幾」：每個星期幾目前只有一天，等於日期代號，考卷那天的星期幾訓練時沒看過（11/28 檢查）"""
     out = {}
-    cols_early, cols_near = ["tod", "wd", "head", "prev"], ["tod", "wd", "head", "prev", "jhs"]
+    cols_early, cols_near = ["tod", "head", "prev"], ["tod", "head", "prev", "jhs"]
     for test in tests:
         tr = [r for d, rs in rows.items() if d != test for r in rs]
         te = rows[test]
         ys = [r["y"] for r in te]
-        hist = [statistics.median([q["y"] for q in tr if abs(q["tod"] - r["tod"]) <= 15] or [q["y"] for q in tr]) for r in te]
+        near = lambda r, xs: [q for q in xs if abs(q["tod"] - r["tod"]) <= 15] or xs
+        hist = [statistics.median([q["y"] for q in near(r, tr)]) for r in te]
+        known = [q for q in tr if q["jhs"] == q["jhs"]]
+        fair = [r["jhs"] + statistics.median([q["y"] - q["jhs"] for q in near(r, known)]) if r["jhs"] == r["jhs"] else h
+                for r, h in zip(te, hist)]
         out.setdefault("同時段歷史", []).extend(a - b for a, b in zip(hist, ys))
+        out.setdefault("國中人數＋同時段士林站淨上車", []).extend(a - b for a, b in zip(fair, ys))
         for name, cols in (("機器學習（提早，不知道國中人數）", cols_early), ("機器學習（車快到，知道國中人數）", cols_near)):
             m = gbr().fit([[r[c] for c in cols] for r in tr], [r["y"] for r in tr])
             out.setdefault(name, []).extend(a - b for a, b in zip(m.predict([[r[c] for c in cols] for r in te]), ys))

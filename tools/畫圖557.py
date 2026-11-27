@@ -3,7 +3,8 @@
 # ///
 """簡報用的機器學習成效圖，存到 design/簡報圖/
 
-  1_誤差比較.png   Bot、v0、機器學習各差多少（數字讀 預測紀錄/557機器學習成績_日期.csv）
+  1_誤差比較.png   現在出門：Bot、網站、機器學習、零件模型；車上人數：公平的比較對象 vs 機器學習
+                   （數字讀 預測紀錄/557零件模型成績_日期.csv、557機器學習成績_日期.csv）
   2_塞車車程.png   一個早上每班車的實際車程，疊上固定車程、機器學習的預測
   3_實際例子.png   一班車：AI 預測離開士林站車上幾人 vs 實際
 
@@ -28,6 +29,7 @@ _spec.loader.exec_module(L)
 p = L.p
 OUT = os.path.normpath(os.path.join(HERE, "..", "design", "簡報圖"))
 SCORES = os.path.join(p.OUT_DIR, "557機器學習成績_2026-11-27.csv")
+PARTS = os.path.join(p.OUT_DIR, "557零件模型成績_2026-11-27.csv")
 SHOW_DAY = "2026-11-25"  # 折線圖、例子用哪一天（模型用其他天訓練，沒看過這天）
 
 # 顏色：機器學習用藍色強調，比較對象用灰色（資料視覺化預設色票）
@@ -57,16 +59,23 @@ def read_scores():
     return {(r["模型"], r["情況"], r["方法"]): float(r["平均差"]) for r in csv.DictReader(lines) if r.get("考卷", "全部") == "全部"}
 
 
-def chart_errors(s):
-    home = [("Bot 現行算法", s[("在家預估幾點到東吳", "提早 0 分鐘查", "Bot 現行")], BASE_LIGHT),
-            ("統計（v0）", s[("在家預估幾點到東吳", "提早 0 分鐘查", "v0 歷史")], BASE_DARK),
-            ("機器學習", s[("在家預估幾點到東吳", "提早 0 分鐘查", "機器學習（車輛位置）")], ML)]
+def read_parts():
+    with open(PARTS, encoding="utf-8-sig", newline="") as f:
+        lines = [x for x in f.read().splitlines() if not x.startswith("#")]
+    return {(r["情況"], r["方法"]): r for r in csv.DictReader(lines) if r["考卷"] == "全部"}
+
+
+def chart_errors(s, z):
+    home = [("Bot 現行算法", float(z[("提早 0 分鐘查", "Bot 現行")]["平均差"]), BASE_LIGHT),
+            ("網站預估", float(z[("提早 0 分鐘查", "網站下一班")]["平均差"]), BASE_LIGHT),
+            ("機器學習（第一版）", float(z[("提早 0 分鐘查", "機器學習（車輛位置）")]["平均差"]), BASE_DARK),
+            ("AI 零件模型", float(z[("提早 0 分鐘查", "零件模型")]["平均差"]), ML)]
     crowd = [("同時段歷史", s[("擁擠（離開士林站車上幾人）", "全天", "同時段歷史")], BASE_LIGHT),
-             ("機器學習・提早", s[("擁擠（離開士林站車上幾人）", "全天", "機器學習（提早，不知道國中人數）")], BASE_DARK),
-             ("機器學習・車快到", s[("擁擠（離開士林站車上幾人）", "全天", "機器學習（車快到，知道國中人數）")], ML)]
-    fig, axes = plt.subplots(1, 2, figsize=(13, 4.6))
+             ("國中人數＋歷史上車", s[("擁擠（離開士林站車上幾人）", "全天", "國中人數＋同時段士林站淨上車")], BASE_DARK),
+             ("機器學習", s[("擁擠（離開士林站車上幾人）", "全天", "機器學習（車快到，知道國中人數）")], ML)]
+    fig, axes = plt.subplots(1, 2, figsize=(13, 4.8))
     for ax, data, title, unit in ((axes[0], home, "現在出門，預測幾點到東吳", "分鐘"),
-                                  (axes[1], crowd, "預測離開士林站時車上幾人", "人")):
+                                  (axes[1], crowd, "車快到時，預測離開士林站車上幾人", "人")):
         names = [d[0] for d in data][::-1]
         vals = [d[1] for d in data][::-1]
         cols = [d[2] for d in data][::-1]
@@ -78,10 +87,12 @@ def chart_errors(s):
         ax.set_title(f"{title}\n平均差幾{unit}（越短越準）", loc="left", fontsize=15, color=INK, pad=12)
         style(ax)
         ax.spines["bottom"].set_visible(False)
-    a, b = home[0][1], home[2][1]
-    c, d = crowd[0][1], crowd[2][1]
-    axes[0].text(0, -0.85, f"比 Bot 少差 {round((a - b) / a * 100)}%", color=ML, fontsize=14, fontweight="bold", transform=axes[0].get_yaxis_transform())
-    axes[1].text(0, -0.85, f"比歷史少差 {round((c - d) / c * 100)}%", color=ML, fontsize=14, fontweight="bold", transform=axes[1].get_yaxis_transform())
+    bot, web, best = home[0][1], home[1][1], home[3][1]
+    fair, ml = crowd[1][1], crowd[2][1]
+    axes[0].text(0, -0.9, f"比 Bot 少差 {round((bot - best) / bot * 100)}%、比網站預估少差 {round((web - best) / web * 100)}%",
+                 color=ML, fontsize=14, fontweight="bold", transform=axes[0].get_yaxis_transform())
+    axes[1].text(0, -0.9, f"比「國中人數＋歷史」少差 {round((fair - ml) / fair * 100)}%", color=ML, fontsize=14, fontweight="bold",
+                 transform=axes[1].get_yaxis_transform())
     fig.text(0.01, 0.01, "輪流考試：11/24（只有傍晚）、11/25、11/26、11/27 輪流當考卷，模型沒看過考卷那天。資料：臺北市公車動態網站，每 15 秒記錄。",
              color=MUTED, fontsize=10)
     fig.tight_layout(rect=(0, 0.05, 1, 1))
@@ -178,7 +189,7 @@ def main():
     except (AttributeError, ValueError):
         pass
     os.makedirs(OUT, exist_ok=True)
-    chart_errors(read_scores())
+    chart_errors(read_scores(), read_parts())
     buses = {d: p.load_day(d) for d in L.DAYS}
     chart_ride(buses)
     r = chart_example({d: L.load_trips(d) for d in L.DAYS})
