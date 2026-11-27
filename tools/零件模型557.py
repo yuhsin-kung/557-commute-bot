@@ -16,7 +16,11 @@
 
 結合：提早 10 分鐘以上，零件模型和 v0 統計取平均（四天考試裡最準）
 
-  uv run tools/零件模型557.py
+回程（東吳 → 捷運士林站，11/28）：同一套零件，上車站改成「離開東吳」（錢穆故居）、下車站改成回程的捷運士林站。
+  提早 20 分鐘以內用零件模型，20 分鐘以上和 v0 平均
+
+  uv run tools/零件模型557.py                    去程、回程都考
+  uv run tools/零件模型557.py --direction 回程
 """
 import argparse
 import math
@@ -105,8 +109,9 @@ def today_factor(today_segs, t, table):
     return float(np.clip(math.exp(w * statistics.median(r)), 0.75, 1.5))
 
 
-def simulate(vis, t, table, factor, rng, sims=SIMS):
-    """路上每台車模擬 sims 次：[(下一次到士林站幾分鐘後, 接著到東吳幾分鐘後)]，都從 t 算起"""
+def simulate(vis, t, table, factor, rng, sims=SIMS, board=MRT, alight=SCHOOL):
+    """路上每台車模擬 sims 次：[(下一次到上車站 board 幾分鐘後, 接著到下車站 alight 幾分鐘後)]，都從 t 算起。
+    預設是去程（士林站上車、東吳下車）；回程用 board=錢穆故居（離開東吳）、alight=捷運士林站（回程）"""
     out = []
     for xs in vis.values():
         last = None
@@ -125,9 +130,9 @@ def simulate(vis, t, table, factor, rng, sims=SIMS):
         tot = ((rng.choice(left, sims) if len(left) else np.full(sims, el + 0.5)) - el) * (factor if pos not in NO_TRAFFIC else 1.0)
         q, clock, mrt = (pos + 1) % C, L.tod(t), None
         for _ in range(2 * C):
-            if q == MRT and mrt is None:
+            if q == board and mrt is None:
                 mrt = tot.copy()
-            if q == SCHOOL and mrt is not None:
+            if q == alight and mrt is not None:
                 out.append((mrt, tot.copy()))
                 break
             f = factor if q not in NO_TRAFFIC else 1.0
@@ -220,6 +225,136 @@ def exam(days, tests, data_dir=p.DATA_DIR, seed=0):
     return out
 
 
+R_BOARD = L.POS[(1, mon.R_QIAN)]   # 回程上車：離開東吳（到錢穆故居）
+R_ALIGHT = L.POS[(1, mon.R_MRT)]   # 回程下車：捷運士林站
+R_PEAKS = ((720, 810), (900, 960), (1020, 1110))  # 回程尖峰：12:00–13:30、15:00–16:00、17:00–18:30（11/28 用資料找的）
+
+
+def returns(day, data_dir=p.DATA_DIR):
+    """一天的回程：[(離開東吳, 到捷運士林站)]。離開東吳用回程表的時間（GPS 漏記錢穆故居就用後面的站往回推）"""
+    ev = mon.load_csv(os.path.join(data_dir, f"557_raw_{day}.csv"), mon.event_key)
+    cr = mon.fresh(mon.load_csv(os.path.join(data_dir, f"557_人數_{day}.csv"), mon.crowd_key))
+    return sorted((t["參考"], t["時間"][mon.R_MRT]) for t in mon.build_returns(ev, cr) if t["參考"] and mon.R_MRT in t["時間"])
+
+
+def return_v0(rets, train, go, day_buses):
+    """回程 v0：訓練那幾天 go 前後 10 分鐘每一分鐘到東吳，等下一班離開東吳要幾分鐘（中位數）；
+    車程：那個時間前後 10 分鐘離開的車，東吳 → 捷運士林站幾分鐘（中位數）"""
+    waits, rides = [], []
+    for d in train:
+        base = p.on_day(go.strftime("%H:%M"), d)
+        deps = [a for a, _ in rets[d]]
+        if not deps or not (deps[0] - timedelta(minutes=15) <= base <= deps[-1]):
+            continue
+        for m in range(-10, 11):
+            at = base + timedelta(minutes=m)
+            nxt = next((a for a in deps if a >= at), None)
+            if nxt and nxt - at <= p.MAX_WAIT and p.seen(day_buses[d], at, nxt):
+                waits.append((nxt - at).total_seconds() / 60)
+    if not waits:
+        return None
+    wait = statistics.median(waits)
+    for d in train:
+        c = p.on_day((go + timedelta(minutes=wait)).strftime("%H:%M"), d)
+        rides += [(b - a).total_seconds() / 60 for a, b in rets[d] if abs(a - c) <= p.WINDOW]
+    return go + timedelta(minutes=wait + (statistics.median(rides) if rides else 8))
+
+
+def site_qian(day, data_dir=p.DATA_DIR):
+    """網站預估：下一班幾點到錢穆故居（回程第一站）"""
+    import csv
+    path = os.path.join(data_dir, f"557_預估_{day}.csv")
+    if not os.path.exists(path):
+        return []
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        return sorted((datetime.strptime(r["資料時間"], "%Y-%m-%d %H:%M:%S"), int(r["預估秒數"])) for r in csv.DictReader(f)
+                      if r["站牌ID"] == mon.R_QIAN and int(r["預估秒數"]) > 0)
+
+
+def in_return_peak(go):
+    return any(a <= go.hour * 60 + go.minute < b for a, b in R_PEAKS)
+
+
+def exam_return(days, tests, data_dir=p.DATA_DIR, seed=0):
+    """回程四天輪流考試：學生 N 分鐘後到東吳站牌，搭第一班離開東吳的車，幾點到捷運士林站。
+    回傳 {(n, 方法): {考卷: [(誤差, 是不是回程尖峰)]}}"""
+    rng = np.random.default_rng(seed)
+    buses = {d: p.load_day(d, data_dir) for d in days}
+    events = {d: L.load_events(d, data_dir) for d in days}
+    vis = {d: {v: visits(xs) for v, xs in events[d].items()} for d in days}
+    segs = {d: segments(vis[d], buses[d]) for d in days}
+    rets = {d: returns(d, data_dir) for d in days}
+    out = {}
+    for test in tests:
+        train = [d for d in days if d != test]
+        table = Table([s for d in train for s in segs[d]])
+        etas = site_qian(test, data_dir)
+        rides_all = [(b - a).total_seconds() / 60 for d in train for a, b in rets[d]]
+        flat = statistics.median(rides_all) if rides_all else 8
+        t, end = p.on_day(p.DAY_START, test), p.on_day(p.DAY_END, test)
+        while t <= end:
+            sims_out = simulate(vis[test], t, table, today_factor(segs[test], t, table), rng, board=R_BOARD, alight=R_ALIGHT)
+            site = L.site_next(etas, t)
+            for n in L.AHEAD:
+                go = t + timedelta(minutes=n)
+                act = next(((a, b) for a, b in rets[test] if a >= go), None)
+                if not act or act[0] - go > p.MAX_WAIT or not p.seen(buses[test], t, act[1]):
+                    continue
+                real = act[1]
+                v0 = return_v0(rets, train, go, buses)
+                if v0 is None:
+                    continue
+                arr = pick(sims_out, n, (v0 - t).total_seconds() / 60)
+                part = t + timedelta(minutes=float(np.median(arr)))
+                web = (site + timedelta(minutes=flat)) if site and site >= go else v0
+                peak = in_return_peak(go)
+                for k, pr in (("Bot 現行", p.bot_estimate(go)), ("v0 歷史", v0), ("網站下一班＋固定車程", web), ("零件模型", part),
+                              ("零件＋v0 平均", part + (v0 - part) / 2)):
+                    out.setdefault((n, k), {}).setdefault(test, []).append(((pr - real).total_seconds() / 60, peak))
+                out.setdefault((n, "零件模型 P80 涵蓋"), {}).setdefault(test, []).append(
+                    (float(real <= t + timedelta(minutes=float(np.percentile(arr, 80)))), peak))
+            t += timedelta(minutes=1)
+        print(f"回程 {test} 考完", file=sys.stderr)
+    return out
+
+
+def score_rows(out, scope_of=lambda e: [e]):
+    """{(n, 方法): {考卷: [誤差]}} → 成績表的列（「全部」＋每天）。scope_of 把一筆拆成 [(範圍, 誤差)]"""
+    rows = []
+    groups = {}
+    for (n, k), by_day in out.items():
+        for day, es in by_day.items():
+            for e in es:
+                for scope, x in scope_of(e):
+                    groups.setdefault((scope, n, k), {}).setdefault(day, []).append(x)
+    for (scope, n, k), by_day in groups.items():
+        for exam_day in ["全部"] + list(by_day):
+            e = [x for v in by_day.values() for x in v] if exam_day == "全部" else by_day[exam_day]
+            if "涵蓋" in k:
+                row = {"平均差": "", "容許內%": round(100 * sum(e) / len(e)), "容許": "目標 60%" if "P20" in k else "目標 80%"}
+            else:
+                row = {"平均差": round(statistics.mean(map(abs, e)), 2), "容許內%": round(100 * sum(abs(x) <= 3 for x in e) / len(e)), "容許": "±3 分"}
+            rows.append({"範圍": scope, "情況": f"提早 {n} 分鐘查", "方法": k, "考卷": exam_day if exam_day == "全部" else exam_day[5:],
+                         **row, "筆數": len(e)})
+    return rows
+
+
+def write_and_print(rows, path, note):
+    fields = (["範圍"] if rows and rows[0]["範圍"] else []) + ["情況", "方法", "考卷", "平均差", "容許", "容許內%", "筆數"]
+    if "範圍" not in fields:
+        for r in rows:
+            r.pop("範圍")
+    p.write_csv(path, rows, fields, note)
+    for r in rows:
+        if r["考卷"] == "全部":
+            key = lambda x: (x.get("範圍"), x["情況"], x["方法"])
+            per = "  ".join(f"{x['考卷']} {x['平均差'] if x['平均差'] != '' else str(x['容許內%']) + '%'}" for x in rows
+                            if x["考卷"] != "全部" and key(x) == key(r))
+            v = f"平均差 {r['平均差']} 分，±3 分內 {r['容許內%']}%" if r["平均差"] != "" else f"{r['容許內%']}%（{r['容許']}）"
+            print(f"{(r.get('範圍') + ' | ') if r.get('範圍') else ''}{r['情況']} | {r['方法']}：{v}  [{per}]")
+    print(f"已寫入 {path}")
+
+
 def main():
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -227,29 +362,20 @@ def main():
         pass
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--days", nargs="+", default=L.DAYS)
+    ap.add_argument("--direction", choices=["去程", "回程", "全部"], default="全部",
+                    help="去程：在家 → 東吳；回程：東吳 → 捷運士林站")
     ap.add_argument("--data", default=p.DATA_DIR)
     ap.add_argument("--out", default=p.OUT_DIR)
     a = ap.parse_args()
-    out = exam(a.days, a.days, a.data)
-    rows = []
-    for (n, k), by_day in out.items():
-        for exam_day in ["全部"] + list(by_day):
-            e = [x for v in by_day.values() for x in v] if exam_day == "全部" else by_day[exam_day]
-            if "涵蓋" in k:
-                row = {"平均差": "", "容許內%": round(100 * sum(e) / len(e)), "容許": "目標 60%" if "P20" in k else "目標 80%"}
-            else:
-                row = {"平均差": round(statistics.mean(map(abs, e)), 2), "容許內%": round(100 * sum(abs(x) <= 3 for x in e) / len(e)), "容許": "±3 分"}
-            rows.append({"情況": f"提早 {n} 分鐘查", "方法": k, "考卷": exam_day if exam_day == "全部" else exam_day[5:], **row, "筆數": len(e)})
-    path = os.path.join(a.out, f"557零件模型成績_{a.days[-1]}.csv")
-    p.write_csv(path, rows, ["情況", "方法", "考卷", "平均差", "容許", "容許內%", "筆數"],
-                f"# 在家預估幾點到東吳，{'、'.join(d[5:] for d in a.days)} 輪流當考卷（11/24 只有傍晚）；產生時間 {datetime.now():%Y-%m-%d %H:%M}")
-    for r in rows:
-        if r["考卷"] == "全部":
-            per = "  ".join(f"{x['考卷']} {x['平均差'] if x['平均差'] != '' else str(x['容許內%']) + '%'}" for x in rows
-                            if x["考卷"] != "全部" and (x["情況"], x["方法"]) == (r["情況"], r["方法"]))
-            v = f"平均差 {r['平均差']} 分，±3 分內 {r['容許內%']}%" if r["平均差"] != "" else f"{r['容許內%']}%（{r['容許']}）"
-            print(f"{r['情況']} | {r['方法']}：{v}  [{per}]")
-    print(f"已寫入 {path}")
+    days_note = f"{'、'.join(d[5:] for d in a.days)} 輪流當考卷（11/24 只有傍晚）；產生時間 {datetime.now():%Y-%m-%d %H:%M}"
+    if a.direction in ("去程", "全部"):
+        rows = score_rows(exam(a.days, a.days, a.data), lambda e: [("", e)])
+        write_and_print(rows, os.path.join(a.out, f"557零件模型成績_{a.days[-1]}.csv"), f"# 在家預估幾點到東吳，{days_note}")
+    if a.direction in ("回程", "全部"):
+        rows = score_rows(exam_return(a.days, a.days, a.data),
+                          lambda e: [("全天", e[0])] + ([("回程尖峰", e[0])] if e[1] else []))
+        write_and_print(rows, os.path.join(a.out, f"557回程成績_{a.days[-1]}.csv"),
+                        f"# 回程：學生 N 分鐘後到東吳站牌，幾點到捷運士林站。回程尖峰 12:00–13:30、15:00–16:00、17:00–18:30。{days_note}")
 
 
 if __name__ == "__main__":

@@ -64,6 +64,40 @@ class PartsTest(unittest.TestCase):
         self.assertTrue(np.allclose(Z.pick(sims, 0, 99.0, sims=10), school))
         self.assertTrue(np.allclose(Z.pick(sims, 5, 99.0, sims=10), 99.0), "5 分鐘後才到站，這台已經開走 → 用備案")
 
+    def test_simulate_return_board_and_alight(self):
+        """回程：車在東吳（去程終點），模擬到錢穆故居（離開東吳）和回程的捷運士林站"""
+        table = Z.Table([(q, 480 + i, 2.0 if q == Z.DWELL else 1.0, None) for q in range(Z.C) for i in range(5)])
+        vis = {"1": [(at("08:00"), Z.DWELL)]}
+        sims = Z.simulate(vis, at("08:00"), table, 1.0, np.random.default_rng(0), sims=5, board=Z.R_BOARD, alight=Z.R_ALIGHT)
+        self.assertEqual(len(sims), 1)
+        dep, arr = sims[0]
+        self.assertTrue(np.allclose(dep, 2.0), "在校內停 2 分鐘才離開")
+        self.assertTrue(np.allclose(arr - dep, Z.R_ALIGHT - Z.R_BOARD), "錢穆故居到捷運士林站每段 1 分")
+
+    def test_return_v0_wait_and_ride(self):
+        """訓練那天每 10 分鐘一班離開東吳、開 8 分鐘到士林站 → 平均等約 5 分＋8 分"""
+        day = "2026-11-25"
+        rets = {day: [(at(f"08:{m:02d}"), at(f"08:{m:02d}") + timedelta(minutes=8)) for m in range(0, 60, 10)]}
+        pred = Z.return_v0(rets, [day], datetime(2026, 11, 26, 8, 20), {day: []})
+        self.assertIsNotNone(pred)
+        mins = (pred - datetime(2026, 11, 26, 8, 20)).total_seconds() / 60
+        self.assertGreaterEqual(mins, 12)
+        self.assertLessEqual(mins, 14)
+        self.assertIsNone(Z.return_v0(rets, [day], datetime(2026, 11, 26, 12, 0), {day: []}), "那天這個時間沒有資料")
+
+    def test_return_peaks(self):
+        self.assertTrue(Z.in_return_peak(at("12:10")))
+        self.assertTrue(Z.in_return_peak(at("17:59")))
+        self.assertFalse(Z.in_return_peak(at("08:00")))
+
+    def test_score_rows_scopes(self):
+        out = {(0, "零件模型"): {"2026-11-25": [(1.0, True), (-3.0, False)]}}
+        rows = Z.score_rows(out, lambda e: [("全天", e[0])] + ([("回程尖峰", e[0])] if e[1] else []))
+        whole = next(r for r in rows if r["範圍"] == "全天" and r["考卷"] == "全部")
+        peak = next(r for r in rows if r["範圍"] == "回程尖峰" and r["考卷"] == "全部")
+        self.assertEqual((whole["平均差"], whole["筆數"]), (2.0, 2))
+        self.assertEqual((peak["平均差"], peak["筆數"]), (1.0, 1))
+
     def test_simulate_drops_vanished_bus(self):
         table = Z.Table([(q, 480 + i, 1.0, None) for q in range(Z.C) for i in range(5)])
         vis = {"1": [(at("08:00"), 5)]}
