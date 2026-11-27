@@ -268,8 +268,8 @@ def hist_ride(buses, train, at, stop="士林國中"):
 
 
 def exam_jhs(days, tests, data_dir=p.DATA_DIR, seed=0):
-    """從士林國中上車：每一分鐘、每個提早幾分鐘，幾點到東吳。國中離開時最多 59 人（四天沒有一班到 60），
-    照容量推國中的人都上得去，所以答案就是第一班。回傳 {(n, 方法): {考卷: [(誤差, 是不是尖峰)]}}"""
+    """從士林國中上車：每一分鐘、每個提早幾分鐘，幾點到東吳，答案是第一班（假設搭得上）。
+    注意：尖峰國中也會排隊（11/25 09:34–09:51 每班在國中上 40–55 人），尖峰要另外給範圍。回傳 {(n, 方法): {考卷: [(誤差, 是不是尖峰)]}}"""
     rng = np.random.default_rng(seed)
     buses = {d: p.load_day(d, data_dir) for d in days}
     events = {d: L.load_events(d, data_dir) for d in days}
@@ -475,7 +475,7 @@ def main():
         rows = score_rows(exam_jhs(a.days, a.days, a.data),
                           lambda e: [("全天", e[0])] + ([("尖峰（07:30–08:00、09:15–10:00）", e[0])] if e[1] else []))
         write_and_print(rows, os.path.join(a.out, f"557國中上車成績_{a.days[-1]}.csv"),
-                        f"# 士林國中上車，在家預估幾點到東吳。國中離開時最多 59 人（沒有一班滿），答案是第一班。{days_note}")
+                        f"# 士林國中上車，在家預估幾點到東吳。答案是第一班（假設搭得上；尖峰國中也會排隊，要另外給範圍）。{days_note}")
     if a.direction in ("回程", "全部"):
         rows = score_rows(exam_return(a.days, a.days, a.data),
                           lambda e: [("全天", e[0])] + ([("回程尖峰", e[0])] if e[1] else []))
