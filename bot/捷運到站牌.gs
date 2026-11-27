@@ -1,6 +1,6 @@
 /**
  * 捷運到站牌：學生按按鈕傳定位 → 找最近的捷運站 → Google 地圖算走路幾分鐘 → 捷運時刻表算哪班捷運、幾點到士林站
- * → 出士林站走到 557 站牌（國中或捷運站）都加 5 分鐘 → 「幾點到站牌」，再拿去估 557（11/28 團隊定的流程）
+ * → 出士林站走到 557 站牌（國中或捷運站）都加 5 分鐘 → 「幾點到站牌」→ 到校預估.gs 估幾點到東吳（11/28 團隊定的流程）
  *
  * 資料：
  *   各站座標：OpenStreetMap（ODbL）；各站到士林站旅程時間：台北捷運官網「票價及旅程時間」（含轉乘步行、不含等車）
@@ -230,7 +230,8 @@ function mrtPlanFromHere(lat, lng, nowMs) {
     const w = mrtWalk_(here, SHILIN_MRT);
     const atStop = new Date(now.getTime() + w.min * 60000);
     return { ok: true, station: '士林', walkMin: w.min, walkSource: w.source, trainAtShilin: null, atStop: hm(atStop),
-      lines: [`你就在士林站附近，走到 557 站牌約 ${w.min} 分鐘（${w.source}）`, `約 ${hm(atStop)} 到站牌`] };
+      school: mrtSchool_(atStop),
+      lines: [`你就在士林站附近，走到 557 站牌約 ${w.min} 分鐘（${w.source}）`, `約 ${hm(atStop)} 到站牌`].concat(p557Lines_(atStop)) }; // 到校預估.gs
   }
   const w = mrtWalk_(here, st.at);
   const ready = new Date(now.getTime() + (w.min + MRT_ENTER_MIN) * 60000);
@@ -239,5 +240,15 @@ function mrtPlanFromHere(lat, lng, nowMs) {
     lines: [`最近的捷運站是${st.name}站，走路約 ${w.min} 分鐘`, '這個時間查不到捷運班次（目前只有平常日 06:00–18:59 的時刻表）'] };
   const atStop = new Date(train.getTime() + MRT_EXIT_TO_STOP_MIN * 60000);
   return { ok: true, station: st.name, walkMin: w.min, walkSource: w.source, trainAtShilin: hm(train), atStop: hm(atStop),
-    lines: [`走到${st.name}站約 ${w.min} 分鐘（${w.source}）`, `搭捷運，${hm(train)} 到士林站`, `出站走到 557 站牌約 ${MRT_EXIT_TO_STOP_MIN} 分鐘，約 ${hm(atStop)} 到站牌`] };
+    school: mrtSchool_(atStop),
+    lines: [`走到${st.name}站約 ${w.min} 分鐘（${w.source}）`, `搭捷運，${hm(train)} 到士林站`, `出站走到 557 站牌約 ${MRT_EXIT_TO_STOP_MIN} 分鐘，約 ${hm(atStop)} 到站牌`]
+      .concat(p557Lines_(atStop)) }; // 到校預估.gs
+}
+
+/** 推薦的站牌和幾點到東吳（給網頁顯示）：{ stop, early, late }，時間是 'HH:mm'，離峰 late＝null */
+function mrtSchool_(atStop) {
+  const r = p557Both_(atStop); // 到校預估.gs
+  if (!r) return null;
+  const hm = d => (d ? Utilities.formatDate(d, TZ, 'HH:mm') : null);
+  return { stop: r.best.stop, early: hm(r.best.early), late: hm(r.best.late), peak: r.best.peak };
 }

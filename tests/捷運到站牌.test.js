@@ -73,3 +73,36 @@ test('被亂按：Google 地圖每分鐘最多 30 次，超過改用距離估（
   assert.equal(sources[31], '用距離估');
   assert.equal(env.mapsCalls.length, 30);
 });
+
+test('接到 557：09:30 到站牌是尖峰 → 給範圍；國中最晚比較早，推薦國中', () => {
+  const env = loadBot(ALL);
+  const at = new Date('2026-11-25T09:30:00+08:00');
+  const mrt = plain(env.call('p557Estimate_', '捷運士林站', at));
+  const jhs = plain(env.call('p557Estimate_', '士林國中', at));
+  assert.equal(mrt.peak, true);
+  assert.ok(mrt.late && jhs.late, '尖峰一定有最晚時間');
+  assert.ok(new Date(mrt.late) > new Date(mrt.early));
+  const lines = env.call('p557Lines_', at);
+  assert.match(lines[0], /^建議走去士林國中站牌：09:\d\d–\d\d:\d\d 到東吳（尖峰/);
+  assert.match(lines[1], /捷運士林站站牌/);
+});
+
+test('接到 557：08:30 離峰只給一個時間；週末、晚上沒有預測', () => {
+  const env = loadBot(ALL);
+  const r = plain(env.call('p557Estimate_', '捷運士林站', new Date('2026-11-25T08:30:00+08:00')));
+  assert.equal(r.peak, false);
+  assert.equal(r.late, null);
+  assert.match(r.text, /^約 08:\d\d 到東吳$/);
+  assert.equal(env.call('p557Estimate_', '捷運士林站', new Date('2026-11-28T08:30:00+08:00')), null);
+  assert.match(env.call('p557Lines_', new Date('2026-11-25T21:00:00+08:00'))[0], /還沒有 557 的預測/);
+});
+
+test('整個流程：石牌 09:05 出發 → 09:25 到站牌 → 尖峰範圍到東吳', () => {
+  const env = loadBot(ALL);
+  env.walkSeconds = () => 6 * 60;
+  const r = plain(env.call('mrtPlanFromHere', SHIPAI[0], SHIPAI[1], ms('2026-11-25T09:05:00+08:00')));
+  assert.equal(r.atStop, '09:25');
+  assert.equal(r.school.peak, true);
+  assert.ok(r.school.late > r.school.early);
+  assert.match(r.lines.join('\n'), /建議走去.+站牌：09:\d\d–\d\d:\d\d 到東吳/);
+});
