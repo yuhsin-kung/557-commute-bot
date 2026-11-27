@@ -230,7 +230,7 @@ pickle.dump(res, open(sys.argv[1], "wb"))
 for k in SEATS:
     print(f"\n======== 門檻 {k}（離開士林站至少剩 {k} 個位置才算上得去） ========")
     for n in L.AHEAD:
-        print(f" 提早 {n} 分鐘")
+        print(f" {n} 分鐘後到站牌")
         for name in ("Bot", f"v0（門檻 {k}）", "零件（不看擠）", "零件＋擠", "結合（零件＋擠，10 分以上和 v0 平均）"):
             e = res[(n, k, name)]
             allv = [abs(x) for v in e.values() for x in v]

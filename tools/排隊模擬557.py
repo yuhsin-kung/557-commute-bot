@@ -316,7 +316,7 @@ def summarize(out):
                 else:
                     a = np.array(xs)
                     row = {"值": round(float(a.mean()), 2), "說明": f"離範圍平均幾分；落在範圍 ±3 分內 {100 * np.mean(a <= 3):.0f}%、正好在範圍內 {100 * np.mean(a == 0):.0f}%"}
-                rows.append({"範圍": scope, "情況": f"提早 {n} 分鐘查", "方法": k, "考卷": day if day == "全部" else day[5:], **row, "筆數": len(xs)})
+                rows.append({"範圍": scope, "情況": ("人已經在站牌" if n == 0 else f"{n} 分鐘後到站牌"), "方法": k, "考卷": day if day == "全部" else day[5:], **row, "筆數": len(xs)})
     return rows
 
 

@@ -250,7 +250,7 @@ pickle.dump(res, open(sys.argv[1], "wb"))
 for k in SEATS:
     print(f"\n======== 只看往東吳尖峰（07–08、09–10、12–13、14:30–15），網站人數 ≥{FULL_AT} 算滿、≥{CROWD_AT} 算很擠 ========")
     for n in L.AHEAD:
-        print(f" 提早 {n} 分鐘")
+        print(f" {n} 分鐘後到站牌")
         for name in ("Bot", "v0", "零件（不看擠）", "零件＋擠", "結合（零件＋擠，10 分以上和 v0 平均）"):
             e = res[(n, k, name)]
             allv = [abs(x) for v in e.values() for x in v]

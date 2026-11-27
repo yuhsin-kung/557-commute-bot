@@ -1,7 +1,7 @@
 # /// script
 # dependencies = ["openpyxl", "scikit-learn", "numpy"]
 # ///
-"""557 零件模型：把公車系統拆成幾個從資料學的零件，再模擬很多次，預測「在家提早 N 分鐘查，幾點到東吳」
+"""557 零件模型：把公車系統拆成幾個從資料學的零件，再模擬很多次，預測「在家查、N 分鐘後到站牌，幾點到東吳」
 
 零件：
   1. 分段車程：路線切成「這站 → 下一站」，每一段依時段（前後 20 分鐘）從訓練那幾天學開車時間的分布。
@@ -14,10 +14,10 @@
      每次模擬挑那之後第一台車，取到東吳時間的中位數當預測，第 20、80 百分位當範圍
   沒有車在 45 分鐘內會來（還沒出車）就用 v0 的歷史等車
 
-結合：提早 10 分鐘以上，零件模型和 v0 統計取平均（四天考試裡最準）
+結合：10 分鐘以上才到站牌，零件模型和 v0 統計取平均（四天考試裡最準）
 
 回程（東吳 → 捷運士林站，11/28）：同一套零件，上車站改成「離開東吳」（錢穆故居）、下車站改成回程的捷運士林站。
-  提早 20 分鐘以內用零件模型，20 分鐘以上和 v0 平均
+  20 分鐘以內到站牌用零件模型，20 分鐘以上和 v0 平均
 
   uv run tools/零件模型557.py                    去程、回程都考
   uv run tools/零件模型557.py --direction 回程
@@ -50,7 +50,7 @@ SIMS = 200
 SEG_WINDOW = 20                  # 分段車程用前後幾分鐘的樣本
 LOOK = 30                        # 今天路況看最近幾分鐘
 SHRINK = 8                       # 今天路況的樣本少於這個數，就往 1 拉一半以上
-BLEND_FROM = 10                  # 提早幾分鐘以上，零件模型和 v0 取平均
+BLEND_FROM = 10                  # 幾分鐘以上才到站牌，零件模型和 v0 取平均
 
 
 def visits(xs):
@@ -243,7 +243,7 @@ def exam(days, tests, data_dir=p.DATA_DIR, seed=0):
                 part = t + timedelta(minutes=float(np.median(school)))
                 both = part + (v0 - part) / 2 if n >= BLEND_FROM else part
                 for k, pr in (("Bot 現行", p.bot_estimate(go)), ("v0 歷史", v0), ("網站下一班", web), ("機器學習（車輛位置）", ml),
-                              ("零件模型", part), ("結合（零件＋v0，提早 10 分鐘以上才平均）", both),
+                              ("零件模型", part), ("結合（零件＋v0，10 分鐘以上才到站牌時取平均）", both),
                               ("平均（零件＋車輛位置 ML）", part + (ml - part) / 2)):
                     add(n, k, test, ((pr - real).total_seconds() / 60,
                                      (pr - real_q).total_seconds() / 60 if real_q else None, peak))
@@ -304,7 +304,7 @@ def exam_jhs(days, tests, data_dir=p.DATA_DIR, seed=0):
                 part = t + timedelta(minutes=float(np.median(school)))
                 both = part + (v0 - part) / 2 if n >= BLEND_FROM else part
                 for k, pr in (("Bot 現行", p.bot_estimate(go)), ("v0 歷史", v0), ("網站下一班", web),
-                              ("零件模型", part), ("結合（零件＋v0，提早 10 分鐘以上才平均）", both)):
+                              ("零件模型", part), ("結合（零件＋v0，10 分鐘以上才到站牌時取平均）", both)):
                     add(n, k, test, ((pr - real).total_seconds() / 60, peak))
                 p20 = t + timedelta(minutes=float(np.percentile(school, 20)))
                 p80 = t + timedelta(minutes=float(np.percentile(school, 80)))
@@ -425,7 +425,7 @@ def score_rows(out, scope_of=lambda e: [e]):
                        "容許": "目標 60%" if "P20" in k else ("" if "比例" in k else "目標 80%")}
             else:
                 row = {"平均差": round(statistics.mean(map(abs, e)), 2), "容許內%": round(100 * sum(abs(x) <= 3 for x in e) / len(e)), "容許": "±3 分"}
-            rows.append({"範圍": scope, "情況": f"提早 {n} 分鐘查", "方法": k, "考卷": exam_day if exam_day == "全部" else exam_day[5:],
+            rows.append({"範圍": scope, "情況": ("人已經在站牌" if n == 0 else f"{n} 分鐘後到站牌"), "方法": k, "考卷": exam_day if exam_day == "全部" else exam_day[5:],
                          **row, "筆數": len(e)})
     return rows
 

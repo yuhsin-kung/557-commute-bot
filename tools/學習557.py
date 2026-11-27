@@ -5,7 +5,7 @@
 
 三個模型（都是梯度提升樹 HistGradientBoosting，資料少、特徵少，比較不容易背答案）：
   1. 車輛位置 → 幾分鐘後到士林站：路上每台車（含還在跑回程、等一下掉頭的車）現在在哪一站、
-     多久前回報、現在幾點、星期幾 → 這台車幾分鐘後開到捷運士林站。學生在家提早 N 分鐘查，
+     多久前回報、現在幾點、星期幾 → 這台車幾分鐘後開到捷運士林站。學生在家查、N 分鐘後到站牌，
      就挑「N 分鐘後第一台到站的車」
   2. 車程：士林站 → 東吳幾分鐘（幾點、星期幾）；塞車時段再依「今天最近一班比平常慢多少」線性調整
   3. 擁擠：這班離開士林站時網站顯示車上幾人（幾點、跟前一班隔多久、前一班幾人；
@@ -31,7 +31,7 @@ _spec.loader.exec_module(p)
 mon = p.mon
 
 DAYS = ["2026-11-24", "2026-11-25", "2026-11-26", "2026-11-27"]
-AHEAD = (0, 10, 20, 30)  # 在家提早幾分鐘查
+AHEAD = (0, 10, 20, 30)  # 幾分鐘後到站牌（0 = 人已經在站牌）
 F = "%Y-%m-%d %H:%M:%S"
 # 一台車一圈的站序：回程每一站，接著去程每一站。位置 = 在這一圈的第幾站
 POS = {(1, s): i for i, s in enumerate(mon.R_ROUTE)} | {(0, s): len(mon.R_ROUTE) + i for i, s in enumerate(mon.ROUTE)}
@@ -265,7 +265,7 @@ def exam_crowd(rows, tests):
 
 
 def exam_home(buses, events, arrivals, tests, data_dir=p.DATA_DIR):
-    """在家提早 N 分鐘查：幾點到東吳。不看擠不擠得上（網站沒有排隊人數），只比時間"""
+    """在家查、N 分鐘後到站牌：幾點到東吳。不看擠不擠得上（網站沒有排隊人數），只比時間"""
     out = {}
     for test in tests:
         train = [d for d in buses if d != test]
@@ -340,7 +340,7 @@ def main():
         for k, e in exam_crowd(crowds, [test]).items():
             errs.setdefault(("擁擠（離開士林站車上幾人）", "全天", k, "人", 10), {})[test] = e
         for (n, k), e in sorted(exam_home(buses, events, arrivals, [test], a.data).items()):
-            errs.setdefault(("在家預估幾點到東吳", f"提早 {n} 分鐘查", k, "分", 3), {})[test] = e
+            errs.setdefault(("在家預估幾點到東吳", ("人已經在站牌" if n == 0 else f"{n} 分鐘後到站牌"), k, "分", 3), {})[test] = e
     print("塞車時段調整係數 β（每輪用訓練那幾天學）：" + "、".join(f"{d[5:]} 當考卷 {b:.2f}" for d, b in betas.items()))
     rows = []
     for (model, period, k, unit, tol), by_day in errs.items():

@@ -183,7 +183,7 @@ def summarize(out):
             xs = [v for d, es in by_day.items() if day in ("全部", d) for v in es]
             a = np.array([x[:3] for x in xs])
             qd = np.array([x[1] for x in xs if x[3]])
-            rows.append({"情況": f"提早 {n} 分鐘查", "方法": k, "考卷": day if day == "全部" else day[5:],
+            rows.append({"情況": ("人已經在站牌" if n == 0 else f"{n} 分鐘後到站牌"), "方法": k, "考卷": day if day == "全部" else day[5:],
                          "下限對%": round(100 * a[:, 0].mean()), "上限對%": round(100 * a[:, 1].mean()),
                          "都對%": round(100 * (a[:, 0] * a[:, 1]).mean()),
                          "第一班要排時上限對%": round(100 * qd.mean()) if len(qd) else "",

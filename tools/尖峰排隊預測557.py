@@ -91,7 +91,7 @@ def red_now(rows, t):
 
 
 def history(rows_by_day, stop, n):
-    """訓練那幾天每一分鐘：(幾點到站, 當時（提早 n 分鐘查）是不是紅色, 最快多等, 最晚多等)"""
+    """訓練那幾天每一分鐘：(幾點到站, 當時（n 分鐘前查）是不是紅色, 最快多等, 最晚多等)"""
     out = []
     for day, rows in rows_by_day.items():
         go = p.on_day(START, day)
@@ -220,7 +220,7 @@ def summarize(out):
                     continue
                 a = np.array([x[:3] + (x[5],) for x in xs])
                 qd = np.array([x[1] for x in xs if x[3]])
-                rows.append({"範圍": scope, "上車站": stop, "情況": f"提早 {n} 分鐘查", "方法": k,
+                rows.append({"範圍": scope, "上車站": stop, "情況": ("人已經在站牌" if n == 0 else f"{n} 分鐘後到站牌"), "方法": k,
                              "考卷": day if day == "全部" else day[5:],
                              "下限對%": round(100 * a[:, 0].mean()), "上限對%": round(100 * a[:, 1].mean()),
                              "都對%": round(100 * (a[:, 0] * a[:, 1]).mean()),
