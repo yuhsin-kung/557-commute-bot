@@ -162,14 +162,38 @@ def hist_wait(buses, train, go):
     return statistics.median(ws) if ws else 8
 
 
+OUT_PEAKS = ((450, 480), (555, 600))  # 往東吳尖峰：07:30–08:00、09:15–10:00（11/28 用「要排隊」規則定的）
+QUEUE_FULL = 60                        # 離開士林站 60 人以上（實測約 64–66 人就滿）
+
+
+def in_out_peak(go):
+    return any(a <= go.hour * 60 + go.minute < b for a, b in OUT_PEAKS)
+
+
+def must_queue(trip):
+    """這班到士林站「要排隊、可能上不去」嗎（11/28 團隊定的顏色規則）：
+    離開士林國中紅 → 要排；離開士林站綠／黃 → 不用；國中綠／黃、士林站紅 → 離開士林站 60 人以上才要排。
+    人數被清掉或沒有人數 → None（不知道，當作上得去）"""
+    if trip.get("人數不可信") or not trip.get("士林站人數"):
+        return None
+    jhs, mrt = trip.get("國中人數"), trip["士林站人數"]
+    if jhs and int(jhs["擁擠等級"]) == 3:
+        return True
+    if int(mrt["擁擠等級"]) < 3:
+        return False
+    return int(mrt["車上人數"]) >= QUEUE_FULL
+
+
 def exam(days, tests, data_dir=p.DATA_DIR, seed=0):
-    """四天輪流考試：每一分鐘、每個提早幾分鐘，各方法預測幾點到東吳 vs 實際。回傳 {(n, 方法): {考卷: [誤差]}}"""
+    """四天輪流考試：每一分鐘、每個提早幾分鐘，各方法預測幾點到東吳 vs 實際。
+    回傳 {(n, 方法): {考卷: [(誤差：搭第一班, 誤差：第一班要排就等下一班, 是不是尖峰)]}}"""
     rng = np.random.default_rng(seed)
     buses = {d: p.load_day(d, data_dir) for d in days}
     events = {d: L.load_events(d, data_dir) for d in days}
     arrivals = {d: L.mrt_arrivals(events[d]) for d in days}
     vis = {d: {v: visits(xs) for v, xs in events[d].items()} for d in days}
     segs = {d: segments(vis[d], buses[d]) for d in days}
+    queue = {d: {(t["車輛ID"], t["參考"]): must_queue(t) for t in L.load_trips(d, data_dir) if t["參考"]} for d in days}
     out = {}
 
     def add(n, k, test, v):
@@ -206,6 +230,10 @@ def exam(days, tests, data_dir=p.DATA_DIR, seed=0):
                 if not act or act["到站"]["士林站"] - go > p.MAX_WAIT or not p.seen(tb, t, act["到站"]["士林站"]):
                     continue
                 real = act["東吳"]
+                # 照排隊規則：第一班要排就當作上不去，等下一班（沒人數的當作上得去）
+                okb = next((b for a, b in mrt if a >= go and not queue[test].get((b["車輛ID"], a))), None)
+                real_q = okb["東吳"] if okb and okb["到站"]["士林站"] - go <= p.MAX_WAIT else None
+                peak = in_out_peak(go)
                 hist = go + timedelta(minutes=hist_wait(buses, train, go))
                 v0 = arrive(hist)
                 ml = arrive(next((c for c in coming if c >= go and c - go <= p.MAX_WAIT), hist))
@@ -216,10 +244,13 @@ def exam(days, tests, data_dir=p.DATA_DIR, seed=0):
                 for k, pr in (("Bot 現行", p.bot_estimate(go)), ("v0 歷史", v0), ("網站下一班", web), ("機器學習（車輛位置）", ml),
                               ("零件模型", part), ("結合（零件＋v0，提早 10 分鐘以上才平均）", both),
                               ("平均（零件＋車輛位置 ML）", part + (ml - part) / 2)):
-                    add(n, k, test, (pr - real).total_seconds() / 60)
-                add(n, "零件模型 P80 涵蓋", test, float(real <= t + timedelta(minutes=float(np.percentile(school, 80)))))
-                add(n, "零件模型 P20–P80 涵蓋", test, float(t + timedelta(minutes=float(np.percentile(school, 20))) <= real
-                                                       <= t + timedelta(minutes=float(np.percentile(school, 80)))))
+                    add(n, k, test, ((pr - real).total_seconds() / 60,
+                                     (pr - real_q).total_seconds() / 60 if real_q else None, peak))
+                p20 = t + timedelta(minutes=float(np.percentile(school, 20)))
+                p80 = t + timedelta(minutes=float(np.percentile(school, 80)))
+                add(n, "零件模型 P80 涵蓋", test, (float(real <= p80), float(real_q <= p80) if real_q else None, peak))
+                add(n, "零件模型 P20–P80 涵蓋", test, (float(p20 <= real <= p80), float(p20 <= real_q <= p80) if real_q else None, peak))
+                add(n, "第一班要排（比例）", test, (float(real_q is not None and real_q != real), None, peak))
             t += timedelta(minutes=1)
         print(f"{test} 考完", file=sys.stderr)
     return out
@@ -330,8 +361,9 @@ def score_rows(out, scope_of=lambda e: [e]):
     for (scope, n, k), by_day in groups.items():
         for exam_day in ["全部"] + list(by_day):
             e = [x for v in by_day.values() for x in v] if exam_day == "全部" else by_day[exam_day]
-            if "涵蓋" in k:
-                row = {"平均差": "", "容許內%": round(100 * sum(e) / len(e)), "容許": "目標 60%" if "P20" in k else "目標 80%"}
+            if "涵蓋" in k or "比例" in k:
+                row = {"平均差": "", "容許內%": round(100 * sum(e) / len(e)),
+                       "容許": "目標 60%" if "P20" in k else ("" if "比例" in k else "目標 80%")}
             else:
                 row = {"平均差": round(statistics.mean(map(abs, e)), 2), "容許內%": round(100 * sum(abs(x) <= 3 for x in e) / len(e)), "容許": "±3 分"}
             rows.append({"範圍": scope, "情況": f"提早 {n} 分鐘查", "方法": k, "考卷": exam_day if exam_day == "全部" else exam_day[5:],
@@ -369,8 +401,17 @@ def main():
     a = ap.parse_args()
     days_note = f"{'、'.join(d[5:] for d in a.days)} 輪流當考卷（11/24 只有傍晚）；產生時間 {datetime.now():%Y-%m-%d %H:%M}"
     if a.direction in ("去程", "全部"):
-        rows = score_rows(exam(a.days, a.days, a.data), lambda e: [("", e)])
-        write_and_print(rows, os.path.join(a.out, f"557零件模型成績_{a.days[-1]}.csv"), f"# 在家預估幾點到東吳，{days_note}")
+        def out_scopes(e):
+            first, queued, peak = e
+            got = [("全天", first)]
+            if peak:
+                got.append(("尖峰（07:30–08:00、09:15–10:00）", first))
+                if queued is not None:
+                    got.append(("尖峰・要排就等下一班", queued))
+            return got
+        rows = score_rows(exam(a.days, a.days, a.data), out_scopes)
+        write_and_print(rows, os.path.join(a.out, f"557零件模型成績_{a.days[-1]}.csv"),
+                        f"# 在家預估幾點到東吳，{days_note}。「要排就等下一班」：第一班照顏色規則要排隊，就當作上不去、改搭下一班")
     if a.direction in ("回程", "全部"):
         rows = score_rows(exam_return(a.days, a.days, a.data),
                           lambda e: [("全天", e[0])] + ([("回程尖峰", e[0])] if e[1] else []))

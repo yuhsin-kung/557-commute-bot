@@ -85,6 +85,23 @@ class PartsTest(unittest.TestCase):
         self.assertLessEqual(mins, 14)
         self.assertIsNone(Z.return_v0(rets, [day], datetime(2026, 11, 26, 12, 0), {day: []}), "那天這個時間沒有資料")
 
+    def test_must_queue_color_rule(self):
+        """團隊定的排隊規則：國中紅 → 要排；士林站綠／黃 → 不用；國中綠／黃、士林站紅 → 60 人以上才要排"""
+        c = lambda n, lv: {"車上人數": str(n), "擁擠等級": str(lv)}
+        self.assertTrue(Z.must_queue({"國中人數": c(55, 3), "士林站人數": c(61, 3)}))
+        self.assertFalse(Z.must_queue({"國中人數": c(30, 2), "士林站人數": c(43, 2)}))
+        self.assertFalse(Z.must_queue({"國中人數": c(10, 1), "士林站人數": c(55, 3)}), "紅色但沒到 60 人：都上得去")
+        self.assertTrue(Z.must_queue({"國中人數": c(35, 2), "士林站人數": c(62, 3)}))
+        self.assertTrue(Z.must_queue({"國中人數": None, "士林站人數": c(64, 3)}))
+        self.assertIsNone(Z.must_queue({"國中人數": c(5, 1), "士林站人數": None}), "沒有人數：不知道")
+        self.assertIsNone(Z.must_queue({"人數不可信": True, "國中人數": c(55, 3), "士林站人數": c(61, 3)}))
+
+    def test_out_peaks(self):
+        self.assertTrue(Z.in_out_peak(at("07:45")))
+        self.assertTrue(Z.in_out_peak(at("09:15")))
+        self.assertFalse(Z.in_out_peak(at("08:00")))
+        self.assertFalse(Z.in_out_peak(at("12:30")), "中午有人排但都上得去，不算尖峰")
+
     def test_return_peaks(self):
         self.assertTrue(Z.in_return_peak(at("12:10")))
         self.assertTrue(Z.in_return_peak(at("17:59")))
