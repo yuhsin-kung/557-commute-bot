@@ -233,15 +233,16 @@ function mrtPlanFromHere(lat, lng, nowMs) {
       school: mrtSchool_(atStop),
       lines: [`你就在士林站附近，走到 557 站牌約 ${w.min} 分鐘（${w.source}）`, `約 ${hm(atStop)} 到站牌`].concat(p557Lines_(atStop)) }; // 到校預估.gs
   }
+  const nm = /站$/.test(st.name) ? st.name : st.name + '站'; // 台北車站不要變成「台北車站站」
   const w = mrtWalk_(here, st.at);
   const ready = new Date(now.getTime() + (w.min + MRT_ENTER_MIN) * 60000);
   const train = mrtTrainToShilin_(st.code, st.toShilin, ready);
   if (!train) return { ok: false, station: st.name, walkMin: w.min, walkSource: w.source,
-    lines: [`最近的捷運站是${st.name}站，走路約 ${w.min} 分鐘`, '這個時間查不到捷運班次（目前只有平常日 06:00–18:59 的時刻表）'] };
+    lines: [`最近的捷運站是${nm}，走路約 ${w.min} 分鐘`, '這個時間查不到捷運班次（目前只有平常日 06:00–18:59 的時刻表）'] };
   const atStop = new Date(train.getTime() + MRT_EXIT_TO_STOP_MIN * 60000);
   return { ok: true, station: st.name, walkMin: w.min, walkSource: w.source, trainAtShilin: hm(train), atStop: hm(atStop),
     school: mrtSchool_(atStop),
-    lines: [`走到${st.name}站約 ${w.min} 分鐘（${w.source}）`, `搭捷運，${hm(train)} 到士林站`, `出站走到 557 站牌約 ${MRT_EXIT_TO_STOP_MIN} 分鐘，約 ${hm(atStop)} 到站牌`]
+    lines: [`走到${nm}約 ${w.min} 分鐘（${w.source}）`, `搭捷運，${hm(train)} 到士林站`, `出站走到 557 站牌約 ${MRT_EXIT_TO_STOP_MIN} 分鐘，約 ${hm(atStop)} 到站牌`]
       .concat(p557Lines_(atStop)) }; // 到校預估.gs
 }
 

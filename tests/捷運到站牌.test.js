@@ -106,3 +106,16 @@ test('整個流程：石牌 09:05 出發 → 09:25 到站牌 → 尖峰範圍到
   assert.ok(r.school.late > r.school.early);
   assert.match(r.lines.join('\n'), /建議走去.+站牌：09:\d\d–\d\d:\d\d 到東吳/);
 });
+
+test('到校預估網頁：LINE 傳「到校預估」拿到打開網頁的按鈕；網頁程式語法正確、呼叫 mrtPlanFromHere', () => {
+  const env = loadBot(ALL);
+  const card = env.call('etaButton_');
+  assert.match(JSON.stringify(card), /\?page=eta/);
+  const page = env.call('doGet', { parameter: { page: 'eta' } });
+  assert.equal(page.title, '幾點到東吳');
+  assert.equal(page.content.includes('__BOT__'), false);
+  const script = page.content.match(/<script>([\s\S]*)<\/script>/)[1];
+  assert.doesNotThrow(() => new Function(script));
+  assert.match(script, /mrtPlanFromHere\(pos\.coords\.latitude, pos\.coords\.longitude\)/);
+  assert.doesNotMatch(script, /alert\(|confirm\(/, '不用會被擋掉的跳出視窗');
+});

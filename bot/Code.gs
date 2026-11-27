@@ -58,6 +58,8 @@ function handleEvent_(ev) {
       answer = menuCategory_('557 以外的選擇'); // 「我想找 557 以外的通勤方式」這類說法
     } else if (/^出門時間(\s|$)/.test(text)) {
       answer = menuFlow_(text); // 選單.gs：用點的排出門時間
+    } else if (/^(到校預估|從我這裡出發幾點到校|幾點到東吳)$/.test(text)) {
+      answer = etaButton_(); // 到校預估.gs：打開定位網頁的按鈕
     } else if (text === '定位測試') {
       answer = geoTestButton_(); // 定位測試.gs（暫時的）
     } else if (/^(訂閱提醒|取消提醒)$/.test(text)) {
