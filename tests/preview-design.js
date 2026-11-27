@@ -116,9 +116,6 @@ document.fonts.ready.then(function () {
       ctx.fillStyle = UI.soft;
       fit(m.hint, 400, 76, maxW);
       ctx.fillText(m.hint, tx, y + h / 2 + 150);
-      // 右上角小標
-      ctx.font = '700 64px ' + FONT; ctx.textAlign = 'right'; ctx.fillStyle = UI.soft;
-      ctx.fillText('主打', x + w - 80, y + 120);
     } else {
       var s2 = 260;
       ctx.drawImage(icons[i], x + (w - s2) / 2, y + 150, s2, s2);
