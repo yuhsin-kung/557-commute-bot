@@ -60,6 +60,7 @@ def bus_rows(trips, day_buses):
         rows.append({"v": t["車輛ID"], "a": t["參考"], "東吳": school.get((t["車輛ID"], t["參考"])),
                      "jhs": None if bad or not jhs else int(jhs["車上人數"]),
                      "jhs_at": None if bad or not jhs else _when(jhs),
+                     "jhs_lv": None if bad or not jhs else int(jhs["擁擠等級"]),
                      "mrt": None if bad or not mrt else int(mrt["車上人數"]),
                      "full": Z.must_queue(t)})
     return sorted(rows, key=lambda r: r["a"])

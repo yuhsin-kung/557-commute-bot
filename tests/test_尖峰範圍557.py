@@ -38,6 +38,14 @@ class RangeTest(unittest.TestCase):
         self.assertTrue(np.allclose(R.pick_kth(sims, 5, 1, 99), 18), "5 分鐘後到站：第一台已經開走")
         self.assertTrue(np.allclose(R.pick_kth(sims, 5, 2, 99), 99), "沒有第二台：用備案")
 
+    def test_color_rates_and_known_first(self):
+        def b(hm, full, lv, left):
+            return {"a": at(hm), "東吳": at(hm) + timedelta(minutes=9), "full": full, "jhs_lv": lv, "jhs_at": at(left)}
+        rows = [b("09:34", True, 3, "09:32"), b("09:40", True, 2, "09:38"), b("09:46", False, 1, "09:44"), b("11:00", True, 1, "10:58")]
+        self.assertEqual(R.color_rates({"d": rows}), {3: 1.0, 2: 1.0, 1: 0.0}, "只看尖峰的車")
+        self.assertIs(R.known_first(rows, at("09:33")), rows[0], "已經離開國中、還沒到士林站")
+        self.assertIsNone(R.known_first(rows, at("09:30")), "還沒到國中：不知道顏色")
+
     def test_extra_uses_nearby_minutes(self):
         gaps = np.array([[570 + i, float(i)] for i in range(11)] + [[700, 50.0]])
         self.assertAlmostEqual(R.extra(gaps, 575), 8.0)

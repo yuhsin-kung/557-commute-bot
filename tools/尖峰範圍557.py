@@ -12,6 +12,9 @@
   C. 第一班 ～ 第二班＋歷史多花時間扣掉一班（第二班之後還可能要等）
   D. 只推第一班的 P20 ～ P80（舊做法，沒算排隊）
   E. Bot：一律 12 分＋尖峰 10 分（只有一個時間）
+  縮窄（只有已經在站牌、第一班已經離開士林國中時才知道顏色，約到站前 1.5 分鐘）：
+    訓練那幾天這個顏色「要排」的比例過半 → 第一班一定要排，下限改成第二班；
+    F 只改下限；G 另外：顏色顯示上得去 → 上限改成第二班；H 另外：顏色顯示上得去 → 上限就是第一班
 
   uv run tools/尖峰範圍557.py
 """
@@ -79,6 +82,24 @@ def pick_kth(sims_out, n, k, fallback):
     return np.where(ok, S[idx, cols], fallback)
 
 
+def color_rates(rows_by_day):
+    """訓練那幾天尖峰的車：離開國中的顏色 → 要排的比例"""
+    c = {}
+    for rows in rows_by_day.values():
+        for r in rows:
+            if Z.in_out_peak(r["a"]) and r["full"] is not None and r["jhs_lv"]:
+                c.setdefault(r["jhs_lv"], []).append(float(r["full"]))
+    return {lv: float(np.mean(v)) for lv, v in c.items()}
+
+
+def known_first(rows, t):
+    """t 這一刻已經離開士林國中、還沒到士林站的第一台車（網站已經有它離開國中的人數），而且它就是下一班"""
+    nxt = next((r for r in rows if r["a"] > t), None)
+    if nxt and nxt["jhs_at"] and nxt["jhs_at"] <= t and nxt["jhs_lv"]:
+        return nxt
+    return None
+
+
 def exam(days, tests, data_dir=p.DATA_DIR, seed=0):
     """回傳 {(n, 方法): {考卷: [(下限對, 上限對, 寬度, 第一班要排)]}}"""
     rng = np.random.default_rng(seed)
@@ -92,6 +113,7 @@ def exam(days, tests, data_dir=p.DATA_DIR, seed=0):
         train = [d for d in days if d != test]
         table = Z.Table([s for d in train for s in segs[d]])
         gaps = gap_samples({d: rows[d] for d in train})
+        rates = color_rates({d: rows[d] for d in train})
         rx, ry = L.ride_samples([b for d in train for b in buses[d]])
         ride_model = L.gbr().fit(rx, ry)
         t, end = p.on_day(START, test) - timedelta(minutes=max(L.AHEAD)), p.on_day(END, test)
@@ -123,9 +145,29 @@ def exam(days, tests, data_dir=p.DATA_DIR, seed=0):
                     "D 只推第一班 P20～P80（沒算排隊）": (at(np.percentile(first, 20)), at(np.percentile(first, 80))),
                     "E Bot 現行（12 分＋尖峰 10 分）": (p.bot_estimate(go), p.bot_estimate(go)),
                 }
+                kf = known_first(rows[test], t) if n == 0 else None
+                will_queue = None if not kf else rates.get(kf["jhs_lv"], 0.5) >= 0.5
+                c_lo, c_hi = ranges["C 第一班～第二班或歷史多花取晚的"]
+                if will_queue is None:
+                    f_r = g_r = h_r = (c_lo, c_hi)
+                elif will_queue:
+                    f_r = g_r = h_r = (at(s50), max(c_hi, at(s50)))
+                else:
+                    f_r, g_r, h_r = (c_lo, c_hi), (c_lo, at(s50)), (c_lo, c_lo)
+                if n == 0:
+                    ranges["F 縮窄：顏色說要排 → 下限改第二班"] = f_r
+                    ranges["G 縮窄：F＋顏色說上得去 → 上限改第二班"] = g_r
+                    ranges["H 縮窄：F＋顏色說上得去 → 上限就是第一班"] = h_r
+                    ranges["（知道第一班顏色的時候）C"] = (c_lo, c_hi) if kf else None
+                    for k in "FGH":
+                        name = next(x for x in ranges if x.startswith(k + " "))
+                        ranges[f"（知道第一班顏色的時候）{name[:1]}"] = ranges[name] if kf else None
                 lo, hi = tr
                 queued = hi > lo
-                for k, (a, b) in ranges.items():
+                for k, ab in ranges.items():
+                    if ab is None:
+                        continue
+                    a, b = ab
                     v = (float(a <= lo + timedelta(minutes=TOL)), float(b >= hi - timedelta(minutes=TOL)),
                          (b - a).total_seconds() / 60, queued)
                     out.setdefault((n, k), {}).setdefault(test, []).append(v)
