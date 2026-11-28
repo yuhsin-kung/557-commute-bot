@@ -4,7 +4,7 @@
 
 - **技術**：LINE Messaging API + Google Apps Script + Google 試算表，全部免費額度
 - **程式**：`bot/` 是備份，**真正在跑的在 Apps Script**，改程式兩邊都要改
-- **細節**：指令、規則、試算表欄位看 [LINE指令說明.md](LINE指令說明.md)
+- **細節**：每個功能怎麼用、Bot 回什麼、背後怎麼做看 [LINE使用流程.md](LINE使用流程.md)；指令、規則、試算表欄位看 [LINE指令說明.md](LINE指令說明.md)
 
 ## 功能
 
