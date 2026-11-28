@@ -61,10 +61,10 @@ function p557Lines_(atStop) {
 
 // ===== 在 LINE 裡完成：按按鈕 → LINE 自己的「傳送位置」畫面 → Bot 收到位置訊息 → 直接回幾點到東吳（不開外部網頁） =====
 
-/** 主打功能的入口：「預估到達時間」。兩種問法：現在出發（傳位置）、趕課倒推（選節次再傳位置） */
+/** 「預估到達時間」的入口：現在出發，幾點到東吳（趕課倒推是另一顆按鈕「⏰ 幾點出門」） */
 function etaButton_() {
-  return choices_('現在出發幾點到？按「傳送我的位置」（LINE 內建的傳位置畫面）。\n要趕課？選第幾節、哪一棟，我倒推你最晚幾點出門。\n\n位置只用來算時間，不會記錄。', // 卡片.gs
-    [{ label: '傳送我的位置', uri: 'https://line.me/R/nv/location/' }, ['我要趕課：幾點要出門', '出門時間'], ['我已經在士林站', '到校預估 士林站']],
+  return choices_('現在出發，幾點到東吳？\n按「傳送我的位置」（LINE 內建的傳位置畫面），我幫你算走到哪個捷運站、搭哪班捷運、走去哪個 557 站牌、幾點到東吳。\n\n要趕課、想知道最晚幾點出門，請按「⏰ 幾點出門」。位置只用來算時間，不會記錄。', // 卡片.gs
+    [{ label: '傳送我的位置', uri: 'https://line.me/R/nv/location/' }, ['我已經在士林站', '到校預估 士林站'], ['⏰ 幾點出門', '出門時間']],
     { title: '🚇 預估到達時間', badge: '出門前提醒' });
 }
 
@@ -77,14 +77,14 @@ function etaFromLocation_(lat, lng, uid) {
     return etaClassFromHere_(lat, lng, pending, now);
   }
   const r = mrtPlan_(lat, lng, now.getTime()); // 捷運到站牌.gs
-  const again = [['再查一次', '到校預估'], ['我要趕課：幾點要出門', '出門時間']];
+  const again = [['再查一次', '到校預估'], ['⏰ 幾點出門', '出門時間']];
   if (!r.ok || !r.school) return choices_(r.lines.join('\n'), again, { title: '🚇 算不出來', badge: '預估到達時間' });
   etaLog_('現在出發', '', r.atStopAt, r.best);
   const head = `建議走去${r.school.stop}站牌\n${r.school.late ? r.school.early + '–' + r.school.late : '約 ' + r.school.early} 到東吳`;
   return choices_(head + '\n\n' + r.lines.map(l => '・' + l).join('\n'), again, { title: '🚇 幾點到東吳', badge: '預估到達時間' });
 }
 
-// ===== 合併「出門時間建議」：趕課 → 倒推最晚幾點出門（11/28 團隊決定兩個功能合成一個） =====
+// ===== 幾點出門：趕課 → 倒推最晚幾點出門（11/28：跟預估到達時間同一套算法，按鈕分開） =====
 
 const ETA_CLASS_WAIT_MIN = 30; // 選好課以後，幾分鐘內傳位置都算這堂課
 let etaLastClass_ = null;      // 這次回覆的出門建議卡片是哪一堂課（比較器.gs 的 planReply_ 設定，Code.gs 回覆後記到這個人身上）
@@ -170,7 +170,7 @@ function etaFromShilin_() {
   const both = p557Both_(atStop);
   etaLog_('已經在士林站', '', atStop, both && both.best);
   return choices_([`從捷運士林站走到 557 站牌約 ${MRT_EXIT_TO_STOP_MIN} 分鐘，約 ${hm(atStop)} 到站牌`].concat(p557Lines_(atStop)).join('\n'),
-    [['再查一次', '到校預估'], ['我要趕課：幾點要出門', '出門時間']], { title: '🚇 幾點到東吳', badge: '我已經在士林站' });
+    [['再查一次', '到校預估'], ['⏰ 幾點出門', '出門時間']], { title: '🚇 幾點到東吳', badge: '我已經在士林站' });
 }
 
 // ===== 測試模式：假日也能試「預估到達時間」（只影響傳指令的那個人，10 分鐘後自動結束） =====
@@ -198,7 +198,7 @@ function etaTestText_(uid, text) {
   const fake = new ETA_REAL_DATE(day + 'T' + ('0' + m[2]).slice(-2) + ':' + m[3] + ':00+08:00');
   cache.put('eta_test_' + uid, JSON.stringify({ offset: fake.getTime() - now.getTime(), label: m[1] + ' ' + ('0' + m[2]).slice(-2) + ':' + m[3] }), ETA_TEST_MIN * 60);
   return choices_('🧪 測試模式開始\n\n接下來 ' + ETA_TEST_MIN + ' 分鐘，你查的都當成「' + m[1] + ' ' + ('0' + m[2]).slice(-2) + ':' + m[3] + '」（' + day + '）來算，只影響你自己。\n傳「測試時間 結束」可以提早結束。', // 卡片.gs
-    [['🚇 預估到達時間', '預估到達時間'], ['我要趕課：幾點要出門', '出門時間']], { title: '🧪 測試模式', badge: '預估到達時間' });
+    [['🚇 預估到達時間', '預估到達時間'], ['⏰ 幾點出門', '出門時間']], { title: '🧪 測試模式', badge: '預估到達時間' });
 }
 
 /** 這個人在測試模式嗎：{ offset, label } 或 null */

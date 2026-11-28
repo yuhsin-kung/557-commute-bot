@@ -43,7 +43,7 @@ test('按分類，Bot 把那一類的功能按鈕傳到聊天室', () => {
   const out = send(env, '出門前提醒')[0];
   assert.equal(titleOf(out), '出門前提醒');
   assert.deepEqual(buttonsOf(out), [
-    ['🚇 預估到達時間', '預估到達時間'], ['557 即時動態', '557 即時動態'], ['比較所有路線', '比較所有路線'],
+    ['🚇 預估到達時間', '預估到達時間'], ['⏰ 幾點出門', '出門時間'], ['557 即時動態', '557 即時動態'], ['比較所有路線', '比較所有路線'],
     ['降雨查詢', '降雨查詢'], ['雨天與考試週訂閱提醒', '訂閱提醒設定'],
   ]);
   assert.deepEqual(buttonsOf(send(env, '公車站牌與排隊禮儀')[0]), [
@@ -52,7 +52,8 @@ test('按分類，Bot 把那一類的功能按鈕傳到聊天室', () => {
   const main = send(env, MAIN)[0];
   assert.match(main.altText, /預估到達時間/);
   assert.match(send(env, '幾點出門、幾點到東吳')[0].altText, /預估到達時間/, '舊名稱也認得');
-  assert.deepEqual(buttonsOf(main).map(b => b[1]), ['https://line.me/R/nv/location/', '出門時間', '到校預估 士林站']);
+  assert.deepEqual(buttonsOf(main).map(b => b[1]), ['https://line.me/R/nv/location/', '到校預估 士林站', '出門時間']);
+  assert.match(send(env, '幾點出門')[0].altText, /哪一天要去學校/, '打「幾點出門」是趕課倒推，不是預估到達時間');
   assert.deepEqual(buttonsOf(send(env, '557 以外的選擇')[0]).map(b => b[1]), ['共乘', 'YouBike', '共享雨傘', '包車']);
   assert.deepEqual(buttonsOf(send(env, '積分與打卡')[0]), [
     ['到校打卡', '到校打卡'], ['出校打卡', '出校打卡'], ['我的紀錄', '我的紀錄'], ['兌換學餐折價券', '兌換折價券'], ['我的折價券', '我的折價券'], ['全校減碳', '全校減碳'],
@@ -155,17 +156,17 @@ test('加好友：歡迎的話、新生須知、選單', () => {
 test('出門時間：點哪一天 → 點第幾節 → 點哪一棟，全程不用打字', () => {
   const env = start();
   const step1 = send(env, '出門時間')[0];
-  assert.equal(saidOf(step1), '出門時間建議\n哪一天要去學校？');
+  assert.equal(saidOf(step1), '⏰ 幾點出門\n哪一天要去學校？');
   assert.deepEqual(buttonsOf(step1), [['今天', '出門時間 今天'], ['明天', '出門時間 明天']]);
 
   const step2 = send(env, '出門時間 明天')[0];
-  assert.equal(saidOf(step2), '出門時間建議\n你明天第幾節有課？\n\n例如：第一節、第二節');
+  assert.equal(saidOf(step2), '⏰ 幾點出門\n你明天第幾節有課？\n\n例如：第一節、第二節');
   assert.equal(buttonsOf(step2).length, 13);
   assert.deepEqual(buttonsOf(step2)[0], ['第 1 節 08:10', '出門時間 明天 08:10']);
   assert.deepEqual(buttonsOf(step2)[12], ['第 D 節 21:15', '出門時間 明天 21:15']);
 
   const step3 = send(env, '出門時間 明天 08:10')[0];
-  assert.equal(saidOf(step3), '出門時間建議\n你在哪一棟上課？\n\n我會幫你估算從下車地點走到教室需要的時間。');
+  assert.equal(saidOf(step3), '⏰ 幾點出門\n你在哪一棟上課？\n\n我會幫你估算從下車地點走到教室需要的時間。');
   assert.equal(buttonsOf(step3).length, 13);
   assert.deepEqual(buttonsOf(step3).slice(0, 3), [['B 綜大', '出門時間 明天 08:10 B'], ['D 二教', '出門時間 明天 08:10 D'], ['R 一教', '出門時間 明天 08:10 R']]);
   assert.deepEqual(buttonsOf(step3)[12], ['不指定', '出門時間 明天 08:10 不指定']);
