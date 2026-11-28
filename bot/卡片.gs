@@ -72,6 +72,14 @@ function cardBubble_(spec) {
 }
 
 /** 每張卡片最下面的小字「回選單」：沒有輸入框上面那排按鈕之後，靠它回到全部功能 */
+/**
+ * 純文字也做成卡片（11/28 團隊要求：所有回覆都用卡片，不送單純的文字訊息）。
+ * 第一行很短、後面空一行，就拿來當標題列（choices_ 的規則），不然標題用 Bot 的名字；最下面有「回選單」
+ */
+function textCard_(text) {
+  return choices_(String(text), [], { primary: false });
+}
+
 function menuLink_() {
   return { type: 'text', text: '回選單 ›', size: 'xs', color: UI.muted, align: 'end', action: { type: 'message', label: '回選單', text: '選單' } };
 }

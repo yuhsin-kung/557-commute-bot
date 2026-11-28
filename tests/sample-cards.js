@@ -88,6 +88,9 @@ function sampleCards() {
   keep('預估到達時間尖峰', env.call('etaFromLocation_', 25.1144, 121.5154, 'sample'));
   env.setNow('2026-11-25T11:05:00+08:00');
   keep('預估到達時間離峰士林站', env.call('etaFromShilin_'));
+  // 純文字回覆也包成卡片（Code.gs 的 reply_ 用 textCard_）
+  keep('純文字改卡片：有標題', env.call('textCard_', '✅ 訂閱成功！\n\n明天會下雨或遇到考試週，前一晚 9 點提醒你。'));
+  keep('純文字改卡片：一行', env.call('textCard_', '已取消出門提醒。'));
   return cards;
 }
 

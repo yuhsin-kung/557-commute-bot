@@ -293,8 +293,9 @@ function rainTarget_(now) {
  * 不放輸入框上面那排「快速回覆」：按鈕都做在訊息裡（卡片.gs 的 card_、choices_），會留在聊天室。
  */
 function reply_(replyToken, answer) {
+  // 純文字也包成卡片（卡片.gs 的 textCard_）：所有回覆都是卡片
   const messages = (Array.isArray(answer) ? answer : [answer])
-    .map(m => (typeof m === 'string' ? { type: 'text', text: m } : m));
+    .map(m => (typeof m === 'string' ? textCard_(m) : m));
   const send = list => UrlFetchApp.fetch('https://api.line.me/v2/bot/message/reply', {
     method: 'post',
     contentType: 'application/json',

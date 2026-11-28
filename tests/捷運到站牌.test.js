@@ -245,7 +245,8 @@ test('測試模式：假裝週三 09:05 → 傳位置照週三算，回覆第一
   assert.match(start[0].altText, /測試模式開始/);
   assert.match(start[0].altText, /週三 09:05/);
   const r = replyOf(env, 'A', { type: 'location', latitude: SHIPAI[0], longitude: SHIPAI[1] });
-  assert.equal(r[0].text, '🧪 測試模式：當成週三 09:05');
+  assert.equal(r[0].altText, '🧪 測試模式：當成週三 09:05');
+  assert.equal(r[0].type, 'flex', '提示也是卡片');
   assert.match(r[1].altText, /搭捷運，09:20 到士林站/);
   assert.match(r[1].altText, /09:25 到站牌/);
   assert.match(r[1].altText, /09:\d\d–\d\d:\d\d 到東吳/);
@@ -253,7 +254,7 @@ test('測試模式：假裝週三 09:05 → 傳位置照週三算，回覆第一
   assert.ok(Math.abs(env.run('Date.now()') - Date.now()) < 5000, 'Date 已經換回來');
   // 別人不受影響
   const other = replyOf(env, 'B', { type: 'location', latitude: SHIPAI[0], longitude: SHIPAI[1] });
-  assert.notEqual(other[0].text, '🧪 測試模式：當成週三 09:05');
+  assert.notEqual(other[0].altText, '🧪 測試模式：當成週三 09:05');
   // 預估紀錄：不記使用者和位置
   const rows = env.sheets['預估紀錄'].rows;
   assert.deepEqual(plain(rows[0]), ['記錄時間', '測試模式（假裝的時間）', '類型', '上課時間', '出發／到站牌', '推薦站牌', '預估到東吳（最早）', '預估到東吳（最晚）', '尖峰']);
@@ -265,12 +266,12 @@ test('測試模式：假裝週三 09:05 → 傳位置照週三算，回覆第一
   assert.equal(row[8], '是', '09:25 是尖峰');
   assert.doesNotMatch(JSON.stringify(rows), /25\.114|121\.515|"A"|"B"/);
   // 結束
-  assert.match(replyOf(env, 'A', { type: 'text', text: '測試時間 結束' })[0].text, /測試模式結束/);
+  assert.match(replyOf(env, 'A', { type: 'text', text: '測試時間 結束' })[0].altText, /測試模式結束/);
   const after = replyOf(env, 'A', { type: 'text', text: '選單' });
-  assert.notEqual(after[0].text, '🧪 測試模式：當成週三 09:05');
+  assert.notEqual(after[0].altText, '🧪 測試模式：當成週三 09:05');
 });
 
 test('測試模式：格式不對就教用法', () => {
   const env = loadBot(ALL);
-  assert.match(replyOf(env, 'A', { type: 'text', text: '測試時間' })[0].text, /測試時間 週三 09:05/);
+  assert.match(replyOf(env, 'A', { type: 'text', text: '測試時間' })[0].altText, /測試時間 週三 09:05/);
 });

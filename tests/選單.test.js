@@ -27,7 +27,7 @@ function send(env, text, uid = 'A') {
   env.call('handleEvent_', { type: 'message', replyToken: 'r', source: { userId: uid }, message: { type: 'text', text } });
   return env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body.messages;
 }
-const isUnknown = messages => typeof messages[0].text === 'string' && messages[0].text.startsWith('這個問題我看不太懂');
+const isUnknown = messages => /這個問題我看不太懂/.test(messages[0].altText || messages[0].text || '');
 const titleOf = message => message.contents.header.contents[message.contents.header.contents.length - 1].text;
 
 test('選單：一則訊息，四個分類的按鈕', () => {
@@ -127,17 +127,18 @@ test('傳「選單」「功能」「說明」「menu」都會回選單', () => {
   });
 });
 
-test('看不懂的句子：先說看不懂，再給選單，不會讓人卡住', () => {
+test('看不懂的句子：一張卡片先說看不懂，下面直接是四個分類，不會讓人卡住', () => {
   const env = start();
   const reply = send(env, '今天好累');
-  assert.equal(reply.length, 2);
-  assert.match(reply[0].text, /^這個問題我看不太懂/);
-  assert.deepEqual(buttonsOf(reply[1]).map(b => b[0]), LABELS);
+  assert.equal(reply.length, 1);
+  assert.equal(reply[0].type, 'flex', '不送純文字');
+  assert.match(reply[0].altText, /這個問題我看不太懂/);
+  assert.deepEqual(buttonsOf(reply[0]).map(b => b[0]), LABELS);
 });
 
 test('看不懂時教的兩種問法，Bot 真的看得懂', () => {
   const env = start();
-  const examples = send(env, '今天好累')[0].text.split('\n').filter(l => l.startsWith('・')).map(l => l.slice(1));
+  const examples = send(env, '今天好累')[0].altText.split('\n').filter(l => l.startsWith('・')).map(l => l.slice(1));
   assert.deepEqual(examples, ['我明天 8 點在 D 棟上課', '我想找 557 以外的通勤方式']);
   examples.forEach(text => assert.equal(isUnknown(send(env, text)), false, '「' + text + '」Bot 看不懂'));
   assert.equal(titleOf(send(env, '我想找 557 以外的通勤方式')[0]), '557 以外的選擇');
@@ -149,7 +150,8 @@ test('加好友：歡迎的話、新生須知、選單', () => {
   env.call('handleEvent_', { type: 'follow', replyToken: 'r', source: { userId: 'A' } });
   const reply = env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body.messages;
   assert.equal(reply.length, 3);
-  assert.match(reply[0].text, /^嗨！我是東吳通勤達人/);
+  assert.equal(reply[0].type, 'flex', '歡迎的話也是卡片');
+  assert.match(reply[0].altText, /^嗨！我是東吳通勤達人/);
   assert.match(saidOf(reply[1]), /新生須知：第一次搭 557/);
   assert.deepEqual(buttonsOf(reply[1]).map(b => b[1]), ['新生測驗', '公車站牌與排隊禮儀']);
   assert.deepEqual(buttonsOf(reply[2]).map(b => b[0]), LABELS);
@@ -224,7 +226,7 @@ test('出門時間選今天：只列還沒開始的節次；快上課的走即�
   env.run("const __RealDate = Date; Date = class extends __RealDate { constructor(...a) { super(...(a.length ? a : [__RealDate.parse('2026-10-12T09:30:00+08:00')])); } static now() { return __RealDate.parse('2026-10-12T09:30:00+08:00'); } };");
   const periods = buttonsOf(send(env, '出門時間 今天')[0]);
   assert.deepEqual(periods[0], ['第 3 節 10:10', '出門時間 今天 10:10'], '第 1、2 節已經開始，不列');
-  assert.equal(send(env, '出門時間 今天 10:10 B')[0].text, '[即時 士林站 B]', '90 分鐘內上課，看即時到站');
+  assert.equal(send(env, '出門時間 今天 10:10 B')[0].altText, '[即時 士林站 B]', '90 分鐘內上課，看即時到站');
   assert.equal(send(env, '出門時間 今天 13:10 B')[0].type, 'flex', '還很久的給出門建議');
 });
 
@@ -255,4 +257,12 @@ test('推播（雨天提醒、站位變更）也是訊息裡的按鈕', () => {
   assert.equal(pushed.contents.header.contents[0].text, '明天（10/13）上學提醒');
   assert.deepEqual(buttonsOf(pushed), [['排明天的出門時間', '出門時間 明天'], ['預約計程車共乘', '共乘 去學校 預約'], ['不想收提醒', '取消提醒']]);
   assert.match(saidOf(pushed), /早上降雨機率 80%/);
+});
+
+test('所有回覆都是卡片，不送單純的文字訊息（11/28 團隊要求）', () => {
+  const env = start();
+  ['選單', '今天好累', '訂閱提醒', '取消提醒', '取消出門提醒', '我的共乘', '取消共乘', '我的折價券', '新生測驗', '答 1', '測試時間', '測試時間 結束',
+    '出門時間', '出門時間 明天', '預估到達時間', '到校預估 士林站', '回報現場 士林站', '騎車到校'].concat(CATEGORIES).forEach(text => {
+    send(env, text).forEach(m => assert.equal(m.type, 'flex', '「' + text + '」回了 ' + m.type));
+  });
 });
