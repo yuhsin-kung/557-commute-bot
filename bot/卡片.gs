@@ -308,13 +308,13 @@ function dsBlock_(b) {
     ] }];
   }
   if (b.flow) {
-    // 打卡步驟：編號標籤、粗體標題、灰字說明、可選的小標籤（第一次打卡＝淡磚紅、第二次打卡＝淡綠），步驟之間有分隔線
+    // 打卡步驟：編號標籤、粗體標題、灰字說明、可選的小標籤（第一次、第二次打卡都是淡綠；11/29 團隊要求），步驟之間有分隔線
     const out = [];
     b.flow.forEach((s, i) => {
       if (i) out.push({ type: 'separator', margin: 'lg', color: UI.line });
       const inner = [dsTx_(s[1], 'sm', UI.ink, { weight: 'bold' }), dsTx_(s[2], 'xs', UI.muted, { margin: 'xs' })];
       if (s[3]) {
-        const green = s[4] === 'green';
+        const green = true; // 第一次、第二次打卡的小標籤都用淡綠
         inner.push({ type: 'box', layout: 'horizontal', margin: 'sm', contents: [{ type: 'box', layout: 'vertical', flex: 0, cornerRadius: '12px', paddingAll: '4px', paddingStart: '8px', paddingEnd: '8px',
           backgroundColor: green ? '#DCFCE7' : UI.onBrandSoft, contents: [dsTx_(s[3], 'xxs', green ? UI.good : UI.brandDark, { wrap: false })] }, { type: 'filler' }] });
       }
