@@ -83,7 +83,7 @@ function p557Bus_(atStop) {
 // ===== 預估到達時間的卡片（11/28 團隊的設計稿：預計抵達、01 前往士林站、02 557 搭乘建議、03 更推薦的上車地點） =====
 
 const ETA_UI = { green: '#16A34A', greenSoft: '#DCFCE7', greenBg: '#ECFDF3', greenInk: '#15803D', ink: '#111827', muted: '#6B7280',
-  line: '#E5E7EB', panel: '#EEF2F7', track: '#CBD5E1', orange: '#F59E0B' };
+  line: '#E5E7EB', panel: '#EEF2F7', track: '#CBD5E1', orange: '#F59E0B', amber: '#B45309' };
 
 function etaTx_(text, size, color, extra) {
   return Object.assign({ type: 'text', text: String(text), size: size, color: color || ETA_UI.ink, wrap: true }, extra || {});
@@ -98,72 +98,107 @@ function etaRow_(label, value) {
 }
 
 /**
- * spec：{ origin: '從石牌站出發', leg: { title, note, rows: [[標籤, 時間]] }, bus: p557Bus_ 的結果, alt: 純文字版（訊息紀錄、通知預覽） }
+ * 設計稿版型（白底、綠色大字、01／02／03 分段），所有新版卡片都用這個。spec：
+ *   kicker    最上面的小字（例：今日通勤預測）
+ *   heading   粗體標題（例：預計抵達東吳）
+ *   big       綠色大字（例：09:35–09:40）
+ *   subs      大字下面的小字（陣列）
+ *   sections  [{ title, badge, big, bigNote, note, queue: { pct, busy, caption }, rows: [[標籤, 值]], subTitle, subRows }]
+ *   tip       { title, name, pct, pctLabel, text }（淺綠色框）
+ *   warns     要注意的事（琥珀色字）
+ *   footnote  最下面的小字
+ *   buttons   [[按鈕上的字, 傳出的字]]，第一顆是綠色主要按鈕
+ *   alt       純文字版（通知預覽、訊息紀錄）
  */
-function etaCard_(spec) {
-  const b = spec.bus;
-  const pct = Math.max(0, Math.min(100, Math.round(b.qm)));
-  const busy = b.peak && b.qm >= 10;
-  const body = [
-    etaTx_('今日通勤預測', 'xs', ETA_UI.muted),
-    etaTx_('預計抵達東吳', 'md', ETA_UI.ink, { weight: 'bold', margin: 'sm' }),
-    etaTx_(b.arrive.replace(/^約 /, ''), 'xxl', ETA_UI.green, { weight: 'bold', margin: 'sm' }),
-    etaTx_(spec.origin, 'xs', ETA_UI.muted, { margin: 'sm' }),
-    { type: 'separator', margin: 'lg', color: ETA_UI.line },
-    etaTx_(spec.leg.title, 'md', ETA_UI.ink, { weight: 'bold', margin: 'lg' }),
-  ].concat(spec.leg.note ? [etaTx_(spec.leg.note, 'xs', ETA_UI.muted, { margin: 'xs' })] : [])
-    .concat(spec.leg.rows.map(r => etaRow_(r[0], r[1])))
-    .concat([
-      { type: 'separator', margin: 'lg', color: ETA_UI.line },
-      { type: 'box', layout: 'horizontal', margin: 'lg', alignItems: 'center', contents: [
-        etaTx_('02 557 搭乘建議', 'md', ETA_UI.ink, { weight: 'bold', flex: 1 }),
-        { type: 'box', layout: 'vertical', flex: 0, backgroundColor: ETA_UI.greenSoft, cornerRadius: '12px', paddingAll: '4px', paddingStart: '8px', paddingEnd: '8px',
-          contents: [etaTx_('首選班次', 'xxs', ETA_UI.greenInk, { wrap: false })] },
-      ] },
-      etaTx_(b.first.replace(/^約 /, ''), 'xl', ETA_UI.green, { weight: 'bold', margin: 'md' }),
-      etaTx_('預計公車進站時間', 'xs', ETA_UI.muted, { margin: 'xs' }),
-      { type: 'box', layout: 'vertical', margin: 'md', backgroundColor: ETA_UI.panel, cornerRadius: '12px', paddingAll: '12px', contents: [
+function designCard_(spec) {
+  const body = [];
+  if (spec.kicker) body.push(etaTx_(spec.kicker, 'xs', ETA_UI.muted));
+  if (spec.heading) body.push(etaTx_(spec.heading, 'md', ETA_UI.ink, { weight: 'bold', margin: 'sm' }));
+  if (spec.big) body.push(etaTx_(spec.big, 'xxl', ETA_UI.green, { weight: 'bold', margin: 'sm' }));
+  (spec.subs || []).forEach(t => body.push(etaTx_(t, 'xs', ETA_UI.muted, { margin: 'sm' })));
+  (spec.sections || []).forEach(sec => {
+    body.push({ type: 'separator', margin: 'lg', color: ETA_UI.line });
+    const head = [etaTx_(sec.title, 'md', ETA_UI.ink, { weight: 'bold', flex: 1 })];
+    if (sec.badge) {
+      head.push({ type: 'box', layout: 'vertical', flex: 0, backgroundColor: ETA_UI.greenSoft, cornerRadius: '12px', paddingAll: '4px', paddingStart: '8px', paddingEnd: '8px',
+        contents: [etaTx_(sec.badge, 'xxs', ETA_UI.greenInk, { wrap: false })] });
+    }
+    body.push({ type: 'box', layout: 'horizontal', margin: 'lg', alignItems: 'center', contents: head });
+    if (sec.note) body.push(etaTx_(sec.note, 'xs', ETA_UI.muted, { margin: 'xs' }));
+    if (sec.big) body.push(etaTx_(sec.big, 'xl', ETA_UI.green, { weight: 'bold', margin: 'md' }));
+    if (sec.bigNote) body.push(etaTx_(sec.bigNote, 'xs', ETA_UI.muted, { margin: 'xs' }));
+    if (sec.queue) {
+      const pct = Math.max(0, Math.min(100, Math.round(sec.queue.pct)));
+      body.push({ type: 'box', layout: 'vertical', margin: 'md', backgroundColor: ETA_UI.panel, cornerRadius: '12px', paddingAll: '12px', contents: [
         { type: 'box', layout: 'horizontal', contents: [
           etaTx_('排隊機率', 'sm', ETA_UI.muted, { flex: 1 }),
           etaTx_(pct + '%', 'md', ETA_UI.ink, { weight: 'bold', align: 'end', flex: 0 }),
         ] },
         { type: 'box', layout: 'vertical', margin: 'sm', height: '8px', cornerRadius: '4px', backgroundColor: ETA_UI.track,
           contents: [{ type: 'box', layout: 'vertical', width: Math.max(pct, 1) + '%', height: '8px', cornerRadius: '4px',
-            backgroundColor: busy ? ETA_UI.orange : ETA_UI.green, contents: [{ type: 'filler' }] }] },
-        etaTx_((busy ? '常常要排，排不上就搭下一班。' : '這個時段通常不用排。') + '搭上後約 ' + b.arrive.replace(/^約 /, '') + ' 抵達', 'xs', ETA_UI.muted, { margin: 'sm' }),
-      ] },
-      etaTx_('下一班備選', 'md', ETA_UI.ink, { weight: 'bold', margin: 'lg' }),
-      etaRow_('進站時間', b.next.replace(/^約 /, '')),
-      etaRow_('抵達東吳', b.nextArrive.replace(/^約 /, '')),
-    ]);
-  if (b.tip) {
+            backgroundColor: sec.queue.busy ? ETA_UI.orange : ETA_UI.green, contents: [{ type: 'filler' }] }] },
+        etaTx_(sec.queue.caption, 'xs', ETA_UI.muted, { margin: 'sm' }),
+      ] });
+    }
+    (sec.rows || []).forEach(r => body.push(etaRow_(r[0], r[1])));
+    if (sec.subTitle) body.push(etaTx_(sec.subTitle, 'md', ETA_UI.ink, { weight: 'bold', margin: 'lg' }));
+    (sec.subRows || []).forEach(r => body.push(etaRow_(r[0], r[1])));
+  });
+  if (spec.tip) {
+    const t = spec.tip;
     body.push({ type: 'separator', margin: 'lg', color: ETA_UI.line });
     body.push({ type: 'box', layout: 'vertical', margin: 'lg', backgroundColor: ETA_UI.greenBg, cornerRadius: '12px', paddingAll: '14px', contents: [
-      etaTx_('💡 03 更推薦的上車地點', 'md', ETA_UI.ink, { weight: 'bold' }),
-      etaTx_('士林國中站', 'md', ETA_UI.ink, { weight: 'bold', margin: 'md' }),
+      etaTx_('💡 ' + t.title, 'md', ETA_UI.ink, { weight: 'bold' }),
+      etaTx_(t.name, 'md', ETA_UI.ink, { weight: 'bold', margin: 'md' }),
       { type: 'box', layout: 'baseline', margin: 'sm', contents: [
-        etaTx_(Math.round(b.qj) + '%', 'xl', ETA_UI.greenInk, { weight: 'bold', flex: 0 }),
-        etaTx_('預估排隊機率', 'xs', ETA_UI.greenInk, { margin: 'sm', flex: 0 }),
+        etaTx_(t.pct, 'xl', ETA_UI.greenInk, { weight: 'bold', flex: 0 }),
+        etaTx_(t.pctLabel, 'xs', ETA_UI.greenInk, { margin: 'sm', flex: 0 }),
       ] },
-      etaTx_('同一班 557，建議改至士林國中站上車，排隊機率較低。', 'sm', ETA_UI.greenInk, { margin: 'sm' }),
+      etaTx_(t.text, 'sm', ETA_UI.greenInk, { margin: 'sm' }),
     ] });
   }
-  const chip = (label, text) => ({ type: 'box', layout: 'vertical', flex: 1, backgroundColor: ETA_UI.panel, cornerRadius: '8px', paddingAll: '12px',
-    action: { type: 'message', label: label.slice(0, 20), text: text },
-    contents: [etaTx_(label, 'sm', ETA_UI.ink, { weight: 'bold', align: 'center' })] });
+  (spec.warns || []).forEach(w => body.push(etaTx_('⚠️ ' + w, 'sm', ETA_UI.amber, { margin: 'md' })));
+  if (spec.footnote) body.push(etaTx_(spec.footnote, 'xxs', ETA_UI.muted, { margin: 'lg' }));
+  const chip = (item, primary) => ({ type: 'box', layout: 'vertical', backgroundColor: primary ? ETA_UI.green : ETA_UI.panel, cornerRadius: '8px', paddingAll: '12px',
+    action: { type: 'message', label: item[0].slice(0, 20), text: item[1] },
+    contents: [etaTx_(item[0], 'sm', primary ? '#FFFFFF' : ETA_UI.ink, { weight: 'bold', align: 'center' })] });
   return {
     type: 'flex',
-    altText: spec.alt.slice(0, 400),
+    altText: String(spec.alt || [spec.heading, spec.big].filter(Boolean).join(' ')).slice(0, 400),
     contents: {
       type: 'bubble',
       body: { type: 'box', layout: 'vertical', paddingAll: '20px', backgroundColor: '#FFFFFF', contents: body },
-      footer: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '16px', paddingTop: '0px', backgroundColor: '#FFFFFF', contents: [
-        chip('再查一次', '到校預估'),
-        chip('⏰ 出發時間規劃', '出門時間'),
-        menuLink_(), // 卡片.gs
-      ] },
+      footer: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '16px', paddingTop: '0px', backgroundColor: '#FFFFFF',
+        contents: (spec.buttons || []).map((b, i) => chip(b, i === 0)).concat([menuLink_()]) }, // 卡片.gs
     },
   };
+}
+
+/** 02 557 搭乘建議那一段（p557Bus_ 的結果） */
+function etaBusSection_(b, title) {
+  return {
+    title: title || '02 557 搭乘建議', badge: '首選班次', big: b.first.replace(/^約 /, ''), bigNote: '預計公車進站時間',
+    queue: { pct: b.qm, busy: b.peak && b.qm >= 10,
+      caption: (b.peak && b.qm >= 10 ? '常常要排，排不上就搭下一班。' : '這個時段通常不用排。') + '搭上後約 ' + b.arrive.replace(/^約 /, '') + ' 抵達' },
+    subTitle: '下一班備選', subRows: [['進站時間', b.next.replace(/^約 /, '')], ['抵達東吳', b.nextArrive.replace(/^約 /, '')]],
+  };
+}
+
+function etaTipOf_(b) {
+  return b.tip ? { title: '03 更推薦的上車地點', name: '士林國中站', pct: Math.round(b.qj) + '%', pctLabel: '預估排隊機率',
+    text: '同一班 557，建議改至士林國中站上車，排隊機率較低。' } : null;
+}
+
+/** 預估到達時間：spec：{ origin, leg: { title, note, rows }, bus, alt } */
+function etaCard_(spec) {
+  const b = spec.bus;
+  return designCard_({
+    kicker: '今日通勤預測', heading: '預計抵達東吳', big: b.arrive.replace(/^約 /, ''), subs: [spec.origin],
+    sections: [{ title: spec.leg.title, note: spec.leg.note, rows: spec.leg.rows }, etaBusSection_(b)],
+    tip: etaTipOf_(b),
+    buttons: [['再查一次', '到校預估'], ['⏰ 出發時間規劃', '出門時間']],
+    alt: spec.alt,
+  });
 }
 
 /** 給學生看的幾行字 */
@@ -252,32 +287,44 @@ function etaClassFromHere_(lat, lng, pending, now) {
   const classAt = timeOn_(base, pending.time);                        // 比較器.gs
   const building = BUILDINGS[pending.building] ? pending.building : '';
   const extra = crowdExtra_(classAt);
-  const mustArrive = addMin_(classAt, -(BUFFER_MIN + walkMin_(building, CAMPUS) + extra.min));
-  const title = pending.day + ' ' + pending.time + ' 上課';
-  const subtitle = building ? building + ' 棟 ' + BUILDINGS[building][0] : '';
-  const again = [{ label: '換一個時間', text: '出門時間' }];
+  const walkIn = walkMin_(building, CAMPUS);
+  const mustArrive = addMin_(classAt, -(BUFFER_MIN + walkIn + extra.min));
+  const classLine = pending.day + ' ' + pending.time + ' 上課' + (building ? '・' + building + ' 棟 ' + BUILDINGS[building][0] : '');
+  const again = [['換一個時間', '出門時間'], ['🚇 預估到達時間', '預估到達時間']];
+  const fail = text => designCard_({ kicker: '出發時間規劃', heading: classLine, sections: [{ title: '算不出來', note: text }], buttons: again, alt: '出發時間規劃\n' + text });
 
   const leg = mrtLeg_([Number(lat), Number(lng)]); // 捷運到站牌.gs：最近的站＋走路時間（只問一次 Google）
-  if (!leg) return card_({ badge: '出門建議', title, subtitle, notes: ['定位格式不對，請再傳一次位置。'], buttons: again });
+  if (!leg) return fail('定位格式不對，請再傳一次位置。');
   const res = etaLatestDepart_(mustArrive, d => mrtAtStop_(leg, d));
-  if (!res || res.noData) {
-    return card_({ badge: '出門建議', title, subtitle, buttons: again,
-      notes: [res && res.noData ? '這個時間還沒有 557 的預測（目前只有平常日 07:00–18:30）。' : '往前找了 3 小時都趕不上，請確認上課時間。'] });
-  }
+  if (!res || res.noData) return fail(res && res.noData ? '這個時間還沒有 557 的預測（目前只有平常日 07:00–18:30）。' : '往前找了 3 小時都趕不上，請確認上課時間。');
   const s = res.school.best;
   etaLog_('趕課（從位置倒推）', pending.day + ' ' + pending.time, res.atStop, s, res.depart);
-  const steps = mrtSteps_(leg, res.depart, res.atStop).concat([
-    `走去${s.stop}站牌，557 預計 ${s.late ? hm(s.early) + '–' + hm(s.late) : hm(s.early)} 到東吳` + (s.peak ? '（尖峰，已把排隊、等下一台算進去）' : ''),
-  ]).concat(building ? ['下車走到 ' + building + ' 棟約 ' + walkMin_(building, CAMPUS) + ' 分鐘'] : []);
-  return card_({
-    badge: '出門建議',
-    title,
-    subtitle,
-    rows: [{ label: '從你這裡出發', value: hm(res.depart) + ' 前出門', best: true }],
-    notes: steps,
+  const steps = mrtSteps_(leg, res.depart, res.atStop);
+  const bus = p557Bus_(res.atStop);
+  const arriveText = s.late ? hm(s.early) + '–' + hm(s.late) : hm(s.early);
+  const inClass = hm(addMin_(s.late || s.early, walkIn));
+  const train = leg.st.code === 'R16' ? null : mrtTrain_(leg, res.depart); // 捷運到站牌.gs
+  const sections = [
+    train
+      ? { title: '01 前往士林站', note: `走到${leg.nm}約 ${leg.walk.min} 分鐘（${leg.walk.source}）`, rows: [['抵達士林捷運站', hm(train)], ['抵達 557 站牌', hm(res.atStop)]] }
+      : { title: '01 走到 557 站牌', note: `你就在士林站附近，走過去約 ${leg.walk.min} 分鐘（${leg.walk.source}）`, rows: [['抵達 557 站牌', hm(res.atStop)]] },
+    bus ? etaBusSection_(bus) : { title: '02 557 搭乘建議', rows: [['預計抵達東吳', arriveText]] },
+    { title: '03 到教室', note: s.peak ? '尖峰時段：最晚時間已經把排隊、等下一台算進去' : '',
+      rows: [['預計抵達東吳（最晚）', hm(s.late || s.early)]].concat(building ? [['走到 ' + building + ' 棟', walkIn + ' 分鐘'], ['到教室', inClass + ' 前']] : []) },
+  ];
+  return designCard_({
+    kicker: '出發時間規劃',
+    heading: '最晚出門時間',
+    big: hm(res.depart) + ' 前出門',
+    subs: [classLine, '從' + leg.nm + '出發'],
+    sections,
+    tip: bus ? etaTipOf_(bus) && Object.assign(etaTipOf_(bus), { title: '04 更推薦的上車地點' }) : null,
     warns: extra.reasons.length ? [extra.reasons.join('、') + '，已多算 ' + extra.min + ' 分鐘。'] : [],
-    footer: '位置只用來算時間，不會記錄',
-    buttons: again.concat([{ label: '出門前提醒我', text: '出門提醒 ' + pending.day + ' ' + hm(res.atStop) + ' 出門 ' + hm(res.depart) }]),
+    footnote: '位置只用來算時間，不會記錄',
+    buttons: [['⏰ 到時間提醒我出門', '出門提醒 ' + pending.day + ' ' + hm(res.atStop) + ' 出門 ' + hm(res.depart)]].concat(again),
+    alt: ['出發時間規劃', classLine, '★ 從你這裡出發：' + hm(res.depart) + ' 前出門'].concat(steps)
+      .concat([`走去${s.stop}站牌，557 預計 ${arriveText} 到東吳` + (s.peak ? '（尖峰，已把排隊、等下一台算進去）' : '')])
+      .concat(building ? ['下車走到 ' + building + ' 棟約 ' + walkIn + ' 分鐘'] : []).join('\n'),
   });
 }
 

@@ -88,6 +88,13 @@ function sampleCards() {
   keep('預估到達時間尖峰', env.call('etaFromLocation_', 25.1144, 121.5154, 'sample'));
   env.setNow('2026-11-25T11:05:00+08:00');
   keep('預估到達時間離峰士林站', env.call('etaFromShilin_'));
+  // 出發時間規劃（從位置倒推）：明天 13:10 B 棟從北投、明天 09:10 D 棟從石牌（尖峰）
+  env.setNow('2026-11-24T21:00:00+08:00');
+  env.run('rainPop_ = () => 20'); // 不下雨的一般情況
+  env.call('etaRememberClass_', 'sample', '明天', '13:10', 'B');
+  keep('出發時間規劃', env.call('etaFromLocation_', 25.1316, 121.4986, 'sample'));
+  env.call('etaRememberClass_', 'sample', '明天', '10:10', 'D');
+  keep('出發時間規劃尖峰', env.call('etaFromLocation_', 25.1144, 121.5154, 'sample'));
   // 純文字回覆也包成卡片（Code.gs 的 reply_ 用 textCard_）
   keep('純文字改卡片：有標題', env.call('textCard_', '✅ 訂閱成功！\n\n明天會下雨或遇到考試週，前一晚 9 點提醒你。'));
   keep('純文字改卡片：一行', env.call('textCard_', '已取消出門提醒。'));
