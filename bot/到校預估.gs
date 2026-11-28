@@ -65,7 +65,7 @@ function p557Lines_(atStop) {
 function etaButton_() {
   return choices_('現在出發幾點到？按「傳送我的位置」（LINE 內建的傳位置畫面）。\n要趕課？選第幾節、哪一棟，我倒推你最晚幾點出門。\n\n位置只用來算時間，不會記錄。', // 卡片.gs
     [{ label: '傳送我的位置', uri: 'https://line.me/R/nv/location/' }, ['我要趕課：幾點要出門', '出門時間'], ['我已經在士林站', '到校預估 士林站']],
-    { title: '🚇 預估到達時間', badge: '選單' });
+    { title: '🚇 預估到達時間', badge: '出門前提醒' });
 }
 
 /** 收到 LINE 位置訊息：剛選好課就倒推幾點出門，不然就是「現在出發幾點到」 */
