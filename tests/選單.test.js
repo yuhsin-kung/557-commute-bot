@@ -236,13 +236,14 @@ test('出門建議的卡片：用我的位置算是主要按鈕；換出發站�
   assert.ok(buttonsOf(any).some(b => b[1] === '出門時間 明天 09:10 不指定 選出發站'));
 });
 
-test('出門時間選今天：只列還沒開始的節次；快上課的走即時比較', () => {
+test('出門時間選今天：第 1～C 節一直都列（不看現在幾點拿掉）；快上課的走即時比較', () => {
   const env = start();
   // 用真的時鐘判斷，所以把 Date 換成固定時間：週一 09:30
   env.run("const __RealDate = Date; Date = class extends __RealDate { constructor(...a) { super(...(a.length ? a : [__RealDate.parse('2026-10-12T09:30:00+08:00')])); } static now() { return __RealDate.parse('2026-10-12T09:30:00+08:00'); } };");
   const periods = buttonsOf(send(env, '出門時間 今天')[0]).slice(2); // 前兩顆是今天、明天
-  assert.deepEqual(periods[0], ['第 3 節 10:10', '出門時間 今天 10:10'], '第 1、2 節已經開始，不列');
-  assert.deepEqual(buttonsOf(send(env, '出門時間')[0])[2], ['第 3 節 10:10', '出門時間 今天 10:10'], '沒選哪一天就先選今天');
+  assert.equal(periods.length, 12, '11/28 團隊決定：已經開始的節次也列');
+  assert.deepEqual(periods[0], ['第 1 節 08:10', '出門時間 今天 08:10']);
+  assert.deepEqual(buttonsOf(send(env, '出門時間')[0])[2], ['第 1 節 08:10', '出門時間 今天 08:10'], '沒選哪一天就先選今天');
   assert.equal(send(env, '出門時間 今天 10:10 B')[0].altText, '[即時 士林站 B]', '90 分鐘內上課，看即時到站');
   assert.equal(send(env, '出門時間 今天 13:10 B')[0].type, 'flex', '還很久的給出門建議');
 });

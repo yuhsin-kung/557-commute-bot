@@ -95,11 +95,11 @@ function menuFlow_(text, uid) {
   const p = text.trim().split(/\s+/);
   let day = p[1], time = p[2], building = p[3], origin = p[4];
   const now = new Date();
-  const left = MENU_PERIODS.filter(k => timeOn_(now, PERIODS[k]) > now); // 今天還沒開始的節次
+  const left = MENU_PERIODS.filter(k => timeOn_(now, PERIODS[k]) > now); // 今天還沒開始的節次（只用來決定預設選哪一天）
 
   if (!/^\d{2}:\d{2}$/.test(time || '')) {
     if (day !== '今天' && day !== '明天') day = left.length ? '今天' : '明天'; // 沒選過就先選今天（今天的課都開始了就選明天）
-    const periods = day === '明天' ? MENU_PERIODS : left;
+    const periods = MENU_PERIODS; // 11/28 團隊決定：第 1～C 節一直都列，不看現在幾點拿掉已經開始的
     const blocks = [
       { hr: true },
       { h: '你哪一天要去學校？', first: true },
