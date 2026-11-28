@@ -300,6 +300,31 @@ function dsBlock_(b) {
       dsTx_(n[2], 'xs', UI.muted, { margin: 'sm' }),
     ], { margin: 'md', paddingAll: '14px' }));
   }
+  if (b.points) {
+    // 磚紅大字獎勵＋旁邊灰字條件（例：+1 點 完成兩次定位打卡即可獲得）
+    return [{ type: 'box', layout: 'baseline', margin: 'md', spacing: 'sm', contents: [
+      dsTx_(b.points[0], 'xl', UI.brand, { weight: 'bold', flex: 0, wrap: false }),
+      dsTx_(b.points[1], 'xs', UI.muted, { flex: 1 }),
+    ] }];
+  }
+  if (b.flow) {
+    // 打卡步驟：編號標籤、粗體標題、灰字說明、可選的小標籤（第一次打卡＝淡磚紅、第二次打卡＝淡綠），步驟之間有分隔線
+    const out = [];
+    b.flow.forEach((s, i) => {
+      if (i) out.push({ type: 'separator', margin: 'lg', color: UI.line });
+      const inner = [dsTx_(s[1], 'sm', UI.ink, { weight: 'bold' }), dsTx_(s[2], 'xs', UI.muted, { margin: 'xs' })];
+      if (s[3]) {
+        const green = s[4] === 'green';
+        inner.push({ type: 'box', layout: 'horizontal', margin: 'sm', contents: [{ type: 'box', layout: 'vertical', flex: 0, cornerRadius: '12px', paddingAll: '4px', paddingStart: '8px', paddingEnd: '8px',
+          backgroundColor: green ? '#DCFCE7' : UI.onBrandSoft, contents: [dsTx_(s[3], 'xxs', green ? UI.good : UI.brandDark, { wrap: false })] }, { type: 'filler' }] });
+      }
+      out.push({ type: 'box', layout: 'horizontal', margin: 'lg', spacing: 'md', contents: [
+        { type: 'box', layout: 'vertical', flex: 0, contents: [dsBadge_(s[0])] },
+        { type: 'box', layout: 'vertical', flex: 1, contents: inner },
+      ] });
+    });
+    return out;
+  }
   // 磚紅小標（例：557 上車地點的「捷運士林站」）
   if (b.label) return [dsTx_(b.label, 'sm', UI.brand, { weight: 'bold', margin: 'xl' })];
   if (b.report) {

@@ -124,6 +124,8 @@ function memberReply_(uid, text) {
   if (text === '騎車回士林' || text === '提交騎車回士林紀錄') return ptBikeOut_(uid); // YouBike 卡片的按鈕也傳這句
   const checkinMode = text.match(/^打卡\s*(進校|出校|早到)$/);
   if (checkinMode) return ptCheckinButton_(uid, checkinMode[1]);
+  const checkinName = { 走路進學校: '進校', 走路出學校: '出校', 早到打卡: '早到' }[text]; // 按鈕傳出的字跟按鈕一樣
+  if (checkinName) return ptCheckinButton_(uid, checkinName);
   if (/^(我的紀錄|我的積分|積分|成就|碳足跡)$/.test(text)) return ptMine_(uid);
   if (text === '全校減碳') return ptSchool_();
   if (text === '騎車到校' || text === '提交騎車到校紀錄') return ptBike_(uid);
