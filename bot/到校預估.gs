@@ -221,30 +221,68 @@ function etaButton_() {
     { title: '🚇 預估到達時間', badge: '出門前提醒' });
 }
 
-/** 收到 LINE 位置訊息：剛選好課就倒推幾點出門，不然就是「現在出發幾點到」 */
+/**
+ * 收到 LINE 位置訊息：先一張「距離最近的捷運站是○○站」（可以換站），再一張結果。
+ * 剛選好課就是出發時間規劃（倒推幾點出門），不然是預估到達時間（現在出發幾點到）。
+ * 位置暫存 10 分鐘（只放在快取，不寫進試算表），讓學生換站時不用再傳一次。
+ */
 function etaFromLocation_(lat, lng, uid) {
-  const now = cpNow_(); // 共乘.gs：時間用共乘的時鐘（測試可以調）
   const pending = etaPendingClass_(uid);
-  if (pending) {
-    CacheService.getScriptCache().remove('eta_class_' + uid);
-    return etaClassFromHere_(lat, lng, pending, now);
-  }
-  const r = mrtPlan_(lat, lng, now.getTime()); // 捷運到站牌.gs
-  const again = [['再查一次', '到校預估'], ['⏰ 出發時間規劃', '出門時間']];
-  const bus = r.ok && p557Bus_(r.atStopAt);
-  if (!bus) return choices_(r.lines.join('\n'), again, { title: '🚇 算不出來', badge: '預估到達時間' });
-  etaLog_('現在出發', '', r.atStopAt, { stop: '捷運士林站（基準）', early: bus.early, late: bus.late, peak: bus.peak });
-  const nm = /站$/.test(r.station) ? r.station : r.station + '站';
-  const leg = r.trainAtShilin
-    ? { title: '01 前往士林站', note: `走到${nm}約 ${r.walkMin} 分鐘（${r.walkSource}）`, rows: [['抵達士林捷運站', r.trainAtShilin], ['抵達 557 站牌', r.atStop]] }
-    : { title: '01 走到 557 站牌', note: `你就在士林站附近，走過去約 ${r.walkMin} 分鐘（${r.walkSource}）`, rows: [['抵達 557 站牌', r.atStop]] };
-  return etaCard_({ origin: '從' + nm + '出發', leg, bus,
-    alt: '🚇 幾點到東吳\n' + r.steps.map(l => '・' + l).join('\n') + '\n\n' + bus.lines.join('\n') });
+  if (pending) CacheService.getScriptCache().remove('eta_class_' + uid);
+  const ctx = { lat: Number(lat), lng: Number(lng), pending: pending || null };
+  if (uid) CacheService.getScriptCache().put('eta_loc_' + uid, JSON.stringify(ctx), ETA_LOC_MIN * 60);
+  const leg = mrtLeg_([ctx.lat, ctx.lng]); // 捷運到站牌.gs
+  if (!leg) return textCard_('定位格式不對，請再傳一次位置。'); // 卡片.gs
+  return [etaStationNotice_(ctx, leg), etaResult_(ctx, leg)];
 }
+
+/** 「距離最近的捷運站是○○站」＋附近其他站的按鈕（換站） */
+function etaStationNotice_(ctx, leg) {
+  const others = mrtNearby_([ctx.lat, ctx.lng], 4).filter(s => s.code !== leg.st.code).slice(0, 3); // 捷運到站牌.gs
+  const walk = leg.st.code === 'R16' ? `走到 557 站牌約 ${leg.walk.min} 分鐘` : `走過去約 ${leg.walk.min} 分鐘`;
+  return choices_(`${walk}（${leg.walk.source}）。\n\n不是你要搭的站？按下面換一站，或直接打「從 ○○ 站出發」。位置只暫存 10 分鐘讓你換站，不會記錄。`,
+    others.map(s => [mrtStationName_(s), '從' + mrtStationName_(s) + '出發']),
+    { title: '📍 距離最近的捷運站：' + leg.nm, badge: ctx.pending ? '出發時間規劃' : '預估到達時間', primary: false });
+}
+
+/** 依出發點算結果：有選課就倒推，不然現在出發 */
+function etaResult_(ctx, leg) {
+  const now = cpNow_(); // 共乘.gs：時間用共乘的時鐘（測試可以調）
+  if (ctx.pending) return etaClassFromHere_(leg, ctx.pending, now);
+  const atStop = mrtAtStop_(leg, now); // 捷運到站牌.gs
+  const again = [['再查一次', '到校預估'], ['⏰ 出發時間規劃', '出門時間']];
+  if (!atStop) return choices_(`從${leg.nm}出發：這個時間查不到捷運班次（捷運營運時間外）`, again, { title: '🚇 算不出來', badge: '預估到達時間' });
+  const bus = p557Bus_(atStop);
+  if (!bus) return choices_(mrtSteps_(leg, now, atStop).concat(p557Lines_(atStop)).join('\n'), again, { title: '🚇 算不出來', badge: '預估到達時間' });
+  etaLog_('現在出發', '', atStop, { stop: '捷運士林站（基準）', early: bus.early, late: bus.late, peak: bus.peak });
+  return etaCard_({ origin: '從' + leg.nm + '出發', leg: { title: leg.st.code === 'R16' ? '01 走到 557 站牌' : '01 前往士林站', rows: mrtRows_(leg, now, atStop) }, bus,
+    alt: '🚇 幾點到東吳\n' + mrtSteps_(leg, now, atStop).map(l => '・' + l).join('\n') + '\n\n' + bus.lines.join('\n') });
+}
+
+/**
+ * 「從○○站出發」：換站重算。剛傳過位置（10 分鐘內）就從那個位置走過去；沒有就當成人已經在那一站。
+ * 剛選好課（還沒傳位置）也會用這一站倒推幾點出門
+ */
+function etaFromStationText_(uid, name) {
+  const st = mrtStationByName_(name); // 捷運到站牌.gs
+  if (!st) return textCard_('找不到「' + name + '」這個捷運站。\n\n請打完整的站名，例如「從石牌站出發」「從台北車站出發」。');
+  const raw = uid && CacheService.getScriptCache().get('eta_loc_' + uid);
+  let ctx = null;
+  try { ctx = raw ? JSON.parse(raw) : null; } catch (e) { ctx = null; }
+  if (!ctx) {
+    const pending = etaPendingClass_(uid);
+    if (pending) CacheService.getScriptCache().remove('eta_class_' + uid);
+    ctx = { lat: null, lng: null, pending: pending || null };
+  }
+  const leg = mrtLeg_(ctx.lat == null ? null : [ctx.lat, ctx.lng], st.code);
+  return etaResult_(ctx, leg);
+}
+
 
 // ===== 出發時間規劃：趕課 → 倒推最晚幾點出門（11/28：跟預估到達時間同一套算法，按鈕分開） =====
 
 const ETA_CLASS_WAIT_MIN = 30; // 選好課以後，幾分鐘內傳位置都算這堂課
+const ETA_LOC_MIN = 10;         // 位置暫存幾分鐘（讓學生換站，不寫進試算表）
 let etaLastClass_ = null;      // 這次回覆的出門建議卡片是哪一堂課（比較器.gs 的 planReply_ 設定，Code.gs 回覆後記到這個人身上）
 const ETA_SEARCH_MIN = 180;    // 最多往前找幾分鐘
 
@@ -286,7 +324,7 @@ function etaPendingClass_(uid) {
 }
 
 /** 收到位置、而且剛選好課：從這個位置倒推最晚幾點出門 */
-function etaClassFromHere_(lat, lng, pending, now) {
+function etaClassFromHere_(leg, pending, now) {
   const hm = d => Utilities.formatDate(d, TZ, 'HH:mm');
   const base = pending.day === '明天' ? addMin_(now, 24 * 60) : now; // 比較器.gs
   const classAt = timeOn_(base, pending.time);                        // 比較器.gs
@@ -298,7 +336,6 @@ function etaClassFromHere_(lat, lng, pending, now) {
   const again = [['換一個時間', '出門時間'], ['🚇 預估到達時間', '預估到達時間']];
   const fail = text => designCard_({ kicker: '出發時間規劃', heading: classLine, sections: [{ title: '算不出來', note: text }], buttons: again, alt: '出發時間規劃\n' + text });
 
-  const leg = mrtLeg_([Number(lat), Number(lng)]); // 捷運到站牌.gs：最近的站＋走路時間（只問一次 Google）
   if (!leg) return fail('定位格式不對，請再傳一次位置。');
   const res = etaLatestDepart_(mustArrive, d => mrtAtStop_(leg, d));
   if (!res || res.noData) return fail(res && res.noData ? '這個時間還沒有 557 的預測（目前只有平常日 07:00–18:30）。' : '往前找了 3 小時都趕不上，請確認上課時間。');
@@ -310,9 +347,7 @@ function etaClassFromHere_(lat, lng, pending, now) {
   const inClass = hm(addMin_(s.late || s.early, walkIn));
   const train = leg.st.code === 'R16' ? null : mrtTrain_(leg, res.depart); // 捷運到站牌.gs
   const sections = [
-    train
-      ? { title: '01 前往士林站', note: `走到${leg.nm}約 ${leg.walk.min} 分鐘（${leg.walk.source}）`, rows: [['抵達士林捷運站', hm(train)], ['抵達 557 站牌', hm(res.atStop)]] }
-      : { title: '01 走到 557 站牌', note: `你就在士林站附近，走過去約 ${leg.walk.min} 分鐘（${leg.walk.source}）`, rows: [['抵達 557 站牌', hm(res.atStop)]] },
+    { title: train ? '01 前往士林站' : '01 走到 557 站牌', rows: mrtRows_(leg, res.depart, res.atStop) }, // 捷運到站牌.gs
     bus ? etaBusSection_(bus) : { title: '02 557 搭乘建議', rows: [['預計抵達東吳', arriveText]] },
     { title: '03 到教室', note: s.peak ? '尖峰時段：最晚時間已經把排隊、等下一台算進去' : '',
       rows: [['預計抵達東吳（最晚）', hm(s.late || s.early)]].concat(building ? [['走到 ' + building + ' 棟', walkIn + ' 分鐘'], ['到教室', inClass + ' 前']] : []) },
@@ -325,7 +360,7 @@ function etaClassFromHere_(lat, lng, pending, now) {
     sections,
     tip: bus ? etaTipOf_(bus) && Object.assign(etaTipOf_(bus), { title: '04 更推薦的上車地點' }) : null,
     warns: extra.reasons.length ? [extra.reasons.join('、') + '，已多算 ' + extra.min + ' 分鐘。'] : [],
-    footnote: '位置只用來算時間，不會記錄',
+    footnote: leg.atStation ? '' : '走路時間：' + leg.walk.source + '。位置只用來算時間，不會記錄',
     buttons: [['⏰ 到時間提醒我出門', '出門提醒 ' + pending.day + ' ' + hm(res.atStop) + ' 出門 ' + hm(res.depart)]].concat(again),
     alt: ['出發時間規劃', classLine, '★ 從你這裡出發：' + hm(res.depart) + ' 前出門'].concat(steps)
       .concat([`走去${s.stop}站牌，557 預計 ${arriveText} 到東吳` + (s.peak ? '（尖峰，已把排隊、等下一台算進去）' : '')])

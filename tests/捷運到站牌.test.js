@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const { loadBot } = require('./gas-env');
+const { buttonsOf } = require('./helpers');
 
 const ALL = fs.readdirSync(path.join(__dirname, '..', 'bot')).filter(f => f.endsWith('.gs')).sort((a, b) => (a === 'Code.gs' ? -1 : b === 'Code.gs' ? 1 : 0));
 const plain = v => JSON.parse(JSON.stringify(v));
@@ -150,7 +151,10 @@ test('在 LINE 裡完成：傳「到校預估」→ 按鈕打開 LINE 的傳送�
   assert.match(card, /line\.me\/R\/nv\/location/);
   assert.doesNotMatch(card, /script\.google\.com|page=eta/);
   env.call('handleEvent_', { type: 'message', replyToken: 'r', source: { userId: 'A' }, message: { type: 'location', latitude: SHIPAI[0], longitude: SHIPAI[1] } });
-  const reply = env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body.messages[0];
+  const msgs = env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body.messages;
+  assert.equal(msgs.length, 2, '先說最近的捷運站，再給結果');
+  assert.match(msgs[0].altText, /距離最近的捷運站：石牌站/);
+  const reply = msgs[1];
   assert.match(reply.altText, /幾點到東吳/);
   assert.match(reply.altText, /🚌 09:\d\d–\d\d:\d\d 之間會來一台 557/);
   assert.match(reply.altText, /⏭️ 下一台 .+；錯過這台，.+ 到東吳/);
@@ -161,7 +165,7 @@ test('在 LINE 裡完成：傳「到校預估」→ 按鈕打開 LINE 的傳送�
 });
 
 // ===== 合併「出門時間建議」 =====
-const lastReply = env => env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body.messages[0];
+const lastReply = env => env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body.messages.slice(-1)[0]; // 最後一張（傳位置會先有一張「最近的捷運站」）
 const sendText = (env, text) => { env.call('handleEvent_', { type: 'message', replyToken: 'r', source: { userId: 'A' }, message: { type: 'text', text } }); return lastReply(env); };
 const sendLoc = (env, lat, lng) => { env.call('handleEvent_', { type: 'message', replyToken: 'r', source: { userId: 'A' }, message: { type: 'location', latitude: lat, longitude: lng } }); return lastReply(env); };
 
@@ -247,9 +251,10 @@ test('測試模式：假裝週三 09:05 → 傳位置照週三算，回覆第一
   const r = replyOf(env, 'A', { type: 'location', latitude: SHIPAI[0], longitude: SHIPAI[1] });
   assert.equal(r[0].altText, '🧪 測試模式：當成週三 09:05');
   assert.equal(r[0].type, 'flex', '提示也是卡片');
-  assert.match(r[1].altText, /搭捷運，09:20 到士林站/);
-  assert.match(r[1].altText, /09:25 到站牌/);
-  assert.match(r[1].altText, /09:\d\d–\d\d:\d\d 到東吳/);
+  assert.match(r[1].altText, /距離最近的捷運站/);
+  assert.match(r[2].altText, /搭捷運，09:20 到士林站/);
+  assert.match(r[2].altText, /09:25 到站牌/);
+  assert.match(r[2].altText, /09:\d\d–\d\d:\d\d 到東吳/);
   // 換回真的時間
   assert.ok(Math.abs(env.run('Date.now()') - Date.now()) < 5000, 'Date 已經換回來');
   // 別人不受影響
@@ -274,4 +279,54 @@ test('測試模式：假裝週三 09:05 → 傳位置照週三算，回覆第一
 test('測試模式：格式不對就教用法', () => {
   const env = loadBot(ALL);
   assert.match(replyOf(env, 'A', { type: 'text', text: '測試時間' })[0].altText, /測試時間 週三 09:05/);
+});
+
+// ===== 最近的捷運站、換站、01 一列一列的時間（11/28） =====
+const allReplies = env => env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body.messages;
+
+test('01 前往士林站：出發、走到捷運站、搭幾點往哪個方向的捷運、抵達士林站、抵達站牌，一列一列', () => {
+  const env = loadBot(ALL);
+  env.walkSeconds = () => 6 * 60;
+  const leg = env.call('mrtLeg_', SHIPAI);
+  const rows = plain(env.call('mrtRows_', leg, new Date('2026-11-25T09:05:00+08:00'), new Date('2026-11-25T09:25:00+08:00')));
+  assert.deepEqual(rows, [['出發', '09:05'], ['走到石牌站（約 6 分）', '09:11'], ['搭捷運（往大安／廣慈）', '09:15'], ['抵達士林捷運站', '09:20'], ['抵達 557 站牌', '09:25']]);
+});
+
+test('傳位置：先說最近的捷運站，附近其他站可以按；打「從北投站出發」就從原本的位置走去北投站重算', () => {
+  const env = loadBot(ALL);
+  env.setNow('2026-11-25T09:05:00+08:00');
+  env.walkSeconds = () => 6 * 60;
+  replyOf(env, 'A', { type: 'location', latitude: SHIPAI[0], longitude: SHIPAI[1] });
+  const [notice] = allReplies(env);
+  assert.match(notice.altText, /距離最近的捷運站：石牌站/);
+  const picks = buttonsOf(notice).map(b => b[1]);
+  assert.equal(picks.length, 3);
+  assert.ok(picks.every(t => /^從.+出發$/.test(t)), picks.join('、'));
+  assert.ok(picks.includes('從唭哩岸站出發') || picks.includes('從明德站出發'), picks.join('、'));
+  const r = allReplies(env, replyOf(env, 'A', { type: 'text', text: '從北投站出發' })).slice(-1)[0];
+  assert.match(r.altText, /走到北投站約 6 分鐘/, '還是從剛剛的位置走過去');
+  assert.match(r.altText, /搭捷運，09:\d\d 到士林站/);
+});
+
+test('沒傳位置直接打「從台北車站出發」：當成人已經在站；站名打不對就教怎麼打', () => {
+  const env = loadBot(ALL);
+  env.setNow('2026-11-25T07:30:00+08:00');
+  const r = replyOf(env, 'B', { type: 'text', text: '從台北車站出發' }).slice(-1)[0];
+  assert.match(r.altText, /人在台北車站/);
+  assert.doesNotMatch(r.altText, /走到台北車站/);
+  assert.match(replyOf(env, 'B', { type: 'text', text: '從火星站出發' })[0].altText, /找不到「火星站?」/);
+  assert.match(replyOf(env, 'B', { type: 'text', text: '從士林站出發' }).slice(-1)[0].altText, /從捷運士林站出站走到 557 站牌約 5 分鐘/);
+});
+
+test('出發時間規劃也可以換站：選好課、傳位置，再按別的站，還是倒推同一堂課', () => {
+  const env = loadBot(ALL);
+  env.setNow('2026-11-24T21:00:00+08:00');
+  env.walkSeconds = () => 6 * 60;
+  sendText(env, '出門時間 明天 10:10 D');
+  const first = allReplies(env, sendLoc(env, SHIPAI[0], SHIPAI[1]));
+  assert.match(JSON.stringify(first[0]), /出發時間規劃/, '最近的捷運站那張標明是出發時間規劃');
+  assert.match(first[1].altText, /明天 10:10 上課/);
+  const again = replyOf(env, 'A', { type: 'text', text: '從北投站出發' }).slice(-1)[0];
+  assert.match(again.altText, /明天 10:10 上課/);
+  assert.match(again.altText, /走到北投站約 6 分鐘/);
 });

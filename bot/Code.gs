@@ -84,6 +84,8 @@ function handleEventNow_(ev) {
       answer = menuFlow_(text, ev.source.userId); // 選單.gs：用點的排出門時間（選好課會記下來，接著傳位置就倒推）
     } else if (/^測試時間(\s|$)/.test(text)) {
       answer = etaTestText_(ev.source.userId, text); // 到校預估.gs：測試模式（假日也能試預估）
+    } else if (/^從\s*\S+?\s*出發$/.test(text) && !/上課|節|棟/.test(text)) {
+      answer = etaFromStationText_(ev.source.userId, text.replace(/^從\s*/, '').replace(/\s*出發$/, '')); // 到校預估.gs：換捷運站
     } else if (text === '到校預估 士林站') {
       answer = etaFromShilin_(); // 到校預估.gs：人已經在捷運士林站
     } else if (/^(到校預估|預估到達時間|🚇 預估到達時間|從我這裡出發幾點到校|幾點到東吳|幾點出門、幾點到東吳|🚇 幾點出門、幾點到東吳)$/.test(text)) {

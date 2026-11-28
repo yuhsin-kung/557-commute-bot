@@ -232,17 +232,73 @@ function mrtTrainToShilin_(code, toShilin, ready) {
   return t === undefined ? null : mrtAtMinute_(ready, t);
 }
 
-/** 這個位置：最近的捷運站和走路時間（Google 地圖只問一次）。定位格式不對回 null */
-function mrtLeg_(here) {
-  if (!isFinite(here[0]) || !isFinite(here[1]) || Math.abs(here[0]) > 90 || Math.abs(here[1]) > 180) return null;
-  const st = mrtNearest_(here);
-  const w = mrtWalk_(here, st.code === 'R16' ? SHILIN_MRT : st.at);
-  return { st, walk: w, nm: /站$/.test(st.name) ? st.name : st.name + '站' }; // 台北車站不要變成「台北車站站」
+/** 用代碼找捷運站（士林站 R16 也算） */
+function mrtStationByCode_(code) {
+  if (code === 'R16') return { code: 'R16', name: '士林', at: SHILIN_MRT, toShilin: 0 };
+  const s = MRT_STATIONS.filter(x => x[0] === code)[0];
+  return s ? { code: s[0], name: s[1], at: [s[2], s[3]], toShilin: s[4] } : null;
 }
+
+/** 用站名找捷運站：「石牌」「石牌站」「捷運石牌站」「台北車站」都可以 */
+function mrtStationByName_(name) {
+  const key = String(name || '').replace(/^捷運/, '').replace(/站$/, '').replace(/臺/g, '台').trim();
+  if (!key) return null;
+  if (key === '士林') return mrtStationByCode_('R16');
+  const norm = n => n.replace(/站$/, '').replace(/臺/g, '台');
+  const s = MRT_STATIONS.filter(x => norm(x[1]) === key)[0] || MRT_STATIONS.filter(x => norm(x[1]).indexOf(key) >= 0)[0];
+  return s ? mrtStationByCode_(s[0]) : null;
+}
+
+/** 離這個位置最近的幾個捷運站（直線距離由近到遠） */
+function mrtNearby_(here, k) {
+  return [mrtStationByCode_('R16')].concat(MRT_STATIONS.map(s => mrtStationByCode_(s[0])))
+    .map(s => Object.assign(s, { m: mrtDistanceM_(here, s.at) }))
+    .sort((a, b) => a.m - b.m).slice(0, k);
+}
+
+function mrtStationName_(st) {
+  return /站$/.test(st.name) ? st.name : st.name + '站'; // 台北車站不要變成「台北車站站」
+}
+
+/**
+ * 從哪裡出發：here＝位置（可以是 null，代表人已經在那一站）；code＝指定的捷運站（沒給就找最近的）。
+ * 回傳 { st, walk: { min, source }, nm }，位置格式不對回 null
+ */
+function mrtLeg_(here, code) {
+  if (here && (!isFinite(here[0]) || !isFinite(here[1]) || Math.abs(here[0]) > 90 || Math.abs(here[1]) > 180)) return null;
+  const st = code ? mrtStationByCode_(code) : (here ? mrtNearest_(here) : null);
+  if (!st) return null;
+  const walk = here ? mrtWalk_(here, st.at) : { min: 0, source: '人已經在站' };
+  return { st, walk, nm: mrtStationName_(st), atStation: !here };
+}
+
+/** 往士林站要搭哪個方向 */
+function mrtDirection_(code) {
+  if (/^R(1[7-9]|2\d)/.test(code)) return '往大安／廣慈';
+  if (!/(^|\/)R\d/.test(code)) return '轉乘淡水信義線，往北投／淡水';
+  return '往北投／淡水';
+}
+
+/** 01 那一段：一列一列的時間（左邊說明、右邊時間） */
+function mrtRows_(leg, depart, atStop) {
+  const hm = d => Utilities.formatDate(d, TZ, 'HH:mm');
+  const rows = [[leg.atStation ? '人在' + leg.nm : '出發', hm(depart)]];
+  if (leg.st.code === 'R16') {
+    rows.push([leg.atStation ? '出站走到 557 站牌（約 ' + MRT_EXIT_TO_STOP_MIN + ' 分）' : '走到 557 站牌（約 ' + leg.walk.min + ' 分）', hm(atStop)]);
+    return rows;
+  }
+  const train = mrtTrain_(leg, depart);
+  if (!leg.atStation) rows.push(['走到' + leg.nm + '（約 ' + leg.walk.min + ' 分）', hm(new Date(depart.getTime() + leg.walk.min * 60000))]);
+  rows.push(['搭捷運（' + mrtDirection_(leg.st.code) + '）', hm(new Date(train.getTime() - leg.st.toShilin * 60000))]);
+  rows.push(['抵達士林捷運站', hm(train)]);
+  rows.push(['抵達 557 站牌', hm(atStop)]);
+  return rows;
+}
+
 
 /** depart 這一刻出門，幾點到 557 站牌（Date）；士林站附近直接走過去。搭不到捷運回 null */
 function mrtAtStop_(leg, depart) {
-  if (leg.st.code === 'R16') return new Date(depart.getTime() + leg.walk.min * 60000);
+  if (leg.st.code === 'R16') return new Date(depart.getTime() + (leg.atStation ? MRT_EXIT_TO_STOP_MIN : leg.walk.min) * 60000);
   const train = mrtTrain_(leg, depart);
   return train ? new Date(train.getTime() + MRT_EXIT_TO_STOP_MIN * 60000) : null;
 }
@@ -255,22 +311,23 @@ function mrtTrain_(leg, depart) {
 /** 每一步怎麼走（給學生看的字） */
 function mrtSteps_(leg, depart, atStop) {
   const hm = d => Utilities.formatDate(d, TZ, 'HH:mm');
+  if (leg.st.code === 'R16' && leg.atStation) return [`從捷運士林站出站走到 557 站牌約 ${MRT_EXIT_TO_STOP_MIN} 分鐘，約 ${hm(atStop)} 到站牌`];
   if (leg.st.code === 'R16') return [`你就在士林站附近，走到 557 站牌約 ${leg.walk.min} 分鐘（${leg.walk.source}）`, `約 ${hm(atStop)} 到站牌`];
-  return [`走到${leg.nm}約 ${leg.walk.min} 分鐘（${leg.walk.source}）`, `搭捷運，${hm(mrtTrain_(leg, depart))} 到士林站`,
-    `出站走到 557 站牌約 ${MRT_EXIT_TO_STOP_MIN} 分鐘，約 ${hm(atStop)} 到站牌`];
+  return (leg.atStation ? [`人在${leg.nm}`] : [`走到${leg.nm}約 ${leg.walk.min} 分鐘（${leg.walk.source}）`]).concat([`搭捷運，${hm(mrtTrain_(leg, depart))} 到士林站`,
+    `出站走到 557 站牌約 ${MRT_EXIT_TO_STOP_MIN} 分鐘，約 ${hm(atStop)} 到站牌`]);
 }
 
 /**
  * 主流程：從這個位置現在出發，幾點到 557 站牌、幾點到東吳（LINE 位置訊息呼叫，到校預估.gs）。
  * 回傳 { ok, station, walkMin, walkSource, trainAtShilin, atStop, school, lines }，時間是 'HH:mm'
  */
-function mrtPlan_(lat, lng, nowMs) {
-  const leg = mrtLeg_([Number(lat), Number(lng)]);
+function mrtPlan_(lat, lng, nowMs, code) {
+  const leg = mrtLeg_(lat == null ? null : [Number(lat), Number(lng)], code);
   if (!leg) return { ok: false, lines: ['定位格式不對'] };
   const now = nowMs ? new Date(nowMs) : new Date();
   const hm = d => Utilities.formatDate(d, TZ, 'HH:mm');
   const atStop = mrtAtStop_(leg, now);
-  const base = { station: leg.st.name, walkMin: leg.walk.min, walkSource: leg.walk.source };
+  const base = { station: leg.st.name, walkMin: leg.walk.min, walkSource: leg.walk.source, leg, departAt: now };
   if (!atStop) return Object.assign(base, { ok: false,
     lines: [`最近的捷運站是${leg.nm}，走路約 ${leg.walk.min} 分鐘`, '這個時間查不到捷運班次（捷運營運時間外）'] });
   const train = leg.st.code === 'R16' ? null : mrtTrain_(leg, now);
