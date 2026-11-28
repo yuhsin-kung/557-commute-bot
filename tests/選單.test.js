@@ -56,7 +56,9 @@ test('按分類，Bot 把那一類的功能按鈕傳到聊天室', () => {
   assert.deepEqual(buttonsOf(main).map(b => b[1]), ['https://line.me/R/nv/location/', '到校預估 士林站', '出門時間']);
   assert.match(send(env, '出發時間規劃')[0].altText, /哪一天要去學校/, '打「出發時間規劃」是趕課倒推');
   assert.match(send(env, '幾點出門')[0].altText, /哪一天要去學校/, '舊名稱「幾點出門」也一樣，不是預估到達時間');
-  assert.deepEqual(buttonsOf(send(env, '557 以外的選擇')[0]).map(b => b[1]), ['共乘', 'YouBike', '共享雨傘', '包車']);
+  // 11/28 團隊要求：按鈕傳出的字跟按鈕上的字一樣（去掉表情符號）
+  assert.deepEqual(buttonsOf(send(env, '557 以外的選擇')[0]), [['🚕 計程車共乘', '計程車共乘'], ['🚲 YouBike 查詢', 'YouBike 查詢'], ['☂️ 共享雨傘', '共享雨傘'], ['🚐 包車調查', '包車調查']]);
+  ['共乘', 'YouBike', '包車'].forEach(old => assert.equal(isUnknown(send(env, old)), false, '舊的「' + old + '」也認得'));
   assert.deepEqual(buttonsOf(send(env, '積分與打卡')[0]), [
     ['🏫 到校打卡', '到校打卡'], ['🏠 出校打卡', '出校打卡'], ['📒 我的紀錄', '我的紀錄'], ['🎟️ 兌換學餐折價券', '兌換折價券'], ['🎫 我的折價券', '我的折價券'], ['🌱 全校減碳', '全校減碳'],
   ]);
@@ -73,7 +75,7 @@ test('每個功能的入口都在某個分類裡', () => {
   const env = start();
   const all = CATEGORIES.flatMap(c => buttonsOf(send(env, c)[0]).map(b => b[1]));
   ['預估到達時間', '比較所有路線', '557 即時動態', '降雨查詢', '訂閱提醒設定', '557 站牌資訊', '排隊禮儀', '回報現場', '新生須知', // 出門時間、我已經在士林站在「預估到達時間」裡
-    '共乘', 'YouBike', '共享雨傘', '包車', '到校打卡', '出校打卡', '我的紀錄', '兌換折價券', '我的折價券', '全校減碳'] // 騎車到校在「到校打卡」裡（積分.test.js）
+    '計程車共乘', 'YouBike 查詢', '共享雨傘', '包車調查', '到校打卡', '出校打卡', '我的紀錄', '兌換折價券', '我的折價券', '全校減碳'] // 騎車到校在「到校打卡」裡（積分.test.js）
     .forEach(command => assert.ok(all.includes(command), '沒有「' + command + '」的按鈕'));
 });
 
@@ -99,7 +101,7 @@ test('走過兩層：功能回覆裡的按鈕（選方向、測驗…）Bot 也�
       });
     });
   });
-  assert.ok(['共乘 去學校', '訂閱提醒', '取消提醒', '出門時間', '到校預估 士林站', '回報現場 士林站'].every(t => seen.includes(t)), seen.join('、'));
+  assert.ok(['士林站 → 東吳', '查看我的共乘', '訂閱提醒', '取消提醒', '出門時間', '到校預估 士林站', '回報現場 士林站'].every(t => seen.includes(t)), seen.join('、'));
 });
 
 test('全部的回覆都不用輸入框上面那排按鈕（快速回覆）', () => {

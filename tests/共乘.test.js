@@ -28,28 +28,37 @@ test('車資平分，進位到 5 元', () => {
   same([1, 2, 3, 4].map(n => env.call('cpShare_', n)), [160, 80, 55, 40]);
 });
 
-test('傳「共乘」先問方向，再問現在走或預約', () => {
+test('按「計程車共乘」先選方向，選了方向看現在走的狀況（可以改成預約）；按鈕傳出的字跟按鈕上的字一樣', () => {
   const env = start();
-  const dirs = say(env, 'A', '共乘');
-  same(buttonsOf(dirs).map(b => b[1]), ['共乘 去學校', '共乘 回士林', '我的共乘']);
-  const modes = say(env, 'A', '共乘 去學校');
-  same(buttonsOf(modes).map(b => b[1]), ['共乘 去學校 現在走', '共乘 去學校 預約']);
+  const dirs = say(env, 'A', '計程車共乘');
+  assert.match(textOf(dirs), /找同學一起搭，車資分攤更划算！[\s\S]*2人\n\$80[\s\S]*3人\n\$55[\s\S]*4人\n\$40[\s\S]*請選擇搭乘方向/);
+  same(buttonsOf(dirs), [['士林站 → 東吳', '士林站 → 東吳'], ['東吳 → 士林站', '東吳 → 士林站'], ['查看我的共乘', '查看我的共乘']]);
+  same(buttonsOf(say(env, 'A', '共乘')), buttonsOf(dirs), '舊的「共乘」一樣認得');
+  const modes = say(env, 'A', '士林站 → 東吳');
+  assert.match(textOf(modes), /🔔 士林站 → 東吳[\s\S]*目前尚無其他乘客等候[\s\S]*1人\n\$160[\s\S]*人數越多，每人分攤的車資越低。[\s\S]*🎁 等待獎勵：若等待 5 分鐘後仍無人加入，仍可獲得 1 點獎勵。/);
+  same(buttonsOf(modes), [['發起共乘', '發起共乘'], ['改成預約', '改成預約']]);
+  assert.match(textOf(say(env, 'A', '改成預約')), /預約 士林站 → 東吳/, '改成預約：用剛剛選的方向');
+  assert.match(textOf(say(env, 'A', '東吳→士林站')), /🔔 東吳 → 士林站/, '箭頭前後沒空白也認得');
+  const started = say(env, 'A', '發起共乘');
+  assert.match(textOf(started), /共乘已成功發起！[\s\S]*你是本次共乘的團主，目前尚無其他乘客加入。[\s\S]*◎ 集合地點：東吳大學校門口/);
+  assert.equal(buttonsOf(started)[0][0], '查看等車室');
+  assert.match(textOf(say(env, 'Z', '發起共乘')), /請選擇搭乘方向/, '沒選過方向就先問方向');
   assert.equal(hasQuickReply([dirs, modes]), false, '按鈕在訊息裡，不用輸入框上面那排');
 });
 
 test('現在走：開鈴 → 第二個人加入 → 5 分鐘到成團 → 叫車 → 上車', () => {
   const env = start();
-  assert.match(textOf(say(env, 'A', '共乘 去學校 現在走')), /現在沒有人在等，你是第一個/);
+  assert.match(textOf(say(env, 'A', '共乘 去學校 現在走')), /目前尚無其他乘客等候/);
   const opened = say(env, 'A', '共乘 去學校 加入');
-  assert.match(textOf(opened), /已開鈴！你是第一個，也是團主/);
-  assert.equal(buttonsOf(opened)[0][0], '打開等車室');
+  assert.match(textOf(opened), /共乘已成功發起！[\s\S]*你是本次共乘的團主/);
+  assert.equal(buttonsOf(opened)[0][0], '查看等車室');
   assert.match(buttonsOf(opened)[0][1], /\?page=room&t=[0-9a-f-]{36}$/);
 
   env.addMinutes(2);
   const status = textOf(say(env, 'B', '共乘 去學校 現在走'));
-  assert.match(status, /現在有 1 個人在等，還剩 3 分鐘/);
-  assert.match(status, /你加入就 2 人，一人約 80 元（現在 160 元）/);
-  assert.match(textOf(say(env, 'B', '共乘 去學校 加入')), /已加入，現在 2 人，一人約 80 元/);
+  assert.match(status, /目前有 1 位乘客等候中，還剩 3 分鐘/);
+  assert.match(status, /你加入後 2 人，每人約 \$80（現在 \$160）/);
+  assert.match(textOf(say(env, 'B', '共乘 去學校 加入')), /已加入共乘！[\s\S]*目前 2 人，每人約 \$80/);
 
   let view = room(env, 'A');
   assert.equal(view.status, '等待中');
@@ -74,13 +83,13 @@ test('現在走：滿 4 人不用等，馬上成團', () => {
   say(env, 'D', '共乘 回士林 加入');
   assert.equal(group(env).status, '已成團');
   assert.equal(room(env, 'D').share, 40);
-  assert.match(textOf(say(env, 'E', '共乘 回士林 現在走')), /現在沒有人在等/, '第 5 個人要另外開一團');
+  assert.match(textOf(say(env, 'E', '共乘 回士林 現在走')), /目前尚無其他乘客等候/, '第 5 個人要另外開一團');
 });
 
 test('兩個方向的人不會湊在一起', () => {
   const env = start();
   say(env, 'A', '共乘 去學校 加入');
-  assert.match(textOf(say(env, 'B', '共乘 回士林 現在走')), /現在沒有人在等/);
+  assert.match(textOf(say(env, 'B', '共乘 回士林 現在走')), /目前尚無其他乘客等候/);
 });
 
 test('等待中可以離開，不扣分；人走光那一團就取消', () => {
@@ -172,7 +181,7 @@ test('預約：出發前 5 分鐘提醒一次，現場的人可以加入，到�
   env.setNow('2026-10-13T07:30:00+08:00');
   env.call('共乘每分鐘檢查');
   assert.equal(env.pushes().length, before, '還沒到出發前 5 分鐘，不提醒');
-  assert.match(textOf(say(env, 'D', '共乘 去學校 現在走')), /現在沒有人在等/, '預約團還沒開放現場加入');
+  assert.match(textOf(say(env, 'D', '共乘 去學校 現在走')), /目前尚無其他乘客等候/, '預約團還沒開放現場加入');
 
   env.setNow('2026-10-13T07:35:00+08:00');
   env.call('共乘每分鐘檢查');
@@ -180,7 +189,7 @@ test('預約：出發前 5 分鐘提醒一次，現場的人可以加入，到�
   assert.equal(env.pushes().length, before + 1, '只提醒一次');
   assert.match(saidOf(env.pushes()[before].body.messages[0]), /你預約的 今天 07:40 士林站 → 東吳 快出發了\n現在 2 人，一人約 80 元/);
 
-  assert.match(textOf(say(env, 'D', '共乘 去學校 現在走')), /現在有 2 個人在等，今天 07:40 出發。\n你加入就 3 人，一人約 55 元/);
+  assert.match(textOf(say(env, 'D', '共乘 去學校 現在走')), /目前有 2 位乘客等候中，今天 07:40 出發。\n你加入後 3 人，每人約 \$55/);
   say(env, 'D', '共乘 去學校 加入');
   press(env, 'A', 'arrived');
   press(env, 'B', 'arrived');
@@ -232,7 +241,7 @@ test('信用分低於 80 不能預約，但還是可以現在走', () => {
   env.call('cpCredit_', 'A', -25);
   assert.match(textOf(say(env, 'A', '共乘 去學校 確認 2026-10-13 07:40')), /信用分是 75 分，低於 80 分暫時不能預約/);
   assert.equal(env.call('cpLoadGroups_').length, 0);
-  assert.match(textOf(say(env, 'A', '共乘 去學校 加入')), /已開鈴/);
+  assert.match(textOf(say(env, 'A', '共乘 去學校 加入')), /共乘已成功發起/);
 });
 
 test('完成一次共乘，信用分加回 1 分（最高 100）', () => {
@@ -311,11 +320,11 @@ test('Code.gs：共乘的訊息會轉給共乘.gs，回覆帶自己的按鈕', (
   const send = ev => { env.call('handleEvent_', Object.assign({ replyToken: 'r', source: { userId: 'A' } }, ev)); return env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body; };
 
   const dirs = send({ type: 'message', message: { type: 'text', text: '共乘' } });
-  same(buttonsOf(dirs.messages[0]).map(b => b[0]), ['士林站 → 東吳', '東吳 → 士林站', '我的共乘']);
+  same(buttonsOf(dirs.messages[0]).map(b => b[0]), ['士林站 → 東吳', '東吳 → 士林站', '查看我的共乘']);
 
   const joined = send({ type: 'message', message: { type: 'text', text: '共乘 去學校 加入' } });
   assert.equal(joined.messages.length, 1);
-  assert.equal(buttonsOf(joined.messages[0])[0][0], '打開等車室');
+  assert.equal(buttonsOf(joined.messages[0])[0][0], '查看等車室');
   assert.equal(hasQuickReply(joined.messages), false, '不放輸入框上面那排按鈕');
 
   const picked = send({ type: 'postback', postback: { data: 'cp=預約&dir=回士林', params: { datetime: '2026-10-12T17:12' } } });

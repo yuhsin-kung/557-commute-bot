@@ -70,8 +70,8 @@ function handleEventNow_(ev) {
   let answer;
   etaLastClass_ = null; // 到校預估.gs
   try {
-    if (/^(共乘|我的共乘|取消共乘)(\s|$)/.test(text)) {
-      answer = cpText_(ev.source.userId, text); // 共乘.gs
+    if (/^(計程車共乘|共乘|查看我的共乘|我的共乘|取消共乘)(\s|$)/.test(text) || /^(發起共乘|加入共乘|改成預約)$/.test(text) || cpDirByLabel_(text)) {
+      answer = cpText_(ev.source.userId, text); // 共乘.gs：按鈕傳出的字跟按鈕上的字一樣（計程車共乘、士林站 → 東吳、發起共乘…）
     } else if (/^(選單|主選單|功能|全部功能|更多功能|使用說明|說明|menu|help)$/i.test(text)) {
       answer = menuCard_(); // 選單.gs：四個分類
     } else if (menuCategory_(text)) {
@@ -119,21 +119,21 @@ function memberReply_(uid, text) {
   if (/^(打卡|步行積分)$/.test(text)) return ptCheckinButton_(uid, ''); // 積分.gs：四種卡都列
   if (text === '到校打卡') return ptCheckinButton_(uid, '到校'); // 走路進學校、早到、騎車到校
   if (text === '出校打卡') return ptCheckinButton_(uid, '離校'); // 走路出學校、騎車回士林
-  if (text === '騎車回士林') return ptBikeOut_(uid);
+  if (text === '騎車回士林' || text === '提交騎車回士林紀錄') return ptBikeOut_(uid); // YouBike 卡片的按鈕也傳這句
   const checkinMode = text.match(/^打卡\s*(進校|出校|早到)$/);
   if (checkinMode) return ptCheckinButton_(uid, checkinMode[1]);
   if (/^(我的紀錄|我的積分|積分|成就|碳足跡)$/.test(text)) return ptMine_(uid);
   if (text === '全校減碳') return ptSchool_();
-  if (text === '騎車到校') return ptBike_(uid);
+  if (text === '騎車到校' || text === '提交騎車到校紀錄') return ptBike_(uid);
   if (/^(兌換折價券|兌換學餐折價券|兌換)$/.test(text)) return ptRedeemAsk_(uid);
   if (text === '確認兌換折價券') return ptRedeem_(uid);
   if (/^(我的折價券|我的學餐折價券|折價券)$/.test(text)) return ptMyCoupons_(uid);
-  if (/^(youbike|ubike|微笑單車|腳踏車)$/i.test(text)) return ybReply_(); // YouBike.gs
+  if (/^(youbike|ubike|微笑單車|腳踏車)( ?查詢)?$/i.test(text)) return ybReply_(); // YouBike.gs
   if (/^(借傘|還傘|共享雨傘)(\s|$)/.test(text)) return umText_(); // 雨傘.gs：Raingo 租借站說明
   if (/^(新生須知|新生教學|新生)$/.test(text)) return nbIntro_(); // 新生.gs
   if (text === '新生測驗' || /^答\s*[1-3]$/.test(text)) return nbQuiz_(uid, text);
   if (text === '排隊禮儀') return nbEtiquette_();
-  if (/^包車(\s|$)/.test(text)) return charterText_(); // 新生.gs
+  if (/^(包車|包車調查|學生包車)(\s|$)/.test(text)) return charterText_(); // 新生.gs
   if (/^(出門提醒 |取消出門提醒$)/.test(text)) return lvText_(uid, text); // 發車提醒.gs
   if (/^回報現場(\s|$)/.test(text)) return rpText_(uid, text); // 現場回報.gs：我在哪一站排隊
   return null;

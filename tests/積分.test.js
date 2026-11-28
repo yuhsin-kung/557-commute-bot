@@ -614,22 +614,44 @@ test('YouBike：列出士林站可借、東吳附近可還；抓不到資料會�
     { sna: 'YouBike2.0_東吳大學', available_rent_bikes: 2, available_return_bikes: 9, latitude: 25.0946, longitude: 121.5457 },
     { sna: 'YouBike2.0_很遠的站', available_rent_bikes: 5, available_return_bikes: 5, latitude: 25.03, longitude: 121.56 },
   ];
-  const card = say(env, 'A', 'youbike');
+  const card = say(env, 'A', 'YouBike 查詢');
   assert.equal(card.type, 'flex');
   const reply = card.altText;
-  assert.match(reply, /捷運士林站\(1號出口\)：可借 7・可還 3/);
-  assert.match(reply, /東吳大學：可借 2・可還 9/);
+  assert.match(reply, /YouBike 通勤資訊（目前有車可借）/);
+  assert.match(reply, /捷運士林站（1號出口） 可借 7・可還 3/);
+  assert.match(reply, /東吳大學 可借 2・可還 9/);
   assert.doesNotMatch(reply, /很遠的站/);
+  // 卡片上：借車、還車分兩段，每站都有可借車輛、可還空位兩格；騎乘提醒、集點、更新時間
+  const words = JSON.stringify(card.contents);
+  ['單程距離', '約 3.5 公里', '部分上坡', '📍 士林站借車', '📍 東吳附近還車', '可借車輛', '可還空位', '騎乘小提醒', '🎁 騎乘集點', '資料更新時間：', '臺北市 YouBike 開放資料']
+    .forEach(w => assert.ok(words.includes(w), w));
+  assert.deepEqual(buttonsOf(card), [['提交騎車到校紀錄', '提交騎車到校紀錄'], ['提交騎車回士林紀錄', '提交騎車回士林紀錄']]);
+  assert.match(textOf(say(env, 'A', '提交騎車到校紀錄')), /騎乘紀錄/, '按了跟「騎車到校」一樣，請學生傳截圖');
+  env.respond.youbike[0].available_rent_bikes = 0;
+  env.addMinutes(2);
+  assert.match(say(env, 'A', 'YouBike').altText, /士林站目前沒車/);
+});
+
+test('YouBike：照設計稿的通勤順序列站（士林站 1 號出口、福林公園、中山中正路口；東吳大學、故宮、至善臨溪路口）', () => {
+  const env = start();
+  const st = (name, lat, lng) => ({ sna: 'YouBike2.0_' + name, available_rent_bikes: 5, available_return_bikes: 5, latitude: lat, longitude: lng });
+  env.respond.youbike = [st('中山中正路口', 25.09651, 121.52753), st('福林公園', 25.09419, 121.52833), st('捷運士林站(1號出口)', 25.09643, 121.52519), st('捷運士林站(2號出口)', 25.09343, 121.52642),
+    st('至善臨溪路口', 25.09709, 121.54229), st('國立故宮博物院', 25.09833, 121.54788), st('東吳大學', 25.095, 121.54521)];
+  const alt = say(env, 'A', 'YouBike').altText;
+  assert.match(alt, /士林站借車：捷運士林站（1號出口）[^；]*；福林公園[^；]*；中山中正路口[^；\n]*\n/);
+  assert.match(alt, /東吳附近還車：東吳大學[^；]*；國立故宮博物院[^；]*；至善臨溪路口/);
 });
 
 // ===== 共享雨傘：Raingo 租借站，Bot 只說明 =====
 
 test('共享雨傘：顯示 Raingo 租借站（規劃中），不收照片、不給積分；設好網址才有借用方式按鈕', () => {
   const env = start();
-  ['共享雨傘', '借傘', '還傘 校門口'].forEach(text => assert.match(say(env, 'A', text).altText, /共享雨傘（規劃中）/, text));
+  ['共享雨傘', '借傘', '還傘 校門口'].forEach(text => assert.match(say(env, 'A', text).altText, /☂️ 共享雨傘服務\n規劃中/, text));
   const card = say(env, 'A', '共享雨傘');
-  assert.match(card.altText, /錢穆故居站：Raingo 租借站/);
-  assert.match(card.altText, /一站借、另一站還/);
+  assert.match(card.altText, /與 Raingo 合作，提供通勤途中雨傘租借服務。/);
+  assert.match(card.altText, /租借據點\n錢穆故居站\n規劃設置\nRaingo 雨傘租借站\n東吳大學校門口\n規劃設置/);
+  assert.match(card.altText, /01\n前往租借站[\s\S]*02\n使用手機租借[\s\S]*03\n跨站歸還\n可於合作租借站歸還，不必回到原租借地點。/);
+  assert.match(card.altText, /ⓘ 服務提醒：本服務目前仍在規劃中/);
   assert.deepEqual(buttonsOf(card), []);
   env.props.RAINGO_URL = 'https://example.com/raingo';
   assert.deepEqual(buttonsOf(say(env, 'A', '共享雨傘')), [['看借用方式', 'https://example.com/raingo']]);
@@ -673,16 +695,22 @@ test('排隊禮儀、包車意願', () => {
   assert.equal(etiquette.contents.hero.action, undefined, '還沒有影片網址就不能點');
   env.props.ETIQUETTE_VIDEO_URL = 'https://youtu.be/example';
   assert.equal(say(env, 'A', '排隊禮儀').contents.hero.action.uri, 'https://youtu.be/example');
-  const charter = say(env, 'A', '包車');
-  assert.match(charter.altText, /學生包車（規劃中）/);
-  assert.match(charter.altText, /登記：下次選課結束後開放/);
-  assert.match(charter.altText, /以一個月為單位繳費/);
-  assert.match(charter.altText, /依人數最多的幾個時段洽詢合法遊覽車或交通業者/);
+  const charter = say(env, 'A', '包車調查');
+  assert.equal(say(env, 'A', '包車').altText, charter.altText, '舊的「包車」也認得');
+  assert.match(charter.altText, /🚌 學生包車\n規劃中\n整合學生通勤需求/);
+  assert.match(charter.altText, /包車資訊\n登記時間\n下次選課結束後開放\n行駛路線\n捷運士林站 → 東吳校園\n尖峰時段直達\n報名方式\n以一個月為單位繳費/);
+  assert.match(charter.altText, /包車媒合流程\n01\n填寫搭乘需求[\s\S]*依人數最多的幾個時段洽詢合法遊覽車或交通業者[\s\S]*03\n確認發車資訊/);
+  assert.match(charter.altText, /ⓘ 服務提醒：本服務目前仍在規劃中，登記時間、收費方式及實際發車安排以正式公告為準。/);
+  assert.deepEqual(buttonsOf(charter), []);
+  env.props.CHARTER_FORM_URL = 'https://forms.example/charter';
+  const formOpen = say(env, 'A', '包車調查');
+  assert.match(formOpen.altText, /登記時間\n表單開放中/);
+  assert.deepEqual(buttonsOf(formOpen),[['填寫包車登記表單', 'https://forms.example/charter']]);
   assert.deepEqual(buttonsOf(charter), [], '表單還沒開放就沒有按鈕，也沒有「我有興趣」');
   assert.doesNotMatch(JSON.stringify(charter), /學期訂閱制|我有興趣/);
   env.props.CHARTER_FORM_URL = 'https://forms.example/charter';
   const open = say(env, 'A', '包車');
-  assert.match(open.altText, /登記：表單開放中/);
+  assert.match(open.altText, /登記時間\n表單開放中/);
   assert.deepEqual(buttonsOf(open), [['填寫包車登記表單', 'https://forms.example/charter']]);
   assert.equal(say(env, 'A', '包車 我有興趣').altText, open.altText, '舊按鈕傳來的字一樣顯示這張卡');
   assert.equal(env.sheets['意願紀錄'], undefined, 'Bot 不另外記登記');

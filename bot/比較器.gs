@@ -207,7 +207,7 @@ function liveReply_(originName, building, classAt) {
     return card_(Object.assign(head, { // 卡片.gs
       notes: ['現在 ' + o.stop + ' 沒有車往東吳的即時資料，可能是末班車已過或還沒發車。'],
       footer: 'TDX 即時資料・' + nowText_(),
-      buttons: [{ label: '找人共乘計程車', text: '共乘' }, { label: '排明天的出門時間', text: '出門時間 明天' }],
+      buttons: [{ label: '找人共乘計程車', text: '計程車共乘' }, { label: '排明天的出門時間', text: '出門時間 明天' }],
     }));
   }
   options.sort((a, b) => a.arrive - b.arrive);
@@ -241,7 +241,7 @@ function liveReply_(originName, building, classAt) {
     notes: notes,
     warns: warns,
     footer: (classAt ? fmt_(classAt) + ' 上課・' : '') + 'TDX 即時資料・' + nowText_() + '・車程為估計值',
-    buttons: [{ label: '找人共乘計程車', text: '共乘' }, { label: 'YouBike 查詢', text: 'YouBike' }],
+    buttons: [{ label: '找人共乘計程車', text: '計程車共乘' }, { label: 'YouBike 查詢', text: 'YouBike 查詢' }],
   }));
 }
 

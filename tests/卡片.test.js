@@ -85,7 +85,7 @@ test('即時比較：照到校時間排，最快的標成推薦，不會到東�
 test('即時比較：沒有車的時候說明原因，並給共乘的按鈕', () => {
   const card = sampleCards().即時比較沒車;
   assert.match(card.altText, /沒有車往東吳的即時資料/);
-  assert.equal(card.contents.footer.contents[0].action.text, '共乘');
+  assert.equal(card.contents.footer.contents[0].action.text, '計程車共乘');
 });
 
 test('出門建議：平日早八的 557 用監測預測倒推（尖峰算排隊）；劍南路出發會列學校專車', () => {

@@ -27,7 +27,8 @@ const UI = {
   brand: '#A63A2B',      // 磚紅：主要按鈕、最推薦的那一列、重點數字
   brandDark: '#7A2A1F',  // 深磚紅：次要按鈕的字
   onBrand: '#FFFFFF',    // 磚紅底上的字
-  onBrandSoft: '#F7DCD5',
+  onBrandSoft: '#F7DCD5', // 淺磚紅：小標籤的底色
+  brandBg: '#FBF1EE',    // 更淡的磚紅：獎勵、推薦面板、可借車輛的底色
   head: '#FFFFFF',       // 標題區：白底
   headInk: '#111827',    // 標題字
   headSoft: '#6B7280',   // 標題上面的小字、副標
@@ -188,4 +189,157 @@ function plain_(answer) {
     .map(m => (typeof m === 'string' ? m : m.text || m.altText || ''))
     .filter(Boolean)
     .join('\n');
+}
+
+// ===== 設計稿版型（11/28 團隊設計稿：計程車共乘、YouBike、共享雨傘、學生包車） =====
+
+/**
+ * 跟 到校預估.gs 的 designCard_ 同一個樣子（白底、粗體標題、灰色面板、磚紅重點），但內容用一塊一塊排：
+ *   kicker   最上面的小字（例：557 以外的選擇）
+ *   title    粗體標題；badge 是標題右邊的小標籤（例：規劃中、目前有車可借）
+ *   lead     標題下面的說明；route 是更小的一行（例：捷運士林站 → 東吳大學）
+ *   blocks   照順序排的內容，每一塊是下面其中一種：
+ *     { sec, note, badge }               分段標題（上面有分隔線）
+ *     { text, muted }                    一段話
+ *     { table: { head, rows } }          兩欄的表格
+ *     { cols: [[上, 下], …], note }       並排的小格子（例：1人 $160）
+ *     { stats: [[標籤, 數值], …] }         並排的統計框（例：單程距離 約 3.5 公里）
+ *     { avail: { name, bikes, docks } }  YouBike 站：可借車輛、可還空位兩格
+ *     { place: { name, badge, note } }   地點（例：雨傘租借站）
+ *     { steps: [[01, 標題, 說明], …] }     01／02／03 步驟
+ *     { info: [[標籤, 數值, 小標籤], …] }   一列一列的資訊
+ *     { panel: { title, lines, tone } }  面板；tone 'brand' 是淡磚紅底，不給是灰色
+ *     { small }                          最小的灰字（資料來源、更新時間）
+ *   buttons  [按鈕上的字, 按了傳出的字] 或 { label, uri }；前 primaryCount 顆（預設 1）是磚紅主要按鈕
+ *   alt      純文字版（不給就用卡片上的字）
+ */
+function dsCard_(spec) {
+  const body = [];
+  if (spec.kicker) body.push(dsTx_(spec.kicker, 'xs', UI.muted));
+  const head = [dsTx_(spec.title, 'lg', UI.ink, { weight: 'bold', flex: 1 })];
+  if (spec.badge) head.push(dsBadge_(spec.badge));
+  body.push({ type: 'box', layout: 'horizontal', alignItems: 'center', spacing: 'sm', margin: spec.kicker ? 'sm' : 'none', contents: head });
+  if (spec.lead) body.push(dsTx_(spec.lead, 'sm', UI.ink, { margin: 'md' }));
+  if (spec.route) body.push(dsTx_(spec.route, 'xs', UI.muted, { margin: 'sm' }));
+  (spec.blocks || []).forEach(b => body.push.apply(body, dsBlock_(b)));
+
+  const items = spec.buttons || [];
+  const primaryCount = spec.primaryCount === undefined ? 1 : spec.primaryCount;
+  const footer = items.map((item, i) => choiceChip_(item, i < primaryCount));
+  if (spec.menu !== false) footer.push(menuLink_());
+  const bubble = { type: 'bubble', body: { type: 'box', layout: 'vertical', paddingAll: '20px', backgroundColor: UI.paper, contents: body } };
+  if (footer.length) bubble.footer = { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '16px', paddingTop: '0px', backgroundColor: UI.paper, contents: footer };
+
+  const labels = items.map(item => '［' + (Array.isArray(item) ? item[0] : item.label) + '］').join('');
+  const words = [];
+  dsWalkText_(bubble.body, words);
+  const alt = spec.alt || words.join('\n');
+  return { type: 'flex', altText: (alt + (labels ? '\n' + labels : '')).slice(0, 400), contents: bubble };
+}
+
+function dsTx_(text, size, color, extra) {
+  return Object.assign({ type: 'text', text: String(text), size: size, color: color || UI.ink, wrap: true }, extra || {});
+}
+
+function dsBadge_(text) {
+  return { type: 'box', layout: 'vertical', flex: 0, backgroundColor: UI.onBrandSoft, cornerRadius: '12px', paddingAll: '4px', paddingStart: '8px', paddingEnd: '8px',
+    contents: [dsTx_(text, 'xxs', UI.brandDark, { wrap: false })] };
+}
+
+/** 灰色（或淡磚紅）圓角小框 */
+function dsBox_(contents, extra) {
+  return Object.assign({ type: 'box', layout: 'vertical', backgroundColor: UI.soft, cornerRadius: '12px', paddingAll: '12px', contents: contents }, extra || {});
+}
+
+/** 一塊內容 → 卡片元件（可能好幾個） */
+function dsBlock_(b) {
+  if (b.sec) {
+    const head = [dsTx_(b.sec, 'md', UI.ink, { weight: 'bold', flex: 1 })];
+    if (b.badge) head.push(dsBadge_(b.badge));
+    const out = [{ type: 'separator', margin: 'lg', color: UI.line }, { type: 'box', layout: 'horizontal', margin: 'lg', alignItems: 'center', contents: head }];
+    if (b.note) out.push(dsTx_(b.note, 'xs', UI.muted, { margin: 'xs' }));
+    return out;
+  }
+  if (b.text) return [dsTx_(b.text, 'sm', b.muted ? UI.muted : UI.ink, { margin: 'md' })];
+  if (b.small) return [dsTx_(b.small, 'xxs', UI.muted, { margin: 'lg' })];
+  if (b.table) {
+    const row = (cells, bold) => ({ type: 'box', layout: 'horizontal', paddingAll: '10px', contents: [
+      dsTx_(cells[0], 'sm', bold ? UI.muted : UI.ink, { flex: 1 }),
+      dsTx_(cells[1], 'sm', bold ? UI.muted : UI.ink, { flex: 1, align: 'end', weight: bold ? 'regular' : 'bold' }),
+    ] });
+    const rows = [row(b.table.head, true)];
+    b.table.rows.forEach(r => { rows.push({ type: 'separator', color: UI.line }); rows.push(row(r, false)); });
+    return [dsBox_(rows, { margin: 'md', paddingAll: '4px' })];
+  }
+  if (b.cols) {
+    const out = [{ type: 'box', layout: 'horizontal', margin: 'md', spacing: 'sm', contents: b.cols.map(c => dsBox_([
+      dsTx_(c[0], 'xs', UI.muted, { align: 'center' }),
+      dsTx_(c[1], 'md', UI.ink, { align: 'center', weight: 'bold', margin: 'xs' }),
+    ], { flex: 1, paddingAll: '8px' })) }];
+    if (b.note) out.push(dsTx_(b.note, 'xs', UI.muted, { margin: 'sm' }));
+    return out;
+  }
+  if (b.stats) {
+    return [{ type: 'box', layout: 'horizontal', margin: 'md', spacing: 'sm', contents: b.stats.map(s => dsBox_([
+      dsTx_(s[0], 'xs', UI.muted),
+      dsTx_(s[1], 'md', UI.ink, { weight: 'bold', margin: 'xs' }),
+    ], { flex: 1 })) }];
+  }
+  if (b.avail) {
+    const a = b.avail;
+    const cell = (label, n, bg, ink) => dsBox_([
+      dsTx_(label, 'xs', ink),
+      dsTx_(n === null || n === undefined ? '—' : String(n), 'xl', ink, { weight: 'bold', margin: 'xs' }),
+    ], { flex: 1, backgroundColor: bg, paddingAll: '10px' });
+    return [
+      dsTx_(a.name, 'sm', UI.ink, { weight: 'bold', margin: 'md' }),
+      { type: 'box', layout: 'horizontal', margin: 'sm', spacing: 'sm', contents: [
+        cell('可借車輛', a.bikes, UI.brandBg, UI.brandDark), // 可借：淡磚紅
+        cell('可還空位', a.docks, UI.soft, UI.ink),            // 可還：灰藍
+      ] },
+    ];
+  }
+  if (b.place) {
+    const p = b.place;
+    const head = [dsTx_(p.name, 'md', UI.ink, { weight: 'bold', flex: 1 })];
+    if (p.badge) head.push(dsBadge_(p.badge));
+    const inner = [{ type: 'box', layout: 'horizontal', alignItems: 'center', spacing: 'sm', contents: head }];
+    if (p.note) inner.push(dsTx_(p.note, 'xs', UI.muted, { margin: 'xs' }));
+    return [dsBox_(inner, { margin: 'md' })];
+  }
+  if (b.steps) {
+    return b.steps.map(s => ({ type: 'box', layout: 'horizontal', margin: 'md', spacing: 'md', contents: [
+      dsTx_(s[0], 'lg', UI.brand, { weight: 'bold', flex: 0, wrap: false }),
+      { type: 'box', layout: 'vertical', flex: 1, contents: [
+        dsTx_(s[1], 'sm', UI.ink, { weight: 'bold' }),
+        dsTx_(s[2], 'xs', UI.muted, { margin: 'xs' }),
+      ] },
+    ] }));
+  }
+  if (b.info) {
+    return b.info.map(r => {
+      const right = [dsTx_(r[1], 'sm', UI.ink, { weight: 'bold', align: 'end' })];
+      if (r[2]) right.push({ type: 'box', layout: 'horizontal', margin: 'xs', contents: [{ type: 'filler' }, dsBadge_(r[2])] });
+      return { type: 'box', layout: 'horizontal', margin: 'md', spacing: 'md', contents: [
+        dsTx_(r[0], 'sm', UI.muted, { flex: 2 }),
+        { type: 'box', layout: 'vertical', flex: 5, contents: right },
+      ] };
+    });
+  }
+  if (b.panel) {
+    const p = b.panel;
+    const brand = p.tone === 'brand';
+    const inner = [];
+    if (p.title) inner.push(dsTx_(p.title, 'sm', brand ? UI.brandDark : UI.ink, { weight: 'bold' }));
+    (p.lines || []).forEach((t, i) => inner.push(dsTx_(t, 'sm', brand ? UI.brandDark : UI.ink, { margin: i || p.title ? 'sm' : 'none' })));
+    return [dsBox_(inner, { margin: 'lg', backgroundColor: brand ? UI.brandBg : UI.soft, paddingAll: '14px' })];
+  }
+  return [];
+}
+
+/** 卡片上所有的字（純文字版用） */
+function dsWalkText_(node, out) {
+  if (!node || typeof node !== 'object') return;
+  if (node.type === 'text') { out.push(node.text); return; }
+  if (Array.isArray(node.contents)) node.contents.forEach(c => dsWalkText_(c, out));
 }

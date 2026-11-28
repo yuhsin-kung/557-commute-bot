@@ -118,7 +118,7 @@ function render(s) {
   state = s;
   var app = document.getElementById('app'), h = '';
   if (!s.ok) {
-    h = '<div class="card"><h1>連結失效了</h1><p class="hint">回 LINE 傳「我的共乘」，再打開一次等車室。</p><a class="btn main" href="' + chat('我的共乘') + '">回 LINE</a></div>';
+    h = '<div class="card"><h1>連結失效了</h1><p class="hint">回 LINE 傳「查看我的共乘」，再打開一次等車室。</p><a class="btn main" href="' + chat('查看我的共乘') + '">回 LINE</a></div>';
   } else if (s.none) {
     h = '<div class="card"><h1>你目前沒有共乘</h1><p class="hint">回 LINE 傳「共乘」就能開始。</p><a class="btn main" href="' + chat('共乘') + '">我要共乘</a></div>';
   } else {

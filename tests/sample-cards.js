@@ -53,10 +53,11 @@ function sampleCards() {
   keep('出門時間：選哪一天', env.call('menuFlow_', '出門時間'));
   keep('出門時間：選節次', env.call('menuFlow_', '出門時間 明天'));
   keep('出門時間：選大樓', env.call('menuFlow_', '出門時間 明天 08:10'));
-  keep('共乘：選方向', env.call('cpText_', 'A', '共乘'));
-  keep('共乘：現在走', env.call('cpText_', 'A', '共乘 去學校 現在走'));
+  keep('共乘：選方向', env.call('cpText_', 'A', '計程車共乘'));
+  keep('共乘：現在走', env.call('cpText_', 'A', '士林站 → 東吳'));
   keep('共乘：選時間', env.call('cpText_', 'A', '共乘 去學校 預約'));
-  keep('共乘：打開等車室', env.call('cpText_', 'A', '共乘 去學校 加入'));
+  keep('共乘：發起成功', env.call('cpText_', 'A', '發起共乘'));
+  keep('共乘：有人在等', env.call('cpText_', 'B', '士林站 → 東吳'));
   keep('打卡：選哪一種', env.call('ptCheckinButton_', 'A', ''));
   keep('打卡：走路進學校', env.call('ptCheckinButton_', 'A', '進校'));
   keep('打卡：走路出學校', env.call('ptCheckinButton_', 'A', '出校'));
@@ -68,8 +69,11 @@ function sampleCards() {
   keep('共享雨傘（Raingo）', env.call('umText_'));
   keep('學生包車', env.call('charterText_'));
   keep('出門提醒設好了', env.call('lvText_', 'A', '出門提醒 明天 07:40'));
-  env.respond.youbike = [{ sna: 'YouBike2.0_捷運士林站(1號出口)', available_rent_bikes: 38, available_return_bikes: 22, latitude: 25.0955, longitude: 121.527 }, { sna: 'YouBike2.0_東吳大學', available_rent_bikes: 8, available_return_bikes: 14, latitude: 25.0946, longitude: 121.5457 }];
-  keep('YouBike 車數', env.call('ybReply_'));
+  env.respond.youbike = [
+    ['捷運士林站(1號出口)', 36, 23, 25.09643, 121.52519], ['福林公園', 10, 13, 25.09419, 121.52833], ['中山中正路口', 5, 14, 25.09651, 121.52753],
+    ['東吳大學', 0, 22, 25.095, 121.54521], ['國立故宮博物院', 10, 15, 25.09833, 121.54788], ['至善臨溪路口', 1, 46, 25.09709, 121.54229],
+  ].map(r => ({ sna: 'YouBike2.0_' + r[0], available_rent_bikes: r[1], available_return_bikes: r[2], latitude: r[3], longitude: r[4] }));
+  keep('YouBike 通勤資訊', env.call('ybReply_'));
   // 學餐折價券：一張的卡片、兩張以上左右滑
   env.setNow('2026-10-26T08:00:00+08:00');
   const coupon = env.call('cpSheet_', '學餐折價券', ['時間', '使用者 ID', '券號', '面額', '狀態', '到期日']);
