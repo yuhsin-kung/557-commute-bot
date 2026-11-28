@@ -8,7 +8,8 @@ const { plain, saidOf, buttonsOf, hasQuickReply } = require('./helpers');
 
 const ALL = fs.readdirSync(path.join(__dirname, '..', 'bot')).filter(f => f.endsWith('.gs')).sort((a, b) => (a === 'Code.gs' ? -1 : b === 'Code.gs' ? 1 : 0));
 const MON_0700 = '2026-10-12T07:00:00+08:00';
-const CATEGORIES = ['出門前提醒', '557 以外的選擇', '公車站牌與排隊禮儀', '積分與打卡']; // 跟簡報、圖文選單的四格一樣
+const CATEGORIES = ['出門前提醒', '557 以外的選擇', '公車站牌與排隊禮儀', '積分與打卡']; // 跟簡報、圖文選單的四格一樣（傳出的字）
+const LABELS = ['🔔 出門前提醒', '🔀 557 以外的選擇', '🚏 公車站牌與排隊禮儀', '🏅 積分與打卡']; // 按鈕上的字（有表情符號）
 const MAIN = '預估到達時間'; // 主要功能：出門前提醒的第一顆，按了直接是入口卡片
 
 /** 會連網路的回覆換成固定的字，測試只看「有沒有走到對的功能」 */
@@ -34,7 +35,7 @@ test('選單：一則訊息，四個分類的按鈕', () => {
   const menu = send(env, '選單');
   assert.equal(menu.length, 1);
   assert.equal(menu[0].type, 'flex');
-  assert.deepEqual(buttonsOf(menu[0]), CATEGORIES.map(c => [c, c]));
+  assert.deepEqual(buttonsOf(menu[0]), CATEGORIES.map((c, i) => [LABELS[i], c]));
   assert.equal(saidOf(menu[0]), '東吳通勤達人\n今天要怎麼去學校？\n\n查出門時間、找其他交通方式，或看看怎麼避開 557 尖峰人潮。👇');
 });
 
@@ -43,11 +44,11 @@ test('按分類，Bot 把那一類的功能按鈕傳到聊天室', () => {
   const out = send(env, '出門前提醒')[0];
   assert.equal(titleOf(out), '出門前提醒');
   assert.deepEqual(buttonsOf(out), [
-    ['🚇 預估到達時間', '預估到達時間'], ['⏰ 出發時間規劃', '出門時間'], ['557 即時動態', '557 即時動態'], ['比較所有路線', '比較所有路線'],
-    ['降雨查詢', '降雨查詢'], ['雨天與考試週訂閱提醒', '訂閱提醒設定'],
+    ['🚇 預估到達時間', '預估到達時間'], ['⏰ 出發時間規劃', '出門時間'], ['🚌 557 即時動態', '557 即時動態'], ['🗺️ 比較所有路線', '比較所有路線'],
+    ['🌧️ 降雨查詢', '降雨查詢'], ['📩 雨天與考試週訂閱提醒', '訂閱提醒設定'],
   ]);
   assert.deepEqual(buttonsOf(send(env, '公車站牌與排隊禮儀')[0]), [
-    ['557 上車地點', '557 站牌資訊'], ['排隊禮儀短片', '排隊禮儀'], ['回報我在哪裡排隊', '回報現場'], ['新生須知', '新生須知'],
+    ['📍 557 上車地點', '557 站牌資訊'], ['🎬 排隊禮儀短片', '排隊禮儀'], ['🙋 回報我在哪裡排隊', '回報現場'], ['🎒 新生須知', '新生須知'],
   ]);
   const main = send(env, MAIN)[0];
   assert.match(main.altText, /預估到達時間/);
@@ -57,7 +58,7 @@ test('按分類，Bot 把那一類的功能按鈕傳到聊天室', () => {
   assert.match(send(env, '幾點出門')[0].altText, /哪一天要去學校/, '舊名稱「幾點出門」也一樣，不是預估到達時間');
   assert.deepEqual(buttonsOf(send(env, '557 以外的選擇')[0]).map(b => b[1]), ['共乘', 'YouBike', '共享雨傘', '包車']);
   assert.deepEqual(buttonsOf(send(env, '積分與打卡')[0]), [
-    ['到校打卡', '到校打卡'], ['出校打卡', '出校打卡'], ['我的紀錄', '我的紀錄'], ['兌換學餐折價券', '兌換折價券'], ['我的折價券', '我的折價券'], ['全校減碳', '全校減碳'],
+    ['🏫 到校打卡', '到校打卡'], ['🏠 出校打卡', '出校打卡'], ['📒 我的紀錄', '我的紀錄'], ['🎟️ 兌換學餐折價券', '兌換折價券'], ['🎫 我的折價券', '我的折價券'], ['🌱 全校減碳', '全校減碳'],
   ]);
 });
 
@@ -122,7 +123,7 @@ test('每一則有按鈕的訊息最下面都有「回選單」；選單自己�
 test('傳「選單」「功能」「說明」「menu」都會回選單', () => {
   const env = start();
   ['選單', '主選單', '功能', '全部功能', '使用說明', 'menu', 'Help'].forEach(text => {
-    assert.deepEqual(buttonsOf(send(env, text)[0]).map(b => b[0]), CATEGORIES, text);
+    assert.deepEqual(buttonsOf(send(env, text)[0]).map(b => b[0]), LABELS, text);
   });
 });
 
@@ -131,7 +132,7 @@ test('看不懂的句子：先說看不懂，再給選單，不會讓人卡住',
   const reply = send(env, '今天好累');
   assert.equal(reply.length, 2);
   assert.match(reply[0].text, /^這個問題我看不太懂/);
-  assert.deepEqual(buttonsOf(reply[1]).map(b => b[0]), CATEGORIES);
+  assert.deepEqual(buttonsOf(reply[1]).map(b => b[0]), LABELS);
 });
 
 test('看不懂時教的兩種問法，Bot 真的看得懂', () => {
@@ -151,7 +152,7 @@ test('加好友：歡迎的話、新生須知、選單', () => {
   assert.match(reply[0].text, /^嗨！我是東吳通勤達人/);
   assert.match(saidOf(reply[1]), /新生須知：第一次搭 557/);
   assert.deepEqual(buttonsOf(reply[1]).map(b => b[1]), ['新生測驗', '公車站牌與排隊禮儀']);
-  assert.deepEqual(buttonsOf(reply[2]).map(b => b[0]), CATEGORIES);
+  assert.deepEqual(buttonsOf(reply[2]).map(b => b[0]), LABELS);
 });
 
 test('出門時間：點哪一天 → 點第幾節 → 點哪一棟，全程不用打字', () => {
