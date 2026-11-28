@@ -8,8 +8,8 @@ const { plain, saidOf, buttonsOf, hasQuickReply } = require('./helpers');
 
 const ALL = fs.readdirSync(path.join(__dirname, '..', 'bot')).filter(f => f.endsWith('.gs')).sort((a, b) => (a === 'Code.gs' ? -1 : b === 'Code.gs' ? 1 : 0));
 const MON_0700 = '2026-10-12T07:00:00+08:00';
-const CATEGORIES = ['幾點出門、幾點到東吳', '出門前提醒', '557 以外的選擇', '積分與打卡'];
-const MAIN = '幾點出門、幾點到東吳'; // 主打：按了直接是入口卡片，不是一串功能按鈕
+const CATEGORIES = ['預估到達時間', '出門前提醒', '557 以外的選擇', '積分與打卡'];
+const MAIN = '預估到達時間'; // 主打：按了直接是入口卡片，不是一串功能按鈕
 
 /** 會連網路的回覆換成固定的字，測試只看「有沒有走到對的功能」 */
 function start() {
@@ -47,7 +47,8 @@ test('按分類，Bot 把那一類的功能按鈕傳到聊天室', () => {
     ['回報我在哪裡排隊', '回報現場'], ['降雨查詢', '降雨查詢'], ['雨天與考試週訂閱提醒', '訂閱提醒設定'],
   ]);
   const main = send(env, MAIN)[0];
-  assert.match(main.altText, /幾點出門、幾點到東吳/);
+  assert.match(main.altText, /預估到達時間/);
+  assert.match(send(env, '幾點出門、幾點到東吳')[0].altText, /預估到達時間/, '舊名稱也認得');
   assert.deepEqual(buttonsOf(main).map(b => b[1]), ['https://line.me/R/nv/location/', '出門時間', '到校預估 士林站']);
   assert.deepEqual(buttonsOf(send(env, '557 以外的選擇')[0]).map(b => b[1]), ['共乘', 'YouBike', '共享雨傘', '包車']);
   assert.deepEqual(buttonsOf(send(env, '積分與打卡')[0]), [
@@ -72,7 +73,7 @@ test('「公車站牌與排隊禮儀」（現在在出門前提醒裡；舊圖�
 test('每個功能的入口都在某個分類裡', () => {
   const env = start();
   const all = CATEGORIES.flatMap(c => buttonsOf(send(env, c)[0]).map(b => b[1]));
-  ['比較所有路線', '出門時間', '到校預估 士林站', '557 即時動態', '降雨查詢', '訂閱提醒設定', '公車站牌與排隊禮儀', // 出門時間在主打「幾點出門、幾點到東吳」裡
+  ['比較所有路線', '出門時間', '到校預估 士林站', '557 即時動態', '降雨查詢', '訂閱提醒設定', '公車站牌與排隊禮儀', // 出門時間在主打「預估到達時間」裡
     '共乘', 'YouBike', '共享雨傘', '包車', '到校打卡', '出校打卡', '我的紀錄', '兌換折價券', '我的折價券', '全校減碳'] // 騎車到校在「到校打卡」裡（積分.test.js）
     .forEach(command => assert.ok(all.includes(command), '沒有「' + command + '」的按鈕'));
 });

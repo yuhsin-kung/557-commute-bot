@@ -155,7 +155,7 @@ test('合併入口：傳送我的位置、我要趕課、我已經在士林站',
   const env = loadBot(ALL);
   const card = env.call('etaButton_');
   const json = JSON.stringify(card);
-  assert.match(card.altText, /幾點出門、幾點到東吳/);
+  assert.match(card.altText, /預估到達時間/);
   assert.match(json, /line\.me\/R\/nv\/location/);
   assert.match(json, /"text":"出門時間"/);
   assert.match(json, /"text":"到校預估 士林站"/);

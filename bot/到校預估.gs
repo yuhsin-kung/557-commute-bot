@@ -61,11 +61,11 @@ function p557Lines_(atStop) {
 
 // ===== 在 LINE 裡完成：按按鈕 → LINE 自己的「傳送位置」畫面 → Bot 收到位置訊息 → 直接回幾點到東吳（不開外部網頁） =====
 
-/** 主打功能的入口：「幾點出門、幾點到東吳」。兩種問法：現在出發（傳位置）、趕課倒推（選節次再傳位置） */
+/** 主打功能的入口：「預估到達時間」。兩種問法：現在出發（傳位置）、趕課倒推（選節次再傳位置） */
 function etaButton_() {
   return choices_('現在出發幾點到？按「傳送我的位置」（LINE 內建的傳位置畫面）。\n要趕課？選第幾節、哪一棟，我倒推你最晚幾點出門。\n\n位置只用來算時間，不會記錄。', // 卡片.gs
     [{ label: '傳送我的位置', uri: 'https://line.me/R/nv/location/' }, ['我要趕課：幾點要出門', '出門時間'], ['我已經在士林站', '到校預估 士林站']],
-    { title: '🚇 幾點出門、幾點到東吳', badge: '選單' });
+    { title: '🚇 預估到達時間', badge: '選單' });
 }
 
 /** 收到 LINE 位置訊息：剛選好課就倒推幾點出門，不然就是「現在出發幾點到」 */
@@ -78,9 +78,9 @@ function etaFromLocation_(lat, lng, uid) {
   }
   const r = mrtPlan_(lat, lng, now.getTime()); // 捷運到站牌.gs
   const again = [['再查一次', '到校預估'], ['我要趕課：幾點要出門', '出門時間']];
-  if (!r.ok || !r.school) return choices_(r.lines.join('\n'), again, { title: '🚇 算不出來', badge: '幾點出門、幾點到東吳' });
+  if (!r.ok || !r.school) return choices_(r.lines.join('\n'), again, { title: '🚇 算不出來', badge: '預估到達時間' });
   const head = `建議走去${r.school.stop}站牌\n${r.school.late ? r.school.early + '–' + r.school.late : '約 ' + r.school.early} 到東吳`;
-  return choices_(head + '\n\n' + r.lines.map(l => '・' + l).join('\n'), again, { title: '🚇 幾點到東吳', badge: '幾點出門、幾點到東吳' });
+  return choices_(head + '\n\n' + r.lines.map(l => '・' + l).join('\n'), again, { title: '🚇 幾點到東吳', badge: '預估到達時間' });
 }
 
 // ===== 合併「出門時間建議」：趕課 → 倒推最晚幾點出門（11/28 團隊決定兩個功能合成一個） =====

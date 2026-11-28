@@ -51,11 +51,11 @@ function cardsPage() {
 <div class="wrap" id="cards">${items}</div>`;
 }
 
-// 圖文選單（2500×1686，11/28 改成「上面一大格＋下面三格」）：主打「幾點出門、幾點到東吳」放最上面整排。
+// 圖文選單（2500×1686，11/28 改成「上面一大格＋下面三格」）：主打「預估到達時間」放最上面整排。
 // 每一格的 text 是按了以後替使用者傳出去的字，要跟 LINE 後台設定的一樣（也要是 bot/選單.gs 認得的分類名稱）。
 // rect 是這一格的位置 [x, y, 寬, 高]，LINE 後台用「上 1 下 3」的版型；用 Messaging API 設定時照這個填 bounds。
 const MENU = [
-  { icon: 'clock-hour-8', label: '幾點出門、幾點到東吳', hint: '傳位置就知道・要趕課幫你倒推・尖峰把排隊算進去', text: '幾點出門、幾點到東吳', primary: true, rect: [0, 0, 2500, 843] },
+  { icon: 'clock-hour-8', label: '預估到達時間', hint: '傳位置就知道・要趕課幫你倒推・尖峰把排隊算進去', text: '預估到達時間', primary: true, rect: [0, 0, 2500, 843] },
   { icon: 'bus', label: '出門前提醒', hint: '557 動態・天氣・上車地點', text: '出門前提醒', rect: [0, 843, 833, 843] },
   { icon: 'car', label: '557 以外的選擇', hint: '共乘・YouBike・雨傘', text: '557 以外的選擇', rect: [833, 843, 834, 843] },
   { icon: 'award', label: '積分與打卡', hint: '5 點換 30 元學餐券', text: '積分與打卡', rect: [1667, 843, 833, 843] },
