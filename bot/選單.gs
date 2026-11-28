@@ -4,7 +4,7 @@
  * 按鈕都做在訊息裡（卡片.gs 的 choices_），不用輸入框上面那排快速回覆。
  *   「選單」        → 一則訊息，四個分類的按鈕（照專案的模組分）
  *   按一個分類      → Bot 把那一類的功能按鈕傳到聊天室
- *   「出門時間」    → 點哪一天 → 點第幾節 → 點哪一棟 → 出門建議（原本要打「明天早八 D 棟」）
+ *   「出門時間」    → 一張卡片選哪一天、最早第幾節 → 出門建議（原本要打「明天早八 D 棟」）
  *   加好友          → 新生須知（新生.gs）＋選單；看不懂的句子 → 回選單
  *
  * 要加新功能的按鈕：在 MENU 對應的分類加一列 [按鈕上的字, 按了傳出的字]。
@@ -52,8 +52,8 @@ const MENU = [
   },
 ];
 
-// 一則訊息裡的按鈕排成兩欄，節次放 13 個（中午的第 E 節很少排課，要用打的）
-const MENU_PERIODS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D'];
+// 節次按鈕排兩欄，第 1～C 節（11/28 團隊設計稿拿掉第 D 節；中午的第 E 節很少排課，要用打的）
+const MENU_PERIODS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C'];
 // 有教室的大樓 12 棟，加上「不指定」
 const MENU_BUILDINGS = ['B', 'D', 'R', 'H', 'G', 'F', 'C', 'N', 'M', 'P', 'Q', 'L'];
 
@@ -85,44 +85,51 @@ function menuUnknown_() {
 }
 
 /**
- * 「出門時間」一步一步點：出門時間 [今天|明天] [HH:MM] [大樓代號|不指定] [出發站]
- * 每一步都把前面選過的帶在按鈕傳出的字裡，所以 Bot 不用記住誰點到哪一步。
+ * 「出門時間」：11/28 團隊設計稿，一張卡片選完——上面選哪一天，下面選最早第幾節，按了節次直接出通勤預測（不再問大樓）。
+ *   出門時間 [今天|明天]         → 同一張卡片，選的那天是磚紅；節次按鈕帶著這一天
+ *   出門時間 今天|明天 HH:MM [大樓代號|不指定] [出發站] → 出門建議（舊按鈕帶大樓、出發站也還認得）
  */
 function menuFlow_(text, uid) {
   const p = text.trim().split(/\s+/);
-  const day = p[1], time = p[2], building = p[3], origin = p[4];
+  let day = p[1], time = p[2], building = p[3], origin = p[4];
   const now = new Date();
+  const left = MENU_PERIODS.filter(k => timeOn_(now, PERIODS[k]) > now); // 今天還沒開始的節次
 
-  if (day !== '今天' && day !== '明天') {
-    return choices_('哪一天要去學校？', [['今天', '出門時間 今天'], ['明天', '出門時間 明天']], { title: '⏰ 出發時間規劃', badge: '第 1 步', primary: false });
-  }
   if (!/^\d{2}:\d{2}$/.test(time || '')) {
-    // 今天只列還沒開始的節次
-    const periods = MENU_PERIODS.filter(k => day === '明天' || timeOn_(now, PERIODS[k]) > now);
-    if (!periods.length) return choices_('今天的課都已經開始了，要改看明天的上課時間嗎？', [['看明天的', '出門時間 明天']]);
-    return choices_('你' + day + '第幾節有課？\n\n例如：第一節、第二節', periods.map(k => ['第 ' + k + ' 節 ' + PERIODS[k], '出門時間 ' + day + ' ' + PERIODS[k]]), { title: '⏰ 出發時間規劃', badge: '第 2 步' });
+    if (day !== '今天' && day !== '明天') day = left.length ? '今天' : '明天'; // 沒選過就先選今天（今天的課都開始了就選明天）
+    const periods = day === '明天' ? MENU_PERIODS : left;
+    const blocks = [
+      { hr: true },
+      { h: '你哪一天要去學校？', first: true },
+      { chips: ['今天', '明天'].map(d => ({ label: d, text: '出門時間 ' + d, selected: d === day })) },
+      { hr: true },
+      { h: '你最早第幾節有課？', first: true },
+    ];
+    if (periods.length) {
+      blocks.push({ text: '請選擇當天最早需要到校的節次。', muted: true },
+        { chips: periods.map(k => ({ label: '第 ' + k + ' 節 ' + PERIODS[k], text: '出門時間 ' + day + ' ' + PERIODS[k] })) });
+    } else {
+      blocks.push({ text: '今天的課都已經開始了，請改選明天。', muted: true });
+    }
+    blocks.push({ panel: { title: 'ⓘ 小提醒', lines: ['選擇當天最早的上課節次，系統將依照課程時間，幫你估算建議出門時間及預計抵達時間。'], quiet: true } });
+    return dsCard_({ kicker: '通勤時間設定', title: '⏰ 出發時間規劃', blocks: blocks }); // 卡片.gs
   }
-  // 日期和節次已確定：先查放假／考試週。放假就不用再問大樓、也不出建議卡。
+  // 日期和節次已確定：先查放假／考試週。放假就不出建議卡。
+  if (day !== '今天' && day !== '明天') day = '今天';
+  if (ORIGINS[building]) { origin = building; building = ''; } // 出門時間 明天 08:10 劍南路站
   const ctx = classContext_({ day: day, arriveTime: time, building: BUILDINGS[building] ? building : '' });
   if (ctx.holiday) return holidayReply_(ctx);
-  if (!BUILDINGS[building] && building !== '不指定') {
-    // 還沒選大樓時，出發站可能佔在大樓那一格（出門時間 明天 08:10 劍南路站）
-    const carried = ORIGINS[building] ? building : (ORIGINS[origin] ? origin : '');
-    const originTail = carried && carried !== '士林站' ? ' ' + carried : '';
-    const items = MENU_BUILDINGS.map(k => [k + ' ' + menuBuildingName_(k), '出門時間 ' + day + ' ' + time + ' ' + k + originTail]);
-    return choices_('你在哪一棟上課？\n\n我會幫你估算從下車地點走到教室需要的時間。', items.concat([['不指定', '出門時間 ' + day + ' ' + time + ' 不指定' + originTail]]), { title: '⏰ 出發時間規劃', badge: '第 3 步' });
-  }
   if (origin === '選出發站') {
-    const base = ['出門時間', day, time, building].join(' ');
+    const base = ['出門時間', day, time, building || '不指定'].join(' ');
     return choices_('要從哪一個捷運站出發？', Object.keys(ORIGINS).map(name => [name, base + ' ' + name]), { title: '⏰ 出發時間規劃', badge: '換出發站', primary: false });
   }
-  return compareQuery_({ // 比較器.gs
+  return compareQuery_({ // 比較器.gs：不問大樓，直接出通勤預測（走進校園的時間用一般情況）
     intent: '去學校',
     arriveTime: time,
-    building: building === '不指定' ? '' : building,
+    building: BUILDINGS[building] ? building : '',
     day: day,
     origin: ORIGINS[origin] ? origin : '',
-  }, text);
+  }, BUILDINGS[building] || / 不指定( |$)/.test(text) ? text : text + ' 不指定'); // 沒選大樓＝不指定（compareQuery_ 看到「不指定」就不再問大樓）
 }
 
 /** 按鈕上的大樓名稱：大家習慣叫簡稱的用簡稱，其他用全名 */

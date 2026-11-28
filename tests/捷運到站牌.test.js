@@ -152,9 +152,9 @@ test('在 LINE 裡完成：傳「到校預估」→ 按鈕打開 LINE 的傳送�
   assert.doesNotMatch(card, /script\.google\.com|page=eta/);
   env.call('handleEvent_', { type: 'message', replyToken: 'r', source: { userId: 'A' }, message: { type: 'location', latitude: SHIPAI[0], longitude: SHIPAI[1] } });
   const msgs = env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body.messages;
-  assert.equal(msgs.length, 2, '先說最近的捷運站，再給結果');
-  assert.match(msgs[0].altText, /距離最近的捷運站：石牌站/);
-  const reply = msgs[1];
+  assert.equal(msgs.length, 1, '11/28：直接給結果，不再多推一張「最近的捷運站」');
+  const reply = msgs[0];
+  assert.match(JSON.stringify(reply.contents), /從石牌站出發/);
   assert.match(reply.altText, /幾點到東吳/);
   assert.match(reply.altText, /🚌 09:\d\d–\d\d:\d\d 之間會來一台 557/);
   assert.match(reply.altText, /⏭️ 下一台 .+；錯過這台，.+ 到東吳/);
@@ -165,18 +165,36 @@ test('在 LINE 裡完成：傳「到校預估」→ 按鈕打開 LINE 的傳送�
 });
 
 // ===== 合併「出門時間建議」 =====
-const lastReply = env => env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body.messages.slice(-1)[0]; // 最後一張（傳位置會先有一張「最近的捷運站」）
+const lastReply = env => env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body.messages.slice(-1)[0]; // 最後一張（測試模式會先有一張提示）
 const sendText = (env, text) => { env.call('handleEvent_', { type: 'message', replyToken: 'r', source: { userId: 'A' }, message: { type: 'text', text } }); return lastReply(env); };
 const sendLoc = (env, lat, lng) => { env.call('handleEvent_', { type: 'message', replyToken: 'r', source: { userId: 'A' }, message: { type: 'location', latitude: lat, longitude: lng } }); return lastReply(env); };
 
-test('合併入口：傳送我的位置、我要趕課、我已經在士林站', () => {
+test('入口（11/28 團隊設計稿）：傳送我的位置、選擇捷運站、我已經在士林站、出發時間規劃；說明和位置隱私說明', () => {
   const env = loadBot(ALL);
   const card = env.call('etaButton_');
-  const json = JSON.stringify(card);
-  assert.match(card.altText, /預估到達時間/);
-  assert.match(json, /line\.me\/R\/nv\/location/);
-  assert.match(json, /"text":"出門時間"/);
-  assert.match(json, /"text":"到校預估 士林站"/);
+  assert.match(card.altText, /^通勤時間預估\n📍 預估到達時間\n現在出發，幾點能到東吳？\n傳送目前位置，Bot 將幫你估算：\n🚉 走到哪個捷運站或公車站\n🚌 建議搭乘哪班公車\n🕘 幾點到達東吳大學\n如果已經在士林站，也可以直接選擇下方按鈕。\n🛡️ 位置隱私說明\n位置僅用於計算通勤時間，不會記錄。/);
+  assert.doesNotMatch(card.altText, /^出門前提醒/, '左上角不再寫出門前提醒');
+  assert.deepEqual(buttonsOf(card), [['📍 傳送我的位置', 'https://line.me/R/nv/location/'], ['🚇 選擇捷運站', '選擇捷運站'], ['🚉 我已經在士林站', '我已經在士林站'], ['⏰ 出發時間規劃', '出發時間規劃']]);
+  assert.match(sendText(env, '我已經在士林站').altText, /幾點到東吳/);
+  assert.match(sendText(env, '出發時間規劃').altText, /出發時間規劃/);
+});
+
+test('選擇捷運站：先選路線、再選站，按了直接出預估（淡水信義線的士林站就是我已經在士林站）', () => {
+  const env = loadBot(ALL);
+  env.setNow('2026-11-25T09:05:00+08:00');
+  const lines = sendText(env, '選擇捷運站');
+  assert.deepEqual(buttonsOf(lines).map(b => b[0]), ['淡水信義線', '文湖線', '松山新店線', '中和新蘆線', '板南線', '環狀線']);
+  const red = sendText(env, '選擇捷運站 淡水信義線');
+  const b = buttonsOf(red);
+  const names = b.map(x => x[0]);
+  assert.ok(names.indexOf('劍潭站') + 1 === names.indexOf('士林站') && names.indexOf('士林站') + 1 === names.indexOf('芝山站'), names.join('、'));
+  assert.deepEqual(b.find(x => x[0] === '士林站'), ['士林站', '我已經在士林站']);
+  assert.deepEqual(b.find(x => x[0] === '石牌站'), ['石牌站', '從石牌站出發']);
+  assert.deepEqual(b.slice(-1)[0], ['換一條路線', '選擇捷運站']);
+  const r = sendText(env, '從石牌站出發');
+  assert.match(r.altText, /人在石牌站/);
+  const blue = buttonsOf(sendText(env, '選擇捷運站 板南線'));
+  assert.ok(blue.some(x => x[1] === '從台北車站出發'), '台北車站不會變成「台北車站站」');
 });
 
 test('我已經在士林站：走 5 分鐘到站牌，再估幾點到東吳', () => {
@@ -251,10 +269,10 @@ test('測試模式：假裝週三 09:05 → 傳位置照週三算，回覆第一
   const r = replyOf(env, 'A', { type: 'location', latitude: SHIPAI[0], longitude: SHIPAI[1] });
   assert.equal(r[0].altText, '🧪 測試模式：當成週三 09:05');
   assert.equal(r[0].type, 'flex', '提示也是卡片');
-  assert.match(r[1].altText, /距離最近的捷運站/);
-  assert.match(r[2].altText, /搭捷運，09:20 到士林站/);
-  assert.match(r[2].altText, /09:25 到站牌/);
-  assert.match(r[2].altText, /09:\d\d–\d\d:\d\d 到東吳/);
+  assert.equal(r.length, 2, '提示＋結果（不再多一張最近的捷運站）');
+  assert.match(r[1].altText, /搭捷運，09:20 到士林站/);
+  assert.match(r[1].altText, /09:25 到站牌/);
+  assert.match(r[1].altText, /09:\d\d–\d\d:\d\d 到東吳/);
   // 換回真的時間
   assert.ok(Math.abs(env.run('Date.now()') - Date.now()) < 5000, 'Date 已經換回來');
   // 別人不受影響
@@ -292,17 +310,12 @@ test('01 前往士林站：出發、走到捷運站、搭幾點往哪個方向�
   assert.deepEqual(rows, [['出發', '09:05'], ['走到石牌站（約 6 分）', '09:11'], ['搭捷運（往大安／廣慈）', '09:15'], ['抵達士林捷運站', '09:20'], ['抵達 557 站牌', '09:25']]);
 });
 
-test('傳位置：先說最近的捷運站，附近其他站可以按；打「從北投站出發」就從原本的位置走去北投站重算', () => {
+test('傳位置後換站：10 分鐘內按「選擇捷運站」選北投站（或打「從北投站出發」），從原本的位置走去北投站重算', () => {
   const env = loadBot(ALL);
   env.setNow('2026-11-25T09:05:00+08:00');
   env.walkSeconds = () => 6 * 60;
   replyOf(env, 'A', { type: 'location', latitude: SHIPAI[0], longitude: SHIPAI[1] });
-  const [notice] = allReplies(env);
-  assert.match(notice.altText, /距離最近的捷運站：石牌站/);
-  const picks = buttonsOf(notice).map(b => b[1]);
-  assert.equal(picks.length, 3);
-  assert.ok(picks.every(t => /^從.+出發$/.test(t)), picks.join('、'));
-  assert.ok(picks.includes('從唭哩岸站出發') || picks.includes('從明德站出發'), picks.join('、'));
+  assert.match(allReplies(env)[0].altText, /走到石牌站/, '最近的是石牌站');
   const r = allReplies(env, replyOf(env, 'A', { type: 'text', text: '從北投站出發' })).slice(-1)[0];
   assert.match(r.altText, /走到北投站約 6 分鐘/, '還是從剛剛的位置走過去');
   assert.match(r.altText, /搭捷運，09:\d\d 到士林站/);
@@ -324,9 +337,33 @@ test('出發時間規劃也可以換站：選好課、傳位置，再按別的�
   env.walkSeconds = () => 6 * 60;
   sendText(env, '出門時間 明天 10:10 D');
   const first = allReplies(env, sendLoc(env, SHIPAI[0], SHIPAI[1]));
-  assert.match(JSON.stringify(first[0]), /出發時間規劃/, '最近的捷運站那張標明是出發時間規劃');
-  assert.match(first[1].altText, /明天 10:10 上課/);
+  assert.equal(first.length, 1);
+  assert.match(first[0].altText, /明天 10:10 上課/);
   const again = replyOf(env, 'A', { type: 'text', text: '從北投站出發' }).slice(-1)[0];
   assert.match(again.altText, /明天 10:10 上課/);
   assert.match(again.altText, /走到北投站約 6 分鐘/);
+});
+
+test('預估結果卡（11/28 團隊設計稿）：建議班次、排隊說明精簡、下一班備選有用途說明、替代上車地點', () => {
+  const card = require('./sample-cards').sampleCards().預估到達時間尖峰;
+  const words = [];
+  require('./helpers').walk(card.contents, n => { if (n.type === 'text') words.push(n.text); });
+  const all = words.join('\n');
+  assert.match(all, /02 557 搭乘建議\n建議班次/);
+  assert.doesNotMatch(all, /首選班次|更推薦的上車地點/);
+  assert.match(all, /排隊機率約 \d+%，(建議預留候車時間。若未能上車，可改搭下一班。|大多可以直接上車。)/);
+  assert.doesNotMatch(all.match(/排隊機率約[^\n]*/)[0], /到東吳|\d\d:\d\d/, '排隊說明不重複抵達時間');
+  assert.match(all, /下一班備選\n若錯過目前班次，可參考下一班預估時間。/);
+  assert.match(all, /💡 03 替代上車地點\n士林國中站/);
+  assert.match(all, /從捷運士林站走到士林國中站約 5 分鐘。/);
+});
+
+test('我已經在士林站、沒有預測的時間：預計到站牌時間＋班次預測提醒（琥珀色面板）', () => {
+  const card = require('./sample-cards').sampleCards()['我已經在士林站：沒有預測'];
+  assert.match(card.altText, /^🚉 幾點到東吳\n從捷運士林站走到 557 站牌約 5 分鐘，約 21:55 到站牌\n目前尚無 557 班次預測資料，僅提供平日 07:00–18:30 的預測。/);
+  const json = JSON.stringify(card.contents);
+  assert.match(json, /"text":"我已經在士林站"/);
+  assert.match(json, /"text":"21:55","size":"xxl","color":"#A63A2B"/);
+  assert.match(json, /"backgroundColor":"#FEF3E2"/);
+  assert.deepEqual(buttonsOf(card), [['再查一次', '我已經在士林站'], ['⏰ 出發時間規劃', '出發時間規劃']]);
 });

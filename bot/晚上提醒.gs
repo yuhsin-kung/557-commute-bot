@@ -75,9 +75,28 @@ function subscribe_(userId, on) {
   } else {
     sheet.appendRow([userId, on ? '訂閱中' : '已取消', new Date()]);
   }
-  return on
-    ? '✅ 訂閱成功！\n\n明天早上會下雨、或是考試週的時候，我會在前一晚 9 點提醒你。\n沒事的晚上不會打擾你 🙂\n\n不想收了就傳「取消提醒」。'
-    : '已取消提醒 👋\n想再收的話傳「訂閱提醒」就好。';
+  if (on) {
+    return dsCard_({ // 卡片.gs（11/28 團隊設計稿）
+      title: '✅ 訂閱成功！',
+      lead: '已成功開啟雨天與考試週提醒。',
+      blocks: [
+        { stat: { label: '提醒時間', boldLabel: true, value: '每晚 9:00', note: '隔天降雨機率達 ' + RAIN_ALERT_POP + '% 以上，或遇到考試週時，將提前通知你。' } },
+        { text: '📅 週末及放假日不會推播提醒。', muted: true },
+        { hr: true },
+        { text: '不想再收到提醒？可隨時選擇「取消提醒」。', muted: true },
+      ],
+    });
+  }
+  return dsCard_({
+    title: '✅ 已取消提醒！',
+    lead: '已關閉雨天與考試週提醒，之後不會再收到相關推播。',
+    blocks: [{ panel: { title: '想重新開啟提醒嗎？', lines: ['隨時傳送「訂閱提醒」，即可重新開啟通知。'], quiet: true, margin: 'md' } }],
+  });
+}
+
+/** 這個人現在有沒有訂閱（降雨查詢、提醒設定的按鈕依這個改變） */
+function isSubscribed_(userId) {
+  return subscribers_().indexOf(userId) >= 0;
 }
 
 function subscribers_() {

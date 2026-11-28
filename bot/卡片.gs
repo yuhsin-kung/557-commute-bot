@@ -38,6 +38,9 @@ const UI = {
   ink: '#111827',        // 內文
   muted: '#6B7280',      // 次要文字
   warn: '#B45309',       // 要注意的事（琥珀色）
+  warnBg: '#FEF3E2',     // 琥珀色提醒面板、末班車已過這種狀態標籤的底色
+  good: '#15803D',       // 降雨機率低（綠）
+  mid: '#C2410C',        // 降雨機率中等（橘）
 };
 
 function card_(spec) {
@@ -225,7 +228,8 @@ function dsCard_(spec) {
 
   const items = spec.buttons || [];
   const primaryCount = spec.primaryCount === undefined ? 1 : spec.primaryCount;
-  const footer = items.map((item, i) => choiceChip_(item, i < primaryCount));
+  const footer = items.map((item, i) => dsChip_(item, i < primaryCount));
+  (spec.after || []).forEach(b => footer.push.apply(footer, dsBlock_(b))); // 按鈕下面的說明（例：位置隱私說明）
   if (spec.menu !== false) footer.push(menuLink_());
   const bubble = { type: 'bubble', body: { type: 'box', layout: 'vertical', paddingAll: '20px', backgroundColor: UI.paper, contents: body } };
   if (footer.length) bubble.footer = { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '16px', paddingTop: '0px', backgroundColor: UI.paper, contents: footer };
@@ -233,8 +237,31 @@ function dsCard_(spec) {
   const labels = items.map(item => '［' + (Array.isArray(item) ? item[0] : item.label) + '］').join('');
   const words = [];
   dsWalkText_(bubble.body, words);
+  (spec.after || []).forEach(b => dsBlock_(b).forEach(n => dsWalkText_(n, words)));
   const alt = spec.alt || words.join('\n');
   return { type: 'flex', altText: (alt + (labels ? '\n' + labels : '')).slice(0, 400), contents: bubble };
+}
+
+/**
+ * 設計稿的按鈕：[字, 傳出的字]、{ label, text }、{ label, uri }、{ label, picker }。
+ * primary 是磚紅底白字；style 'outline' 是白底、磚紅字、灰框；selected 也是磚紅底（選過的日期）
+ */
+function dsChip_(item, primary) {
+  const label = Array.isArray(item) ? item[0] : item.label;
+  let action;
+  if (Array.isArray(item)) action = { type: 'message', label: label.slice(0, 20), text: item[1] };
+  else if (item.uri) action = { type: 'uri', label: label.slice(0, 20), uri: item.uri };
+  else if (item.picker) action = Object.assign({ type: 'datetimepicker', label: label.slice(0, 20) }, item.picker);
+  else action = { type: 'message', label: label.slice(0, 20), text: item.text };
+  const solid = (primary && !(item && item.style === 'outline')) || (item && item.selected);
+  const outline = item && item.style === 'outline';
+  const box = {
+    type: 'box', layout: 'vertical', flex: 1, cornerRadius: '8px', paddingAll: '12px', action: action,
+    backgroundColor: solid ? UI.brand : outline ? UI.paper : UI.soft,
+    contents: [dsTx_(label, 'sm', solid ? UI.onBrand : outline ? UI.brand : UI.ink, { weight: 'bold', align: 'center' })],
+  };
+  if (outline) { box.borderWidth = '1px'; box.borderColor = UI.line; }
+  return box;
 }
 
 function dsTx_(text, size, color, extra) {
@@ -260,7 +287,82 @@ function dsBlock_(b) {
     if (b.note) out.push(dsTx_(b.note, 'xs', UI.muted, { margin: 'xs' }));
     return out;
   }
+  if (b.hr) return [{ type: 'separator', margin: 'lg', color: UI.line }];
+  if (b.h) return [dsTx_(b.h, 'md', UI.ink, { weight: 'bold', margin: b.first ? 'md' : 'lg' })];
   if (b.text) return [dsTx_(b.text, 'sm', b.muted ? UI.muted : UI.ink, { margin: 'md' })];
+  if (b.chips) {
+    // 卡片裡的按鈕（例：選哪一天、第幾節），預設排兩欄；selected 的那顆是磚紅
+    const cols = b.cols || 2;
+    const chips = b.chips.map(item => dsChip_(item, false));
+    const rows = [];
+    for (let i = 0; i < chips.length; i += cols) {
+      const row = chips.slice(i, i + cols);
+      while (row.length < cols) row.push({ type: 'filler' });
+      rows.push({ type: 'box', layout: 'horizontal', spacing: 'sm', contents: row });
+    }
+    return [{ type: 'box', layout: 'vertical', margin: 'md', spacing: 'sm', contents: rows }];
+  }
+  if (b.group) {
+    // 灰色面板裡一列一列（中間有分隔線）：[標題, 右邊的值, 下面的小字]
+    const inner = [];
+    b.group.forEach((r, i) => {
+      if (i) inner.push({ type: 'separator', margin: 'md', color: UI.line });
+      const top = [dsTx_(r[0], 'sm', UI.ink, { weight: 'bold', flex: 1 })];
+      if (r[1]) top.push(dsTx_(r[1], 'sm', UI.ink, { weight: 'bold', align: 'end', flex: 0, wrap: false }));
+      inner.push({ type: 'box', layout: 'horizontal', margin: i ? 'md' : 'none', contents: top });
+      if (r[2]) inner.push(dsTx_(r[2], 'xs', UI.muted, { margin: 'xs' }));
+    });
+    return [dsBox_(inner, { margin: 'md', paddingAll: '14px' })];
+  }
+  if (b.hero) {
+    // 推薦的那一個：灰色面板，名稱磚紅大字、右上小標籤、大的時間
+    const h = b.hero;
+    const top = [dsTx_(h.name, 'xl', UI.brand, { weight: 'bold', flex: 1 })];
+    if (h.badge) top.push(dsBadge_(h.badge));
+    const inner = [{ type: 'box', layout: 'horizontal', alignItems: 'center', contents: top }];
+    if (h.big) inner.push(dsTx_(h.big, 'xl', UI.ink, { weight: 'bold', margin: 'sm' }));
+    if (h.note) inner.push(dsTx_(h.note, 'xs', UI.muted, { margin: 'xs' }));
+    if (h.sub) inner.push(dsTx_(h.sub, 'xs', UI.ink, { margin: 'md' }));
+    return [dsBox_(inner, { margin: 'md', paddingAll: '14px' })];
+  }
+  if (b.list) {
+    // 簡潔列表：[名稱, 名稱下的小字, 右邊的值, 值下的小字]，中間有分隔線
+    const out = [];
+    b.list.forEach((r, i) => {
+      if (i) out.push({ type: 'separator', margin: 'md', color: UI.line });
+      out.push({ type: 'box', layout: 'horizontal', margin: 'md', contents: [
+        { type: 'box', layout: 'vertical', flex: 1, contents: [dsTx_(r[0], 'sm', UI.ink)].concat(r[1] ? [dsTx_(r[1], 'xxs', UI.muted, { margin: 'xs' })] : []) },
+        { type: 'box', layout: 'vertical', flex: 0, contents: [dsTx_(r[2], 'sm', UI.ink, { weight: 'bold', align: 'end', wrap: false })].concat(r[3] ? [dsTx_(r[3], 'xxs', UI.muted, { align: 'end', margin: 'xs' })] : []) },
+      ] });
+    });
+    return out;
+  }
+  if (b.stat) {
+    // 灰色面板：小標、磚紅大字、說明（例：提醒時間 每晚 9:00、預計抵達 557 站牌 21:54）
+    const s = b.stat;
+    const inner = [dsTx_(s.label, 'sm', s.boldLabel ? UI.ink : UI.muted, s.boldLabel ? { weight: 'bold' } : {}), dsTx_(s.value, 'xxl', UI.brand, { weight: 'bold', margin: 'sm' })];
+    if (s.note) inner.push(dsTx_(s.note, 'xs', UI.muted, { margin: 'sm' }));
+    return [dsBox_(inner, { margin: 'md', paddingAll: '14px' })];
+  }
+  if (b.metric) {
+    // 左邊標籤、右邊有顏色的大數字（例：降雨機率 10%）
+    return [{ type: 'box', layout: 'horizontal', margin: 'lg', alignItems: 'center', contents: [
+      dsTx_(b.metric[0], 'md', UI.ink, { weight: 'bold', flex: 1 }),
+      dsTx_(b.metric[1], 'xxl', b.metric[2] || UI.brand, { weight: 'bold', flex: 0, align: 'end' }),
+    ] }];
+  }
+  if (b.status) {
+    // 站名＋右邊的狀態：[站名, 狀態文字, true＝狀態標籤（末班車已過這種，琥珀色）]
+    const out = [];
+    b.status.forEach((r, i) => {
+      if (i) out.push({ type: 'separator', margin: 'md', color: UI.line });
+      const right = r[2]
+        ? { type: 'box', layout: 'vertical', flex: 0, backgroundColor: UI.warnBg, cornerRadius: '12px', paddingAll: '4px', paddingStart: '8px', paddingEnd: '8px', contents: [dsTx_(r[1], 'xxs', UI.warn, { wrap: false })] }
+        : dsTx_(r[1], 'sm', UI.ink, { weight: 'bold', align: 'end', flex: 0 });
+      out.push({ type: 'box', layout: 'horizontal', margin: 'md', alignItems: 'center', spacing: 'md', contents: [dsTx_(r[0], 'sm', UI.ink, { weight: 'bold', flex: 1 }), right] });
+    });
+    return out;
+  }
   if (b.small) return [dsTx_(b.small, 'xxs', UI.muted, { margin: 'lg' })];
   if (b.table) {
     const row = (cells, bold) => ({ type: 'box', layout: 'horizontal', paddingAll: '10px', contents: [
@@ -328,11 +430,12 @@ function dsBlock_(b) {
   }
   if (b.panel) {
     const p = b.panel;
-    const brand = p.tone === 'brand';
+    const brand = p.tone === 'brand', warn = p.tone === 'warn';
     const inner = [];
-    if (p.title) inner.push(dsTx_(p.title, 'sm', brand ? UI.brandDark : UI.ink, { weight: 'bold' }));
-    (p.lines || []).forEach((t, i) => inner.push(dsTx_(t, 'sm', brand ? UI.brandDark : UI.ink, { margin: i || p.title ? 'sm' : 'none' })));
-    return [dsBox_(inner, { margin: 'lg', backgroundColor: brand ? UI.brandBg : UI.soft, paddingAll: '14px' })];
+    if (p.title) inner.push(dsTx_(p.title, 'sm', brand ? UI.brandDark : warn ? UI.warn : UI.ink, { weight: 'bold' }));
+    const lineColor = brand ? UI.brandDark : (p.quiet || warn) ? UI.muted : UI.ink; // quiet：說明用灰字
+    (p.lines || []).forEach((t, i) => inner.push(dsTx_(t, p.quiet || warn ? 'xs' : 'sm', lineColor, { margin: i || p.title ? 'sm' : 'none' })));
+    return [dsBox_(inner, { margin: p.margin || 'lg', backgroundColor: brand ? UI.brandBg : warn ? UI.warnBg : UI.soft, paddingAll: '14px' })];
   }
   return [];
 }

@@ -30,6 +30,13 @@ function sampleCards() {
   env.run('tdx_ = () => __bus;');
   keep('557 到站', env.call('busReply_', 0, ['捷運士林站(中正)', '士林國中'], '557 士林 → 東吳'));
   keep('557 回家', env.call('busReply_', 1, ['東吳大學(錢穆故居)'], '557 東吳 → 士林'));
+  env.context.__bus557 = [
+    { Direction: 0, StopName: { Zh_tw: '捷運士林站(中正)' }, EstimateTime: 240 },
+    { Direction: 0, StopName: { Zh_tw: '士林國中' }, EstimateTime: 360 },
+    { Direction: 1, StopName: { Zh_tw: '東吳大學(錢穆故居)' }, StopStatus: 3 },
+  ];
+  env.run('tdx_ = () => __bus557;');
+  keep('557 即時動態', env.call('bus557Reply_'));
 
   const weather = pop => {
     env.onFetch = url => (url.includes('opendata.cwa.gov.tw') ? { body: { records: { Locations: [{ Location: [{ WeatherElement: [{ Time: [
@@ -50,9 +57,7 @@ function sampleCards() {
   keep('選單', env.call('menuCard_'));
   keep('分類：出門前提醒', env.call('menuCategory_', '出門前提醒'));
   keep('分類：557 以外的選擇', env.call('menuCategory_', '557 以外的選擇'));
-  keep('出門時間：選哪一天', env.call('menuFlow_', '出門時間'));
-  keep('出門時間：選節次', env.call('menuFlow_', '出門時間 明天'));
-  keep('出門時間：選大樓', env.call('menuFlow_', '出門時間 明天 08:10'));
+  keep('出發時間規劃：選日期和節次', env.call('menuFlow_', '出門時間 明天'));
   keep('共乘：選方向', env.call('cpText_', 'A', '計程車共乘'));
   keep('共乘：現在走', env.call('cpText_', 'A', '士林站 → 東吳'));
   keep('共乘：選時間', env.call('cpText_', 'A', '共乘 去學校 預約'));
@@ -89,18 +94,25 @@ function sampleCards() {
   // 預估到達時間（團隊設計稿的樣子）：尖峰從石牌出發、離峰已經在士林站
   env.walkSeconds = () => 6 * 60;
   env.setNow('2026-11-25T09:05:00+08:00');
-  const firstReply = env.call('etaFromLocation_', 25.1144, 121.5154, 'sample');
-  keep('最近的捷運站', firstReply[0]);
-  keep('預估到達時間尖峰', firstReply[1]);
+  keep('預估到達時間：入口', env.call('etaButton_'));
+  keep('選擇捷運站', env.call('etaPickStation_', '選擇捷運站'));
+  keep('選擇捷運站：淡水信義線', env.call('etaPickStation_', '選擇捷運站 淡水信義線'));
+  keep('預估到達時間尖峰', env.call('etaFromLocation_', 25.1144, 121.5154, 'sample'));
   env.setNow('2026-11-25T11:05:00+08:00');
   keep('預估到達時間離峰士林站', env.call('etaFromShilin_'));
+  env.setNow('2026-11-25T21:50:00+08:00');
+  keep('我已經在士林站：沒有預測', env.call('etaFromShilin_'));
   // 出發時間規劃（從位置倒推）：明天 13:10 B 棟從北投、明天 09:10 D 棟從石牌（尖峰）
   env.setNow('2026-11-24T21:00:00+08:00');
   env.run('rainPop_ = () => 20'); // 不下雨的一般情況
   env.call('etaRememberClass_', 'sample', '明天', '13:10', 'B');
-  keep('出發時間規劃', env.call('etaFromLocation_', 25.1316, 121.4986, 'sample')[1]);
+  keep('出發時間規劃', env.call('etaFromLocation_', 25.1316, 121.4986, 'sample'));
   env.call('etaRememberClass_', 'sample', '明天', '10:10', 'D');
-  keep('出發時間規劃尖峰', env.call('etaFromLocation_', 25.1144, 121.5154, 'sample')[1]);
+  keep('出發時間規劃尖峰', env.call('etaFromLocation_', 25.1144, 121.5154, 'sample'));
+  // 雨天與考試週訂閱提醒：設定、訂閱成功、已取消
+  keep('雨天與考試週提醒', env.call('remindSettings_', 'S'));
+  keep('訂閱成功', env.call('subscribe_', 'S', true));
+  keep('已取消提醒', env.call('subscribe_', 'S', false));
   // 純文字回覆也包成卡片（Code.gs 的 reply_ 用 textCard_）
   keep('純文字改卡片：有標題', env.call('textCard_', '✅ 訂閱成功！\n\n明天會下雨或遇到考試週，前一晚 9 點提醒你。'));
   keep('純文字改卡片：一行', env.call('textCard_', '已取消出門提醒。'));

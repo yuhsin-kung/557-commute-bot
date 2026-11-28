@@ -74,10 +74,10 @@ const WEATHER_EXAM_EXTRA_MIN = 20; // 隔天降雨機率 60% 以上或考試週�
 
 // ===== 主流程 =====
 
-function compareReply_(text) {
+function compareReply_(text, uid) {
   const q = parseQuestion_(text);
   if (q.intent === '回家') return busReply_(1, ['東吳大學(錢穆故居)'], '557 東吳 → 士林');
-  if (q.intent === '天氣') return rainReply_();
+  if (q.intent === '天氣') return rainReply_(uid);
   if (q.intent === '站牌') return stationReply_(); // 站位變更.gs
   if (q.intent === '其他' && !q.building && !q.arriveTime) return menuUnknown_(); // 選單.gs：看不懂就給按鈕
   return compareQuery_(q, text);
@@ -185,13 +185,16 @@ function incompleteTimeReply_(q) {
   return choices_(hint, items, { title: '請補上課時間', badge: '時間', primary: false });
 }
 
-/** 即時模式：查出發站所有路線的到站時間，算出各條到教室的時間 */
+/**
+ * 即時模式：查出發站所有路線的到站時間，算出各條到教室的時間。
+ * 11/28 團隊設計稿：今日推薦路線（公車最快）→ 其他公車路線 → 其他通勤方式（YouBike、計程車共乘）→ 通勤建議
+ */
 function liveReply_(originName, building, classAt) {
   const o = ORIGINS[originName];
   const etas = etaAtStop_(o.stop);
   const now = new Date();
   const target = building ? building + ' 棟' : '東吳大學';
-  const head = { badge: '多路線比較', title: originName + ' → ' + target, subtitle: building ? BUILDINGS[building][0] : '' };
+  const head = { kicker: '多路線比較', title: originName + ' → ' + target, route: building ? BUILDINGS[building][0] : '' };
 
   const options = [];
   o.routes.forEach(([route, dir, dest]) => {
@@ -202,46 +205,49 @@ function liveReply_(originName, building, classAt) {
     const total = waitMin + o.rideMin[dest] + walk;
     options.push({ route, dest, waitMin, walk, arrive: addMin_(now, total) });
   });
+  const source = (classAt ? fmt_(classAt) + ' 上課・' : '') + '🔄 TDX 即時資料・' + nowText_() + '｜車程為估計值';
 
   if (!options.length) {
-    return card_(Object.assign(head, { // 卡片.gs
-      notes: ['現在 ' + o.stop + ' 沒有車往東吳的即時資料，可能是末班車已過或還沒發車。'],
-      footer: 'TDX 即時資料・' + nowText_(),
-      buttons: [{ label: '找人共乘計程車', text: '計程車共乘' }, { label: '排明天的出門時間', text: '出門時間 明天' }],
+    return dsCard_(Object.assign(head, { // 卡片.gs
+      blocks: [
+        { hr: true },
+        { panel: { tone: 'warn', title: 'ⓘ 現在沒有公車的即時資料', lines: ['現在 ' + o.stop + ' 沒有車往東吳的即時資料，可能是末班車已過或還沒發車。'] } },
+        { small: '🔄 TDX 即時資料・' + nowText_() },
+      ],
+      buttons: [['找人共乘計程車', '計程車共乘'], ['排明天的出門時間', '出門時間 明天']],
     }));
   }
   options.sort((a, b) => a.arrive - b.arrive);
 
-  const rows = options.slice(0, 4).map((opt, i) => ({
-    label: opt.route,
-    value: (opt.waitMin <= 1 ? '即將進站' : opt.waitMin + ' 分鐘後') + '・' + fmt_(opt.arrive) + ' 到',
-    sub: (opt.dest === CAMPUS ? '直接進校園' : '錢穆故居站下車') + (building ? '，走 ' + opt.walk + ' 分鐘' : '')
-      + (classAt && opt.arrive > classAt ? '（會遲到）' : ''),
-    best: i === 0,
-  }));
-  if (originName === '士林站') otherWays_(now, building, classAt).forEach(r => rows.push(r));
-
-  const notes = [];
-  const warns = [];
+  const late = opt => (classAt && opt.arrive > classAt ? '（會遲到）' : '');
+  const where = opt => (opt.dest === CAMPUS ? '直接進校園' : '錢穆故居站下車') + (building ? '，走 ' + opt.walk + ' 分鐘' : '');
   const best = options[0];
-  const bus557 = options.find(x => x.route === '557');
-  if (best.dest === CAMPUS) {
-    notes.push('目前只要搭乘 ' + best.route + '，便能最快速地抵達學校。');
-  } else {
-    notes.push('目前只要搭乘 ' + best.route + '，便能最快速地抵達錢穆故居站，再步行進校。');
+  const blocks = [
+    { hr: true },
+    { h: '今日推薦路線', first: true },
+    { hero: { name: best.route, badge: '公車最快', big: fmt_(best.arrive) + late(best),
+      note: building ? '預計抵達 ' + building + ' 棟' : best.dest === CAMPUS ? '預計抵達東吳大學' : '預計抵達錢穆故居站',
+      sub: '📍 ' + (best.dest === CAMPUS ? '直接進入校園' : '下車後步行進入校園') + '・' + (best.waitMin <= 1 ? '即將進站' : best.waitMin + ' 分鐘後進站') } },
+  ];
+  const others = options.slice(1, 4);
+  if (others.length) {
+    blocks.push({ h: '其他公車路線' }, { list: others.map(opt => [opt.route, where(opt), fmt_(opt.arrive) + ' 到' + late(opt), opt.waitMin <= 1 ? '即將進站' : opt.waitMin + ' 分鐘後']) });
   }
-  if (originName === '士林站' && bus557 && best.route === '557' && isPeak_(now)) {
-    warns.push('現在是尖峰，557 可能擠不上。其他車到錢穆故居站下車也一樣。');
+  if (originName === '士林站') {
+    blocks.push({ hr: true }, { h: '其他通勤方式' }, { group: otherWays_(now, building, classAt).map(r => [r.label, r.value, r.sub]) });
   }
-  if (classAt && best.arrive > classAt) warns.push(fmt_(classAt) + ' 上課，最快的車也會遲到。可以考慮共乘。');
 
+  const advice = ['想搭公車，推薦選擇 ' + best.route + '，預計 ' + fmt_(best.arrive) + ' 抵達' + (building ? ' ' + building + ' 棟' : best.dest === CAMPUS ? '東吳大學' : '錢穆故居站') + '。'];
+  if (originName === '士林站') advice.push('趕時間可以找人共乘計程車；想自己掌握出發時間，也可以騎 YouBike。');
+  if (originName === '士林站' && best.route === '557' && options.some(x => x.route === '557') && isPeak_(now)) {
+    advice.push('⚠️ 現在是尖峰，557 可能擠不上。其他車到錢穆故居站下車也一樣。');
+  }
+  if (classAt && best.arrive > classAt) advice.push('⚠️ ' + fmt_(classAt) + ' 上課，最快的車也會遲到。可以考慮共乘。');
+  blocks.push({ panel: { title: '💡 通勤建議', lines: [advice.join('')], quiet: true, margin: 'md' } }, { small: source });
 
-  return card_(Object.assign(head, {
-    rows: rows,
-    notes: notes,
-    warns: warns,
-    footer: (classAt ? fmt_(classAt) + ' 上課・' : '') + 'TDX 即時資料・' + nowText_() + '・車程為估計值',
-    buttons: [{ label: '找人共乘計程車', text: '計程車共乘' }, { label: 'YouBike 查詢', text: 'YouBike 查詢' }],
+  return dsCard_(Object.assign(head, {
+    blocks: blocks,
+    buttons: [['找人共乘計程車', '計程車共乘'], ['查看 YouBike 車數', '查看 YouBike 車數']],
   }));
 }
 

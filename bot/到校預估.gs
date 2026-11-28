@@ -142,10 +142,11 @@ function designCard_(spec) {
         { type: 'box', layout: 'vertical', margin: 'sm', height: '8px', cornerRadius: '4px', backgroundColor: ETA_UI.track,
           contents: [{ type: 'box', layout: 'vertical', width: Math.max(pct, 1) + '%', height: '8px', cornerRadius: '4px',
             backgroundColor: sec.queue.busy ? ETA_UI.orange : ETA_UI.calm, contents: [{ type: 'filler' }] }] },
-      ] });
+      ].concat(sec.queue.note ? [etaTx_(sec.queue.note, 'xs', ETA_UI.muted, { margin: 'sm' })] : []) });
     }
     (sec.rows || []).forEach(r => body.push(etaRow_(r[0], r[1])));
     if (sec.subTitle) body.push(etaTx_(sec.subTitle, 'md', ETA_UI.ink, { weight: 'bold', margin: 'lg' }));
+    if (sec.subNote) body.push(etaTx_(sec.subNote, 'xxs', ETA_UI.muted, { margin: 'xs' }));
     (sec.subRows || []).forEach(r => body.push(etaRow_(r[0], r[1])));
   });
   if (spec.tip) {
@@ -159,7 +160,7 @@ function designCard_(spec) {
         etaTx_(t.pctLabel, 'xs', ETA_UI.greenInk, { margin: 'sm', flex: 0 }),
       ] },
       etaTx_(t.text, 'sm', ETA_UI.greenInk, { margin: 'sm' }),
-    ] });
+    ].concat(t.extra ? [etaTx_(t.extra, 'xs', ETA_UI.greenInk, { margin: 'xs' })] : []) });
   }
   (spec.warns || []).forEach(w => body.push(etaTx_('⚠️ ' + w, 'sm', ETA_UI.amber, { margin: 'md' })));
   if (spec.footnote) body.push(etaTx_(spec.footnote, 'xxs', ETA_UI.muted, { margin: 'lg' }));
@@ -181,16 +182,16 @@ function designCard_(spec) {
 /** 02 557 搭乘建議那一段（p557Bus_ 的結果） */
 function etaBusSection_(b, title) {
   return {
-    title: title || '02 557 搭乘建議', badge: '首選班次', big: b.first.replace(/^約 /, ''), bigNote: '預計公車進站時間',
+    title: title || '02 557 搭乘建議', badge: '建議班次', big: b.first.replace(/^約 /, ''), bigNote: '預計公車進站時間',
     queue: { pct: b.qm, busy: b.peak && b.qm >= 10,
-    },
-    subTitle: '下一班備選', subRows: [['進站時間', b.next.replace(/^約 /, '')], ['抵達東吳', b.nextArrive.replace(/^約 /, '')]],
+      note: '排隊機率約 ' + Math.round(b.qm) + '%，' + (b.qm >= 30 ? '建議預留候車時間。若未能上車，可改搭下一班。' : '大多可以直接上車。') },
+    subTitle: '下一班備選', subNote: '若錯過目前班次，可參考下一班預估時間。', subRows: [['進站時間', b.next.replace(/^約 /, '')], ['抵達東吳', b.nextArrive.replace(/^約 /, '')]],
   };
 }
 
 function etaTipOf_(b) {
-  return b.tip ? { title: '03 更推薦的上車地點', name: '士林國中站', pct: Math.round(b.qj) + '%', pctLabel: '預估排隊機率',
-    text: '同一班 557，建議改至士林國中站上車，排隊機率較低。' } : null;
+  return b.tip ? { title: '03 替代上車地點', name: '士林國中站', pct: Math.round(b.qj) + '%', pctLabel: '預估排隊機率',
+    text: '同一班 557，建議改至士林國中站上車，排隊機率較低。', extra: '從捷運士林站走到士林國中站約 5 分鐘。' } : null;
 }
 
 /** 預估到達時間：spec：{ origin, leg: { title, note, rows }, bus, alt } */
@@ -213,11 +214,49 @@ function p557Lines_(atStop) {
 
 // ===== 在 LINE 裡完成：按按鈕 → LINE 自己的「傳送位置」畫面 → Bot 收到位置訊息 → 直接回幾點到東吳（不開外部網頁） =====
 
-/** 「預估到達時間」的入口：現在出發，幾點到東吳（趕課倒推是另一顆按鈕「⏰ 出發時間規劃」） */
+/** 「預估到達時間」的入口：現在出發，幾點到東吳（11/28 團隊設計稿；趕課倒推是另一顆按鈕「⏰ 出發時間規劃」） */
 function etaButton_() {
-  return choices_('現在出發，幾點到東吳？\n按「傳送我的位置」（LINE 內建的傳位置畫面），我幫你算走到哪個捷運站、搭哪班捷運、走去哪個 557 站牌、幾點到東吳。\n\n要趕課、想知道最晚幾點出門，請按「⏰ 出發時間規劃」。位置只用來算時間，不會記錄。', // 卡片.gs
-    [{ label: '傳送我的位置', uri: 'https://line.me/R/nv/location/' }, ['我已經在士林站', '到校預估 士林站'], ['⏰ 出發時間規劃', '出門時間']],
-    { title: '🚇 預估到達時間', badge: '出門前提醒' });
+  return dsCard_({ // 卡片.gs
+    kicker: '通勤時間預估',
+    title: '📍 預估到達時間',
+    blocks: [
+      { h: '現在出發，幾點能到東吳？', first: true },
+      { text: '傳送目前位置，Bot 將幫你估算：', muted: true },
+      { panel: { lines: ['🚉 走到哪個捷運站或公車站', '🚌 建議搭乘哪班公車', '🕘 幾點到達東吳大學'], margin: 'md' } },
+      { text: '如果已經在士林站，也可以直接選擇下方按鈕。', muted: true },
+    ],
+    // 傳送我的位置：LINE 內建的傳位置畫面（不開外部網頁）；選擇捷運站：不傳位置，自己選站
+    buttons: [{ label: '📍 傳送我的位置', uri: 'https://line.me/R/nv/location/' }, ['🚇 選擇捷運站', '選擇捷運站'], ['🚉 我已經在士林站', '我已經在士林站'], ['⏰ 出發時間規劃', '出發時間規劃']],
+    after: [{ panel: { title: '🛡️ 位置隱私說明', lines: ['位置僅用於計算通勤時間，不會記錄。'], quiet: true, margin: 'sm' } }],
+  });
+}
+
+// 「選擇捷運站」：先選路線、再選站（取代以前傳位置後多推一張「最近的捷運站」）
+const ETA_LINES = [['淡水信義線', 'R'], ['文湖線', 'BR'], ['松山新店線', 'G'], ['中和新蘆線', 'O'], ['板南線', 'BL'], ['環狀線', 'Y']];
+
+function etaPickStation_(text) {
+  const lineName = String(text).replace(/^選擇捷運站\s*/, '');
+  const line = ETA_LINES.filter(l => l[0] === lineName)[0];
+  if (!line) {
+    return dsCard_({
+      kicker: '預估到達時間', title: '🚇 選擇捷運站',
+      lead: '先選捷運路線，再選你要出發的車站。剛傳過位置的話，會從你的位置算走到那一站的時間。',
+      blocks: [{ chips: ETA_LINES.map(l => ({ label: l[0], text: '選擇捷運站 ' + l[0] })) }],
+    });
+  }
+  // 轉乘站的代碼像「BL12/R10」：拆開找這條線的那一段，用它的號碼排順序
+  const onLine = s => s[0].split('/').filter(c => c.replace(/[0-9]+$/, '') === line[1])[0];
+  const num = s => Number(onLine(s).replace(/^[A-Z]+/, ''));
+  const stations = MRT_STATIONS.filter(onLine).sort((a, b) => num(a) - num(b)); // 捷運到站牌.gs
+  const chips = stations.map(s => { const nm = /站$/.test(s[1]) ? s[1] : s[1] + '站'; return { label: nm, text: '從' + nm + '出發' }; });
+  if (line[1] === 'R') chips.splice(stations.filter(s => num(s) < 16).length, 0, { label: '士林站', text: '我已經在士林站' });
+  return dsCard_({
+    kicker: '預估到達時間', title: '🚇 ' + line[0],
+    lead: '選你要出發的車站。',
+    blocks: [{ chips: chips }],
+    buttons: [['換一條路線', '選擇捷運站']],
+    primaryCount: 0,
+  });
 }
 
 /**
@@ -232,16 +271,7 @@ function etaFromLocation_(lat, lng, uid) {
   if (uid) CacheService.getScriptCache().put('eta_loc_' + uid, JSON.stringify(ctx), ETA_LOC_MIN * 60);
   const leg = mrtLeg_([ctx.lat, ctx.lng]); // 捷運到站牌.gs
   if (!leg) return textCard_('定位格式不對，請再傳一次位置。'); // 卡片.gs
-  return [etaStationNotice_(ctx, leg), etaResult_(ctx, leg)];
-}
-
-/** 「距離最近的捷運站是○○站」＋附近其他站的按鈕（換站） */
-function etaStationNotice_(ctx, leg) {
-  const others = mrtNearby_([ctx.lat, ctx.lng], 4).filter(s => s.code !== leg.st.code).slice(0, 3); // 捷運到站牌.gs
-  const walk = leg.st.code === 'R16' ? `走到 557 站牌約 ${leg.walk.min} 分鐘` : `走過去約 ${leg.walk.min} 分鐘`;
-  return choices_(`${walk}（${leg.walk.source}）。\n\n不是你要搭的站？按下面換一站，或直接打「從 ○○ 站出發」。位置只暫存 10 分鐘讓你換站，不會記錄。`,
-    others.map(s => [mrtStationName_(s), '從' + mrtStationName_(s) + '出發']),
-    { title: '📍 距離最近的捷運站：' + leg.nm, badge: ctx.pending ? '出發時間規劃' : '預估到達時間', primary: false });
+  return etaResult_(ctx, leg); // 11/28：不再多推一張「最近的捷運站」，要換站按入口的「選擇捷運站」
 }
 
 /** 依出發點算結果：有選課就倒推，不然現在出發 */
@@ -357,7 +387,7 @@ function etaClassFromHere_(leg, pending, now) {
     big: hm(res.depart) + ' 前出門',
     subs: [classLine, '從' + leg.nm + '出發'],
     sections,
-    tip: bus ? etaTipOf_(bus) && Object.assign(etaTipOf_(bus), { title: '04 更推薦的上車地點' }) : null,
+    tip: bus ? etaTipOf_(bus) && Object.assign(etaTipOf_(bus), { title: '04 替代上車地點' }) : null,
     warns: extra.reasons.length ? [extra.reasons.join('、') + '，已多算 ' + extra.min + ' 分鐘。'] : [],
     footnote: leg.atStation ? '' : '走路時間：' + leg.walk.source + '。位置只用來算時間，不會記錄',
     buttons: [['⏰ 到時間提醒我出門', '出門提醒 ' + pending.day + ' ' + hm(res.atStop) + ' 出門 ' + hm(res.depart)]].concat(again),
@@ -374,8 +404,17 @@ function etaFromShilin_() {
   const bus = p557Bus_(atStop);
   etaLog_('已經在士林站', '', atStop, bus && { stop: '捷運士林站（基準）', early: bus.early, late: bus.late, peak: bus.peak });
   const walk = `從捷運士林站走到 557 站牌約 ${MRT_EXIT_TO_STOP_MIN} 分鐘，約 ${hm(atStop)} 到站牌`;
-  if (!bus) return choices_([walk].concat(p557Lines_(atStop)).join('\n'),
-    [['再查一次', '到校預估'], ['⏰ 出發時間規劃', '出門時間']], { title: '🚇 幾點到東吳', badge: '我已經在士林站' });
+  if (!bus) {
+    return dsCard_({ // 卡片.gs（11/28 團隊設計稿）
+      kicker: '我已經在士林站', title: '🚉 幾點到東吳',
+      blocks: [
+        { stat: { label: '預計抵達 557 站牌', value: hm(atStop), note: '從捷運士林站步行約 ' + MRT_EXIT_TO_STOP_MIN + ' 分鐘' } },
+        { panel: { tone: 'warn', title: 'ⓘ 班次預測提醒', lines: ['目前尚無 557 班次預測資料，僅提供平日 07:00–18:30 的預測。'], margin: 'md' } },
+      ],
+      buttons: [['再查一次', '我已經在士林站'], ['⏰ 出發時間規劃', '出發時間規劃']],
+      alt: '🚉 幾點到東吳\n' + walk + '\n目前尚無 557 班次預測資料，僅提供平日 07:00–18:30 的預測。',
+    });
+  }
   return etaCard_({ origin: '從捷運士林站出發', leg: { title: '01 走到 557 站牌', note: `出站走過去約 ${MRT_EXIT_TO_STOP_MIN} 分鐘`, rows: [['抵達 557 站牌', hm(atStop)]] }, bus,
     alt: '🚇 幾點到東吳\n' + walk + '\n' + bus.lines.join('\n') });
 }

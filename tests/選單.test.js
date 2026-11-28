@@ -53,7 +53,7 @@ test('按分類，Bot 把那一類的功能按鈕傳到聊天室', () => {
   const main = send(env, MAIN)[0];
   assert.match(main.altText, /預估到達時間/);
   assert.match(send(env, '幾點出門、幾點到東吳')[0].altText, /預估到達時間/, '舊名稱也認得');
-  assert.deepEqual(buttonsOf(main).map(b => b[1]), ['https://line.me/R/nv/location/', '到校預估 士林站', '出門時間']);
+  assert.deepEqual(buttonsOf(main).map(b => b[1]), ['https://line.me/R/nv/location/', '選擇捷運站', '我已經在士林站', '出發時間規劃']);
   assert.match(send(env, '出發時間規劃')[0].altText, /哪一天要去學校/, '打「出發時間規劃」是趕課倒推');
   assert.match(send(env, '幾點出門')[0].altText, /哪一天要去學校/, '舊名稱「幾點出門」也一樣，不是預估到達時間');
   // 11/28 團隊要求：按鈕傳出的字跟按鈕上的字一樣（去掉表情符號）
@@ -101,7 +101,7 @@ test('走過兩層：功能回覆裡的按鈕（選方向、測驗…）Bot 也�
       });
     });
   });
-  assert.ok(['士林站 → 東吳', '查看我的共乘', '訂閱提醒', '取消提醒', '出門時間', '到校預估 士林站', '回報現場 士林站'].every(t => seen.includes(t)), seen.join('、'));
+  assert.ok(['士林站 → 東吳', '查看我的共乘', '開啟提醒', '關閉提醒', '出門時間 明天', '出門時間 明天 08:10', '選擇捷運站', '我已經在士林站', '回報現場 士林站'].every(t => seen.includes(t)), seen.join('、'));
 });
 
 test('全部的回覆都不用輸入框上面那排按鈕（快速回覆）', () => {
@@ -159,34 +159,40 @@ test('加好友：歡迎的話、新生須知、選單', () => {
   assert.deepEqual(buttonsOf(reply[2]).map(b => b[0]), LABELS);
 });
 
-test('出門時間：點哪一天 → 點第幾節 → 點哪一棟，全程不用打字', () => {
+test('出發時間規劃（11/28 團隊設計稿）：一張卡片選哪一天、最早第幾節（第 1～C 節兩欄），按了節次直接出建議，不再問大樓', () => {
   const env = start();
-  const step1 = send(env, '出門時間')[0];
-  assert.equal(saidOf(step1), '⏰ 出發時間規劃\n哪一天要去學校？');
-  assert.deepEqual(buttonsOf(step1), [['今天', '出門時間 今天'], ['明天', '出門時間 明天']]);
+  const card = send(env, '出門時間 明天')[0];
+  assert.match(saidOf(card), /^通勤時間設定\n⏰ 出發時間規劃\n/);
+  const json = JSON.stringify(plain(card.contents.body));
+  assert.match(json, /你哪一天要去學校？[\s\S]*你最早第幾節有課？[\s\S]*請選擇當天最早需要到校的節次。[\s\S]*ⓘ 小提醒[\s\S]*選擇當天最早的上課節次，系統將依照課程時間，幫你估算建議出門時間及預計抵達時間。/);
+  const b = buttonsOf(card);
+  assert.deepEqual(b.slice(0, 2), [['今天', '出門時間 今天'], ['明天', '出門時間 明天']]);
+  assert.equal(b.length, 2 + 12, '第 1～C 節，第 D 節拿掉了');
+  assert.deepEqual(b[2], ['第 1 節 08:10', '出門時間 明天 08:10']);
+  assert.deepEqual(b[13], ['第 C 節 20:20', '出門時間 明天 20:20']);
+  assert.ok(!b.some(x => /第 D 節/.test(x[0])));
+  // 選的那天是磚紅，節次兩欄
+  const chips = [];
+  require('./helpers').walk(plain(card).contents, n => { if (n.action) chips.push(n); });
+  assert.equal(chips.find(c => c.action.text === '出門時間 明天').backgroundColor, '#A63A2B');
+  assert.equal(chips.find(c => c.action.text === '出門時間 今天').backgroundColor, '#EEF2F7');
+  const rows = plain(card).contents.body.contents.filter(c => c.type === 'box' && c.contents.every(r => r.layout === 'horizontal'));
+  assert.ok(rows.length >= 2 && rows.every(r => r.contents.every(row => row.contents.length === 2)), '兩欄');
+  assert.equal(card.contents.footer.contents.length, 1, '下面只有回選單');
 
-  const step2 = send(env, '出門時間 明天')[0];
-  assert.equal(saidOf(step2), '⏰ 出發時間規劃\n你明天第幾節有課？\n\n例如：第一節、第二節');
-  assert.equal(buttonsOf(step2).length, 13);
-  assert.deepEqual(buttonsOf(step2)[0], ['第 1 節 08:10', '出門時間 明天 08:10']);
-  assert.deepEqual(buttonsOf(step2)[12], ['第 D 節 21:15', '出門時間 明天 21:15']);
+  const plan = send(env, '出門時間 明天 08:10')[0];
+  assert.equal(plan.type, 'flex');
+  assert.equal(plan.contents.header.contents[1].text, '明天 08:10 上課', '按了節次直接出建議');
+  assert.match(plan.altText, /★ 搭 557 進校園：(\d\d:\d\d 前到士林站|還沒有預測)/, '平常日有預測就倒推，週末說還沒有（看測試跑的那天）');
 
-  const step3 = send(env, '出門時間 明天 08:10')[0];
-  assert.equal(saidOf(step3), '⏰ 出發時間規劃\n你在哪一棟上課？\n\n我會幫你估算從下車地點走到教室需要的時間。');
-  assert.equal(buttonsOf(step3).length, 13);
-  assert.deepEqual(buttonsOf(step3).slice(0, 3), [['B 綜大', '出門時間 明天 08:10 B'], ['D 二教', '出門時間 明天 08:10 D'], ['R 一教', '出門時間 明天 08:10 R']]);
-  assert.deepEqual(buttonsOf(step3)[12], ['不指定', '出門時間 明天 08:10 不指定']);
-
-  const card = send(env, '出門時間 明天 08:10 D')[0];
-  assert.equal(card.type, 'flex');
-  assert.equal(card.contents.header.contents[1].text, '明天 08:10 上課');
-  assert.equal(card.contents.header.contents[2].text, 'D 棟 第二教學研究大樓');
-  assert.match(card.altText, /★ 搭 557 進校園：(\d\d:\d\d 前到士林站|還沒有預測)/, '平常日有預測就倒推，週末說還沒有（看測試跑的那天）');
+  const old = send(env, '出門時間 明天 08:10 D')[0];
+  assert.equal(old.contents.header.contents[2].text, 'D 棟 第二教學研究大樓', '舊按鈕帶大樓也還認得');
 });
 
 test('超過 6 顆的按鈕排成兩欄，單數的最後一顆自己一列、整列寬', () => {
   const env = start();
-  const body = plain(send(env, '出門時間 明天')[0]).contents.body.contents;
+  const items = Array.from({ length: 13 }, (_, i) => ['按鈕 ' + i, '選單']);
+  const body = plain(env.call('choices_', '選一個', items)).contents.body.contents;
   const rows = body.filter(c => c.type === 'box' && c.layout === 'horizontal');
   assert.equal(rows.length, 6, '13 顆按鈕 = 6 列兩欄 + 最後一顆');
   assert.ok(rows.every(r => r.contents.length === 2 && r.contents.every(c => c.action)));
@@ -226,17 +232,18 @@ test('出門時間選今天：只列還沒開始的節次；快上課的走即�
   const env = start();
   // 用真的時鐘判斷，所以把 Date 換成固定時間：週一 09:30
   env.run("const __RealDate = Date; Date = class extends __RealDate { constructor(...a) { super(...(a.length ? a : [__RealDate.parse('2026-10-12T09:30:00+08:00')])); } static now() { return __RealDate.parse('2026-10-12T09:30:00+08:00'); } };");
-  const periods = buttonsOf(send(env, '出門時間 今天')[0]);
+  const periods = buttonsOf(send(env, '出門時間 今天')[0]).slice(2); // 前兩顆是今天、明天
   assert.deepEqual(periods[0], ['第 3 節 10:10', '出門時間 今天 10:10'], '第 1、2 節已經開始，不列');
+  assert.deepEqual(buttonsOf(send(env, '出門時間')[0])[2], ['第 3 節 10:10', '出門時間 今天 10:10'], '沒選哪一天就先選今天');
   assert.equal(send(env, '出門時間 今天 10:10 B')[0].altText, '[即時 士林站 B]', '90 分鐘內上課，看即時到站');
   assert.equal(send(env, '出門時間 今天 13:10 B')[0].type, 'flex', '還很久的給出門建議');
 });
 
 test('出門時間亂傳也不會壞：格式不對就從那一步重新問', () => {
   const env = start();
-  assert.match(saidOf(send(env, '出門時間 後天')[0]), /哪一天要去學校？$/);
-  assert.match(saidOf(send(env, '出門時間 明天 八點')[0]), /你明天第幾節有課？/);
-  assert.match(saidOf(send(env, '出門時間 明天 08:10 Z')[0]), /你在哪一棟上課？/);
+  assert.match(saidOf(send(env, '出門時間 後天')[0]), /哪一天要去學校？/);
+  assert.match(saidOf(send(env, '出門時間 明天 八點')[0]), /你最早第幾節有課？/);
+  assert.equal(send(env, '出門時間 明天 08:10 Z')[0].contents.header.contents[1].text, '明天 08:10 上課', '沒看過的大樓代號就不指定大樓');
   assert.equal(send(env, '出門時間 明天 08:10 D 火星')[0].contents.header.contents[1].text, '明天 08:10 上課', '沒看過的出發站當成士林站');
 });
 

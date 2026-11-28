@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadBot } = require('./gas-env');
 const { sampleCards } = require('./sample-cards');
+const { buttonsOf } = require('./helpers');
 
 const FILES = ['Code.gs', '卡片.gs', '選單.gs', '比較器.gs', '晚上提醒.gs', '站位變更.gs', '共乘.gs', '等車室.gs', '定位測試.gs', '積分.gs', '新生.gs'];
 const plain = x => JSON.parse(JSON.stringify(x));
@@ -70,16 +71,17 @@ test('每一種回覆的卡片：沒有空字串、顏色格式正確、按鈕�
 });
 
 test('即時比較：照到校時間排，最快的標成推薦，不會到東吳的路線不列', () => {
+  // 11/28 團隊設計稿：今日推薦路線（公車最快）→ 其他公車路線 → 其他通勤方式 → 通勤建議
   const card = sampleCards().即時比較;
-  const rows = card.contents.body.contents.filter(c => c.type === 'box' && c.contents[0].layout === 'horizontal');
-  assert.deepEqual(rows.map(r => r.contents[0].contents[0].text), ['紅30', '255', '304重慶', '557', '🚕 計程車共乘'], '公車下面接著其他方法（這裡沒有 YouBike 資料）');
-  assert.equal(rows[0].contents[0].contents[0].color, '#A63A2B', '最快的那一列用重點色（磚紅）');
-  assert.equal(rows[1].contents[0].contents[0].color, '#111827');
-  assert.match(rows[0].contents[0].contents[1].text, /^即將進站・\d\d:\d\d 到$/);
-  assert.equal(rows[0].contents[1].text, '錢穆故居站下車，走 5 分鐘');
-  assert.equal(rows[3].contents[1].text, '直接進校園，走 2 分鐘');
-  assert.match(card.altText, /目前只要搭乘 紅30，便能最快速地抵達錢穆故居站，再步行進校。/);
-  assert.equal(card.contents.header.contents[1].text, '士林站 → B 棟');
+  const alt = card.altText;
+  assert.match(alt, /^多路線比較\n士林站 → B 棟\n綜合大樓/);
+  assert.match(alt, /今日推薦路線\n紅30\n公車最快\n\d\d:\d\d\n預計抵達 B 棟\n📍 下車後步行進入校園・即將進站/);
+  assert.match(alt, /其他公車路線\n255\n錢穆故居站下車，走 5 分鐘\n\d\d:\d\d 到\n\d+ 分鐘後\n304重慶\n[^\n]+\n[^\n]+\n[^\n]+\n557\n直接進校園，走 2 分鐘/);
+  assert.match(alt, /其他通勤方式\n🚕 計程車共乘/, '公車下面接著其他方法（這裡沒有 YouBike 資料）');
+  assert.match(alt, /💡 通勤建議\n想搭公車，推薦選擇 紅30/);
+  const hero = JSON.stringify(card.contents.body.contents);
+  assert.match(hero, /"text":"紅30","size":"xl","color":"#A63A2B"/, '推薦路線名稱用重點色（磚紅）');
+  assert.doesNotMatch(alt, /公車首選/);
 });
 
 test('即時比較：沒有車的時候說明原因，並給共乘的按鈕', () => {
@@ -98,14 +100,26 @@ test('出門建議：平日早八的 557 用監測預測倒推（尖峰算排隊
   assert.match(cards.出門建議劍南路.altText, /・學校專車：07:50 發車/);
 });
 
-test('天氣：60% 以上用提醒的顏色，並把降雨機率標出來', () => {
+test('天氣：降雨機率用顏色分（低綠、中橘、高紅），加狀態標題，建議放灰色面板，來源放底部', () => {
   const cards = sampleCards();
-  const rainy = cards.天氣會下雨.contents.body.contents;
-  assert.equal(rainy[0].contents[0].contents[1].text, '80%');
-  assert.equal(rainy[1].contents[0].color, '#B45309');
-  const fine = cards.天氣不會下雨.contents.body.contents;
-  assert.equal(fine[1].contents[0].color, '#111827');
-  assert.match(cards.天氣不會下雨.altText, /應該不會下雨/);
+  const pct = card => JSON.parse(JSON.stringify(card)).contents.body.contents.find(c => c.type === 'box' && c.contents[1] && /%$/.test(c.contents[1].text)).contents[1];
+  assert.equal(pct(cards.天氣會下雨).text, '80%');
+  assert.equal(pct(cards.天氣會下雨).color, '#A63A2B', '高機率紅色');
+  assert.match(cards.天氣會下雨.altText, /🌧️ 降雨機率高\n[^\n]*很可能下雨/);
+  assert.equal(pct(cards.天氣不會下雨).color, '#15803D', '低機率綠色');
+  assert.match(cards.天氣不會下雨.altText, /☀️ 降雨機率低\n[^\n]*預計不太會下雨，可以考慮從錢穆故居站步行進入學校。\n⛅ 中央氣象署資料・\d\d:\d\d 更新/);
+  assert.deepEqual(buttonsOf(cards.天氣不會下雨), [['雨天與考試週訂閱提醒', '雨天與考試週訂閱提醒']]);
+});
+
+test('天氣：中等機率橘色；已訂閱的人按鈕變成「已開啟提醒」', () => {
+  const env = loadBot(FILES);
+  env.onFetch = url => (url.includes('opendata.cwa.gov.tw') ? { body: { records: { Locations: [{ Location: [{ WeatherElement: [{ Time: [
+    { StartTime: '2026-10-13T06:00:00+08:00', ElementValue: [{ ProbabilityOfPrecipitation: '40' }] }] }] }] }] } } } : undefined);
+  const card = env.call('rainReply_', 'A');
+  assert.match(card.altText, /40%\n🌦️ 降雨機率中等/);
+  assert.match(JSON.stringify(card.contents), /"text":"40%","size":"xxl","color":"#C2410C"/);
+  env.call('subscribe_', 'A', true);
+  assert.deepEqual(buttonsOf(env.call('rainReply_', 'A')), [['✅ 已開啟提醒', '已開啟提醒']]);
 });
 
 test('上車地點：還沒有德育中心的摘要時，用內建的三個地點', () => {

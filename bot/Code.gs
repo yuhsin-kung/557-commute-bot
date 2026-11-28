@@ -86,19 +86,21 @@ function handleEventNow_(ev) {
       answer = etaTestText_(ev.source.userId, text); // 到校預估.gs：測試模式（假日也能試預估）
     } else if (/^從\s*\S+?\s*出發$/.test(text) && !/上課|節|棟/.test(text)) {
       answer = etaFromStationText_(ev.source.userId, text.replace(/^從\s*/, '').replace(/\s*出發$/, '')); // 到校預估.gs：換捷運站
-    } else if (text === '到校預估 士林站') {
+    } else if (/^選擇捷運站(\s|$)/.test(text)) {
+      answer = etaPickStation_(text); // 到校預估.gs：自己選路線、選站
+    } else if (text === '到校預估 士林站' || text === '我已經在士林站') {
       answer = etaFromShilin_(); // 到校預估.gs：人已經在捷運士林站
     } else if (/^(到校預估|預估到達時間|🚇 預估到達時間|從我這裡出發幾點到校|幾點到東吳|幾點出門、幾點到東吳|🚇 幾點出門、幾點到東吳)$/.test(text)) {
       answer = etaButton_(); // 到校預估.gs：主打功能的入口（傳位置、趕課倒推）
     } else if (text === '定位測試') {
       answer = geoTestButton_(); // 定位測試.gs（暫時的）
-    } else if (/^(訂閱提醒|取消提醒)$/.test(text)) {
-      answer = subscribe_(ev.source.userId, text === '訂閱提醒'); // 晚上提醒.gs
-    } else if (/^(訂閱提醒設定|雨天與考試週訂閱提醒)$/.test(text)) {
-      answer = remindSettings_();
+    } else if (/^(訂閱提醒|取消提醒|開啟提醒|關閉提醒)$/.test(text)) {
+      answer = subscribe_(ev.source.userId, text === '訂閱提醒' || text === '開啟提醒'); // 晚上提醒.gs（按鈕傳出的字跟按鈕一樣：開啟提醒、關閉提醒）
+    } else if (/^(訂閱提醒設定|雨天與考試週訂閱提醒|已開啟提醒|✅ 已開啟提醒)$/.test(text)) {
+      answer = remindSettings_(ev.source.userId);
     } else {
       // 積分、打卡、YouBike、雨傘、新生、包車：要知道是誰傳的，所以排在 route_ 前面
-      answer = memberReply_(ev.source.userId, text) || route_(text);
+      answer = memberReply_(ev.source.userId, text) || route_(text, ev.source.userId);
     }
   } catch (err) {
     console.error(err);
@@ -128,18 +130,19 @@ function memberReply_(uid, text) {
   if (/^(兌換折價券|兌換學餐折價券|兌換)$/.test(text)) return ptRedeemAsk_(uid);
   if (text === '確認兌換折價券') return ptRedeem_(uid);
   if (/^(我的折價券|我的學餐折價券|折價券)$/.test(text)) return ptMyCoupons_(uid);
-  if (/^(youbike|ubike|微笑單車|腳踏車)( ?查詢)?$/i.test(text)) return ybReply_(); // YouBike.gs
+  if (/^(查看 ?)?(youbike|ubike|微笑單車|腳踏車)( ?(查詢|車數))?$/i.test(text)) return ybReply_(); // YouBike.gs
   if (/^(借傘|還傘|共享雨傘)(\s|$)/.test(text)) return umText_(); // 雨傘.gs：Raingo 租借站說明
   if (/^(新生須知|新生教學|新生)$/.test(text)) return nbIntro_(); // 新生.gs
   if (text === '新生測驗' || /^答\s*[1-3]$/.test(text)) return nbQuiz_(uid, text);
   if (text === '排隊禮儀') return nbEtiquette_();
   if (/^(包車|包車調查|學生包車)(\s|$)/.test(text)) return charterText_(); // 新生.gs
   if (/^(出門提醒 |取消出門提醒$)/.test(text)) return lvText_(uid, text); // 發車提醒.gs
+  if (text === '回報我在哪裡排隊') return rpText_(uid, '回報現場'); // 按鈕傳出的字跟按鈕一樣
   if (/^回報現場(\s|$)/.test(text)) return rpText_(uid, text); // 現場回報.gs：我在哪一站排隊
   return null;
 }
 
-function route_(text) {
+function route_(text, uid) {
   if (/^(557|557 即時動態|557 到站|557 去學校|557 回家|公車)$/.test(text)) {
     return bus557Reply_(); // 往東吳、往捷運站一起顯示
   }
@@ -147,7 +150,7 @@ function route_(text) {
     return busReply_(1, ['東吳大學(錢穆故居)'], '557 東吳 → 士林');
   }
   if (/雨|天氣|傘/.test(text)) {
-    return rainReply_();
+    return rainReply_(uid);
   }
   if (/站牌|站位|上車(地點|處)|候車|排隊|哪(裡|邊|兒)?(搭|排|上車|等)/.test(text)) {
     return stationReply_(); // 站位變更.gs：「557 站牌資訊」「557 在哪裡搭」都會到這裡
@@ -155,33 +158,60 @@ function route_(text) {
   if (/^(比較所有路線|比較所有公車路線|幫我比較路線|現在最快的車)$/.test(text)) {
     return liveReply_('士林站', '', null); // 比較器.gs：士林站現在最快的幾班車
   }
-  return compareReply_(text); // 其他問題交給比較器（比較器.gs）判斷
+  return compareReply_(text, uid); // 其他問題交給比較器（比較器.gs）判斷
 }
 
-/** 「雨天與考試週訂閱提醒」：說明會提醒什麼，再給開啟、關閉兩顆按鈕 */
-function remindSettings_() {
-  return choices_([ // 卡片.gs
-    '訂閱後，隔天降雨機率 ' + RAIN_ALERT_POP + '% 以上或遇到考試週，每晚 9 點提醒你提早出門。', // 晚上提醒.gs
-    '週末、放假不會打擾你。',
-  ].join('\n'), [['開啟提醒', '訂閱提醒'], ['關閉提醒', '取消提醒']], { title: '🔔 雨天與考試週訂閱提醒', badge: '出門前提醒', primary: false });
+/** 「雨天與考試週訂閱提醒」：提醒條件、提醒時間，再給開啟、關閉兩顆按鈕（11/28 團隊設計稿） */
+function remindSettings_(uid) {
+  const on = uid ? isSubscribed_(uid) : false; // 晚上提醒.gs
+  return dsCard_({ // 卡片.gs
+    kicker: '出門前提醒',
+    title: '🔔 雨天與考試週提醒',
+    badge: uid ? (on ? '已開啟' : '未開啟') : '',
+    lead: '訂閱提醒，讓你提前掌握隔天的天氣與考試週資訊，不再匆忙出門。',
+    blocks: [
+      { hr: true },
+      { h: '提醒條件' },
+      { group: [
+        ['🌧️ 隔天降雨機率達 ' + RAIN_ALERT_POP + '% 以上', '', '提醒隔天可能下雨，提早準備雨具。'], // 晚上提醒.gs
+        ['📖 遇到考試週', '', '提醒你留意隔天行程，提早安排出門時間。'],
+      ] },
+      { stat: { label: '🕘 提醒時間', boldLabel: true, value: '每晚 9:00', note: '符合提醒條件時，於前一晚推播通知。' } },
+      { text: '📅 週末及放假日不會推播提醒。', muted: true },
+    ],
+    buttons: [['開啟提醒', '開啟提醒'], ['關閉提醒', '關閉提醒']],
+  });
 }
 
 // ===== 557 即時到站（TDX） =====
 
-/** 「557 即時動態」：一次查兩個方向，往東吳看士林站、士林國中，往捷運站看東吳大學 */
+/** 「557 即時動態」：往東吳（士林站、士林國中）、往捷運站（東吳大學）分兩組（11/28 團隊設計稿） */
 function bus557Reply_() {
   const etas = tdx_('EstimatedTimeOfArrival/City/Taipei/557?$format=JSON&$filter=' + encodeURIComponent("RouteName/Zh_tw eq '557'"));
-  const rows = [[0, '捷運士林站(中正)', '往東吳'], [0, '士林國中', '往東吳'], [1, '東吳大學(錢穆故居)', '往捷運站']].map(([dir, name, to]) => {
+  // [站名, 顯示的字, 是不是狀態（末班車已過、尚未發車這種，用琥珀色標籤）]
+  const stop = (dir, name) => {
     const hits = etas.filter(e => e.Direction === dir && e.StopName.Zh_tw === name);
-    return { label: to + '｜' + name, value: hits.length ? hits.map(etaText_).join('、') : '沒有資料' };
+    const timed = hits.filter(e => e.EstimateTime != null);
+    if (timed.length) return [busStopName_(name), timed.map(etaText_).join('、'), false];
+    return [busStopName_(name), hits.length ? hits.map(etaText_).join('、') : '沒有資料', true];
+  };
+  const toSchool = [stop(0, '捷運士林站(中正)'), stop(0, '士林國中')];
+  const toMrt = [stop(1, '東吳大學(錢穆故居)')];
+  const ended = toSchool.concat(toMrt).every(r => /末班車已過/.test(r[1]));
+  const blocks = [{ sec: '往東吳方向' }, { status: toSchool }, { sec: '往捷運站方向' }, { status: toMrt }];
+  if (ended) blocks.push({ panel: { tone: 'warn', title: 'ⓘ 557 今天已經收班', lines: ['可以按「比較所有路線」改搭其他公車，或找人共乘計程車。'] } });
+  blocks.push({ hr: true }, { small: '🔄 TDX 即時資料・' + nowText_() });
+  return dsCard_({ // 卡片.gs
+    kicker: '557 即時動態',
+    title: '557 往東吳 / 往捷運站',
+    blocks: blocks,
+    buttons: [['比較所有路線', '比較所有路線'], ['回報我在哪裡排隊', '回報我在哪裡排隊'], { label: '查看 557 站牌資訊', text: '查看 557 站牌資訊', style: 'outline' }],
   });
-  return card_({ // 卡片.gs
-    badge: '557 即時動態',
-    title: '557 往東吳／往捷運站',
-    rows: rows,
-    footer: 'TDX 即時資料・' + nowText_(),
-    buttons: [{ label: '比較所有路線', text: '比較所有路線' }, { label: '回報我在哪裡排隊', text: '回報現場' }, { label: '557 站牌資訊', text: '557 站牌資訊' }],
-  });
+}
+
+/** 站名顯示：括號改成全形，「捷運士林站(中正)」→「捷運士林站（中正）」 */
+function busStopName_(name) {
+  return String(name).replace(/\(/g, '（').replace(/\)/g, '）');
 }
 
 function busReply_(direction, stopNames, title) {
@@ -240,7 +270,7 @@ function tdxToken_() {
 
 // ===== 降雨機率（中央氣象署） =====
 
-function rainReply_() {
+function rainReply_(uid) {
   const url = 'https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-061'
     + '?Authorization=' + PROPS.getProperty('CWA_API_KEY')
     + '&LocationName=' + encodeURIComponent('士林區')
@@ -252,20 +282,26 @@ function rainReply_() {
   const slot = times.find(t => t.StartTime.indexOf(target.day + 'T' + target.hour) === 0) || times[0];
   const pop = Number(slot.ElementValue[0].ProbabilityOfPrecipitation);
 
-  let advice;
-  if (pop >= 60) advice = target.morning ? '很可能下雨。557 會比平常擠，建議早 20 分鐘出門、記得帶傘。' : '很可能下雨，出門記得帶傘。';
-  else if (pop >= 30) advice = '有機會下雨，帶把傘比較保險。';
-  else advice = '應該不會下雨，可以考慮從錢穆故居站走進學校。';
+  // 11/28 團隊設計稿：低機率綠、中等橘、高機率紅，加一行狀態標題，建議放灰色面板
+  const when = target.day === Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd') ? '今天' : '明天';
+  let level;
+  if (pop >= 60) level = { title: '🌧️ 降雨機率高', color: UI.brand, advice: target.morning ? when + '早上很可能下雨。557 會比平常擠，建議早 20 分鐘出門、記得帶傘。' : '很可能下雨，出門記得帶傘。' };
+  else if (pop >= 30) level = { title: '🌦️ 降雨機率中等', color: UI.mid, advice: '有機會下雨，帶把傘比較保險。' };
+  else level = { title: '☀️ 降雨機率低', color: UI.good, advice: (target.morning ? when + '早上' : '') + '預計不太會下雨，可以考慮從錢穆故居站步行進入學校。' };
 
-  return card_({ // 卡片.gs
-    badge: '降雨查詢',
+  // 訂閱過的人按鈕改成「已開啟提醒」（晚上提醒.gs），避免重複訂閱
+  const on = uid ? isSubscribed_(uid) : false;
+  return dsCard_({ // 卡片.gs
+    kicker: '降雨查詢',
     title: target.title,
-    subtitle: '士林區',
-    rows: [{ label: '降雨機率', value: pop + '%', best: pop >= 60 }],
-    notes: pop >= 60 ? [] : [advice],
-    warns: pop >= 60 ? [advice] : [],
-    footer: '中央氣象署・' + nowText_(),
-    buttons: [{ label: '雨天與考試週訂閱提醒', text: '訂閱提醒設定' }],
+    route: '士林區',
+    blocks: [
+      { hr: true },
+      { metric: ['降雨機率', pop + '%', level.color] },
+      { panel: { title: level.title, lines: [level.advice], quiet: true, margin: 'md' } },
+      { small: '⛅ 中央氣象署資料・' + nowText_() + ' 更新' },
+    ],
+    buttons: [on ? ['✅ 已開啟提醒', '已開啟提醒'] : ['雨天與考試週訂閱提醒', '雨天與考試週訂閱提醒']],
   });
 }
 

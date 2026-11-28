@@ -20,10 +20,23 @@ test('557 即時動態：往東吳（士林站、士林國中）和往捷運站�
     { Direction: 1, StopName: { Zh_tw: '捷運士林站(中正)' }, EstimateTime: 900 }, // 回程經過士林站，不能混進「往東吳」
   ];
   const card = env.call('route_', '557 即時動態');
-  assert.match(card.altText, /往東吳｜捷運士林站\(中正\)：5 分鐘後到站/);
-  assert.match(card.altText, /往東吳｜士林國中：即將進站/);
-  assert.match(card.altText, /往捷運站｜東吳大學\(錢穆故居\)：10 分鐘後到站/);
+  // 11/28 團隊設計稿：往東吳、往捷運站分兩組
+  assert.match(card.altText, /往東吳方向\n捷運士林站（中正）\n5 分鐘後到站\n士林國中\n即將進站\n往捷運站方向\n東吳大學（錢穆故居）\n10 分鐘後到站/);
   assert.doesNotMatch(card.altText, /15 分鐘/);
+  assert.doesNotMatch(card.altText, /今天已經收班/);
+  const b = buttonsOf(card);
+  assert.deepEqual(b, [['比較所有路線', '比較所有路線'], ['回報我在哪裡排隊', '回報我在哪裡排隊'], ['查看 557 站牌資訊', '查看 557 站牌資訊']]);
+  const chips = card.contents.footer.contents;
+  assert.equal(chips[0].backgroundColor, '#A63A2B', '比較所有路線：紅色主要按鈕');
+  assert.equal(chips[1].backgroundColor, '#EEF2F7', '回報我在哪裡排隊：灰色次要按鈕');
+  assert.equal(chips[2].borderWidth, '1px', '557 站牌資訊：紅字外框');
+  assert.equal(chips[2].contents[0].color, '#A63A2B');
+  // 末班車已過：琥珀色狀態標籤，並提醒改搭其他路線
+  env.respond['EstimatedTimeOfArrival'] = ['捷運士林站(中正)', '士林國中', '東吳大學(錢穆故居)'].map((n, i) => ({ Direction: i < 2 ? 0 : 1, StopName: { Zh_tw: n }, StopStatus: 3 }));
+  const ended = env.call('route_', '557 即時動態');
+  assert.match(ended.altText, /捷運士林站（中正）\n末班車已過/);
+  assert.match(ended.altText, /557 今天已經收班\n可以按「比較所有路線」改搭其他公車/);
+  assert.match(JSON.stringify(ended.contents), /"backgroundColor":"#FEF3E2","cornerRadius":"12px"[^}]*"contents":\[\{"type":"text","text":"末班車已過"/);
   ['557', '557 到站', '557 去學校', '557 回家'].forEach(old => assert.equal(env.call('route_', old).altText.split('\n')[0], card.altText.split('\n')[0], old + ' 也是同一張'));
 });
 
@@ -52,8 +65,16 @@ test('出門時間建議：隔天降雨機率 60% 以上或考試週，多留 20
 test('雨天與考試週訂閱提醒：說明會提醒什麼，給開啟、關閉兩顆按鈕', () => {
   const env = loadBot(ALL);
   const card = env.call('remindSettings_');
-  assert.match(saidOf(card), /降雨機率 60% 以上或遇到考試週，每晚 9 點提醒你提早出門/);
-  assert.deepEqual(buttonsOf(card), [['開啟提醒', '訂閱提醒'], ['關閉提醒', '取消提醒']]);
+  assert.match(saidOf(card), /提醒條件\n🌧️ 隔天降雨機率達 60% 以上\n提醒隔天可能下雨，提早準備雨具。\n📖 遇到考試週/);
+  assert.match(saidOf(card), /🕘 提醒時間\n每晚 9:00\n符合提醒條件時，於前一晚推播通知。\n📅 週末及放假日不會推播提醒。/);
+  assert.deepEqual(buttonsOf(card), [['開啟提醒', '開啟提醒'], ['關閉提醒', '關閉提醒']], '按鈕傳出的字跟按鈕一樣');
+  // 按了開啟：訂閱成功卡片；再看設定是「已開啟」；關閉：已取消卡片
+  const send = text => { env.call('handleEvent_', { type: 'message', replyToken: 'r', source: { userId: 'A' }, message: { type: 'text', text } }); return env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body.messages[0]; };
+  assert.match(send('開啟提醒').altText, /✅ 訂閱成功！\n已成功開啟雨天與考試週提醒。\n提醒時間\n每晚 9:00[\s\S]*不想再收到提醒？可隨時選擇「取消提醒」。/);
+  assert.match(send('雨天與考試週訂閱提醒').altText, /雨天與考試週提醒\n已開啟/);
+  assert.match(send('關閉提醒').altText, /✅ 已取消提醒！\n已關閉雨天與考試週提醒，之後不會再收到相關推播。\n想重新開啟提醒嗎？\n隨時傳送「訂閱提醒」，即可重新開啟通知。/);
+  assert.match(send('訂閱提醒設定').altText, /雨天與考試週提醒\n未開啟/);
+  assert.match(send('訂閱提醒').altText, /訂閱成功/, '舊的「訂閱提醒」也認得');
 });
 
 test('比較所有公車路線：最快的車開進學校就說「抵達學校」，到錢穆故居站才說「步行進校」', () => {
@@ -61,10 +82,13 @@ test('比較所有公車路線：最快的車開進學校就說「抵達學校�
   const eta = (route, dir, sec) => ({ RouteName: { Zh_tw: route }, Direction: dir, EstimateTime: sec });
   env.context.__etas = [eta('557', 0, 60), eta('紅30', 1, 600)];
   env.run('etaAtStop_ = () => __etas; isPeak_ = () => false;');
-  assert.match(env.call('liveReply_', '士林站', '', null).altText, /目前只要搭乘 557，便能最快速地抵達學校。/);
+  assert.match(env.call('liveReply_', '士林站', '', null).altText, /今日推薦路線\n557\n公車最快\n\d\d:\d\d\n預計抵達東吳大學\n📍 直接進入校園/);
   env.context.__etas = [eta('557', 0, 900), eta('紅30', 1, 60)];
   const alt = env.call('liveReply_', '士林站', '', null).altText;
-  assert.match(alt, /目前只要搭乘 紅30，便能最快速地抵達錢穆故居站，再步行進校。/);
+  assert.match(alt, /今日推薦路線\n紅30\n公車最快\n\d\d:\d\d\n預計抵達錢穆故居站\n📍 下車後步行進入校園/);
+  assert.match(alt, /💡 通勤建議\n想搭公車，推薦選擇 紅30，預計 \d\d:\d\d 抵達錢穆故居站。/);
+  assert.match(alt, /其他公車路線\n557\n直接進校園\n\d\d:\d\d 到\n15 分鐘後/);
+  assert.doesNotMatch(alt, /公車首選/);
   assert.doesNotMatch(alt, /走一樣的路/);
 });
 
@@ -75,11 +99,12 @@ test('比較所有路線：公車下面接著列 YouBike 和計程車共乘；�
   env.run('etaAtStop_ = () => __etas; isPeak_ = () => false;');
   env.respond.youbike = [{ sna: 'YouBike2.0_捷運士林站(1號出口)', available_rent_bikes: 12, available_return_bikes: 20, latitude: 25.0955, longitude: 121.527 }];
   const alt = env.call('liveReply_', '士林站', '', null).altText;
-  assert.match(alt, /🚲 YouBike：約 \d\d:\d\d 到/);
-  assert.match(alt, /士林站附近可借 12 台，騎約 18 分鐘/);
-  assert.match(alt, /🚕 計程車共乘：約 \d\d:\d\d 到/);
-  assert.match(alt, /最多等 5 分鐘湊人，4 人每人約 40 元/);
-  assert.match(alt, /目前只要搭乘 557/, '最快的公車那句照舊');
+  assert.match(alt, /其他通勤方式\n🚲 YouBike\n約 \d\d:\d\d 到\n士林站附近可借 12 台，騎約 18 分鐘/);
+  assert.match(alt, /🚕 計程車共乘\n約 \d\d:\d\d 到\n最多等 5 分鐘湊人，4 人每人約 40 元/);
+  assert.match(alt, /💡 通勤建議\n想搭公車，推薦選擇 557/);
+  const card = env.call('liveReply_', '士林站', '', null);
+  assert.deepEqual(buttonsOf(card), [['找人共乘計程車', '計程車共乘'], ['查看 YouBike 車數', '查看 YouBike 車數']]);
+  assert.match(env.call('memberReply_', 'A', '查看 YouBike 車數').altText, /YouBike 通勤資訊/, '「查看 YouBike 車數」Bot 認得');
   assert.equal(env.call('route_', '比較所有公車路線').altText.split('\n')[0], env.call('route_', '比較所有路線').altText.split('\n')[0]);
 });
 
