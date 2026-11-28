@@ -86,7 +86,7 @@ test('考試週仍出建議卡，多留 20 分鐘，並附行事曆與步行來�
   assert.match(examCard.altText, /步行：校園大樓表（估計）/);
   assert.doesNotMatch(examCard.altText, /實測/);
   assert.doesNotMatch(normalCard.altText, /行事曆：/);
-  assert.deepEqual(buttonsOf(examCard).map(b => b[0]), ['換一個時間', '用我的位置算幾點出門', '改從其他捷運站出發', '預約計程車共乘', '557 發車前提醒我']);
+  assert.deepEqual(buttonsOf(examCard).map(b => b[0]), ['用我的位置算幾點出門', '換一個時間', '改從其他捷運站出發', '預約計程車共乘', '557 發車前提醒我']);
 
   freeze(env, '2026-11-09T21:00:00+08:00');
   const viaMenu = env.call('menuFlow_', '出門時間 明天 08:10 D');

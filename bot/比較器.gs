@@ -70,7 +70,6 @@ function isLocalNonOrigin_(name) {
 }
 
 const BUFFER_MIN = 5;      // 提早幾分鐘到教室
-const PEAK_EXTRA_MIN = 10; // 尖峰 557 可能擠不上，要多等一兩班
 const WEATHER_EXAM_EXTRA_MIN = 20; // 隔天降雨機率 60% 以上或考試週，出門時間再多留
 
 // ===== 主流程 =====
@@ -272,29 +271,26 @@ function planReply_(originName, building, classAt, isTomorrow) {
   const o = ORIGINS[originName];
   const mustArrive = addMin_(classAt, -BUFFER_MIN);
   const extra = crowdExtra_(classAt);
-  const peak = isPeak_(addMin_(classAt, -30));
   const rows = [];
   let remind = null; // 557 發車提醒（發車提醒.gs）：建議到士林站的時間
 
   if (originName === '士林站') {
-    // 557：有監測預測表（到校預估.gs）就倒推，尖峰用範圍的最晚時間（排隊、等下一台都算進去）；沒有預測（週末、時段外）才用估計車程
+    // 從捷運士林站出發：跟「預估到達時間」同一套算法（到校預估.gs）。出站走 5 分鐘到 557 站牌，
+    // 查 557 預測表從上課時間倒推，尖峰用範圍的最晚時間（排隊、等下一台都算進去）。
+    // 沒有預測（週末、07:00–18:30 以外）就直接說，不再用估計的固定車程；其他公車沒有監測資料，不列（要看就按「比較所有路線」）
     const pred = etaLatestDepart_(addMin_(mustArrive, -(walkMin_(building, CAMPUS) + extra.min)),
       d => addMin_(d, MRT_EXIT_TO_STOP_MIN)); // 捷運到站牌.gs：出捷運站走到 557 站牌
-    let by557, sub557;
     if (pred && pred.depart) {
-      by557 = pred.depart;
       const b = pred.school.best;
-      sub557 = '預計 ' + fmt_(b.early) + (b.late ? '–' + fmt_(b.late) : '') + ' 到東吳（' + b.stop + '站牌）'
-        + (b.peak ? '，尖峰已把排隊、等下一台算進去' : '');
+      remind = fmt_(pred.depart);
+      rows.push({ label: '搭 557 進校園', value: fmt_(pred.depart) + ' 前到士林站',
+        sub: '出站走 ' + MRT_EXIT_TO_STOP_MIN + ' 分鐘到' + b.stop + '站牌，預計 ' + fmt_(b.early) + (b.late ? '–' + fmt_(b.late) : '') + ' 到東吳'
+          + (b.peak ? '（尖峰，已把排隊、等下一台算進去）' : '') + (building ? '，走 ' + walkMin_(building, CAMPUS) + ' 分鐘到教室' : '') });
     } else {
-      by557 = addMin_(mustArrive, -(o.rideMin[CAMPUS] + walkMin_(building, CAMPUS) + (peak ? PEAK_EXTRA_MIN : 0) + extra.min));
-      sub557 = peak ? '尖峰可能要等一兩班，已多算 ' + PEAK_EXTRA_MIN + ' 分鐘' : '';
+      rows.push({ label: '搭 557 進校園', value: '還沒有預測',
+        sub: '557 預測目前只有平常日 07:00–18:30。出門前按「比較所有路線」看即時到站' });
     }
-    const byOther = addMin_(mustArrive, -(o.rideMin[QIAN] + walkMin_(building, QIAN) + 5 + extra.min));
-    remind = fmt_(by557);
-    rows.push({ label: '搭 557 進校園', value: fmt_(by557) + ' 前到士林站', sub: sub557 });
-    rows.push({ label: '搭其他車', value: fmt_(byOther) + ' 前到士林站',
-      sub: '255、304、紅30、683、957、北環幹線… 哪班先來搭哪班，到錢穆故居站下車' + (building ? '，走 ' + walkMin_(building, QIAN) + ' 分鐘' : '') });
+    etaLastClass_ = { day: isTomorrow ? '明天' : '今天', time: fmt_(classAt), building: building || '不指定' }; // 到校預估.gs：接著傳位置就倒推
   } else {
     const by = addMin_(mustArrive, -(o.rideMin[QIAN] + walkMin_(building, QIAN) + 5 + extra.min));
     rows.push({ label: o.stop, value: fmt_(by) + ' 前到站',
@@ -318,9 +314,9 @@ function planReply_(originName, building, classAt, isTomorrow) {
     warns: extra.reasons.length ? [extra.reasons.join('、') + '，已多算 ' + extra.min + ' 分鐘。'] : [],
     footer: contextFooter_(classAt, building),
     // 這張是事先規劃：最常做的是換時間；即時到站看下面那行小字說的「比較所有路線」
-    buttons: [
+    // 從士林站的版本：最常做的是從自己家倒推，所以「用我的位置算幾點出門」是主要按鈕
+    buttons: (originName === '士林站' ? [{ label: '用我的位置算幾點出門', uri: 'https://line.me/R/nv/location/' }] : []).concat([
       { label: '換一個時間', text: '出門時間' },
-    ].concat(originName === '士林站' ? [{ label: '用我的位置算幾點出門', uri: 'https://line.me/R/nv/location/' }] : []).concat([
       { label: '改從其他捷運站出發', text: ['出門時間', isTomorrow ? '明天' : '今天', fmt_(classAt), building || '不指定', '選出發站'].join(' ') },
       { label: '預約計程車共乘', text: originName === '士林站' ? '共乘 去學校 預約' : '共乘' },
     ]).concat(remind ? [{ label: '557 發車前提醒我', text: '出門提醒 ' + (isTomorrow ? '明天' : '今天') + ' ' + remind }] : []),

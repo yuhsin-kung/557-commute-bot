@@ -206,3 +206,14 @@ test('沒選課直接傳位置：現在出發幾點到（不會被當成趕課�
   assert.match(r.altText, /幾點到東吳/);
   assert.doesNotMatch(r.altText, /前出門/);
 });
+
+test('口語問「明天第 3 節 D 棟」也一樣：回出門建議後，接著傳位置就倒推（不會被當成現在出發）', () => {
+  const env = loadBot(ALL);
+  env.setNow('2026-11-24T21:00:00+08:00');
+  env.walkSeconds = () => 6 * 60;
+  env.run('parseWithGemini_ = () => null; rainPop_ = () => 20;');
+  sendText(env, '出門時間 明天 10:10 D 士林站'); // 從士林站出發的出門建議
+  const r = sendLoc(env, SHIPAI[0], SHIPAI[1]);
+  assert.match(r.altText, /明天 10:10 上課/);
+  assert.match(r.altText, /從你這裡出發：\d\d:\d\d 前出門/);
+});

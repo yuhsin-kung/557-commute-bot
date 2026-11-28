@@ -109,8 +109,6 @@ function menuFlow_(text, uid) {
     const base = ['出門時間', day, time, building].join(' ');
     return choices_('要從哪一個捷運站出發？', Object.keys(ORIGINS).map(name => [name, base + ' ' + name]), { title: '出門時間建議', badge: '換出發站', primary: false });
   }
-  // 選好課（從士林站或沒指定出發站）：記下來，接著傳位置就從學生的位置倒推（到校預估.gs）
-  if (!ORIGINS[origin] || origin === '士林站') etaRememberClass_(uid, day, time, building);
   return compareQuery_({ // 比較器.gs
     intent: '去學校',
     arriveTime: time,

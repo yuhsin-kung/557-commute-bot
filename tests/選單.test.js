@@ -174,7 +174,7 @@ test('出門時間：點哪一天 → 點第幾節 → 點哪一棟，全程不�
   assert.equal(card.type, 'flex');
   assert.equal(card.contents.header.contents[1].text, '明天 08:10 上課');
   assert.equal(card.contents.header.contents[2].text, 'D 棟 第二教學研究大樓');
-  assert.match(card.altText, /★ 搭 557 進校園：\d\d:\d\d 前到士林站/);
+  assert.match(card.altText, /★ 搭 557 進校園：(\d\d:\d\d 前到士林站|還沒有預測)/, '平常日有預測就倒推，週末說還沒有（看測試跑的那天）');
 });
 
 test('超過 6 顆的按鈕排成兩欄，單數的最後一顆自己一列、整列寬', () => {
@@ -189,21 +189,21 @@ test('超過 6 顆的按鈕排成兩欄，單數的最後一顆自己一列、�
   assert.ok(!JSON.stringify(body).includes('"filler"'));
 });
 
-test('出門建議的卡片：換時間是主要按鈕；換出發站先選站；共乘寫明是計程車', () => {
+test('出門建議的卡片：用我的位置算是主要按鈕；換出發站先選站；共乘寫明是計程車；週日沒有 557 預測就不給發車提醒', () => {
   const env = start();
-  // 固定在週六中午，明天是週日：非尖峰，557 提醒維持 07:50（不改車程公式）
+  // 固定在週六中午，明天是週日：557 預測只有平常日，所以說「還沒有預測」、不給發車提醒（不再退回估計車程）
   env.run("const __RealDate = Date; Date = class extends __RealDate { constructor(...a) { super(...(a.length ? a : [__RealDate.parse('2026-10-17T12:00:00+08:00')])); } static now() { return __RealDate.parse('2026-10-17T12:00:00+08:00'); } };");
   const card = send(env, '出門時間 明天 08:10 D')[0];
   assert.deepEqual(buttonsOf(card), [
-    ['換一個時間', '出門時間'],
     ['用我的位置算幾點出門', 'https://line.me/R/nv/location/'],
+    ['換一個時間', '出門時間'],
     ['改從其他捷運站出發', '出門時間 明天 08:10 D 選出發站'],
     ['預約計程車共乘', '共乘 去學校 預約'],
-    ['557 發車前提醒我', '出門提醒 明天 07:50'],
   ]);
+  assert.match(card.altText, /還沒有預測/);
   assert.match(card.altText, /步行：校園大樓表（估計）/);
   assert.doesNotMatch(card.altText, /實測/);
-  assert.equal(card.contents.footer.contents[0].style, 'primary', '換一個時間是紅色主按鈕');
+  assert.equal(card.contents.footer.contents[0].style, 'primary', '用我的位置算幾點出門是紅色主按鈕');
   const pick = send(env, '出門時間 明天 08:10 D 選出發站')[0];
   assert.deepEqual(buttonsOf(pick).map(b => b[1]), ['出門時間 明天 08:10 D 士林站', '出門時間 明天 08:10 D 劍南路站', '出門時間 明天 08:10 D 大直站']);
   const jiannan = send(env, '出門時間 明天 08:10 D 劍南路站')[0];

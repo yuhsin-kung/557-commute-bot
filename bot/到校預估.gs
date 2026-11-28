@@ -86,6 +86,7 @@ function etaFromLocation_(lat, lng, uid) {
 // ===== 合併「出門時間建議」：趕課 → 倒推最晚幾點出門（11/28 團隊決定兩個功能合成一個） =====
 
 const ETA_CLASS_WAIT_MIN = 30; // 選好課以後，幾分鐘內傳位置都算這堂課
+let etaLastClass_ = null;      // 這次回覆的出門建議卡片是哪一堂課（比較器.gs 的 planReply_ 設定，Code.gs 回覆後記到這個人身上）
 const ETA_SEARCH_MIN = 180;    // 最多往前找幾分鐘
 
 /** 從東吳站牌下車的時間：有預測就回 { best, at }（尖峰用最晚、離峰用第一台），沒有預測回 null */

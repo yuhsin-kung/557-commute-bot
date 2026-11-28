@@ -60,6 +60,7 @@ function handleEvent_(ev) {
 
   const text = ev.message.text.trim();
   let answer;
+  etaLastClass_ = null; // 到校預估.gs
   try {
     if (/^(共乘|我的共乘|取消共乘)(\s|$)/.test(text)) {
       answer = cpText_(ev.source.userId, text); // 共乘.gs
@@ -89,6 +90,8 @@ function handleEvent_(ev) {
     console.error(err);
     answer = '抱歉，資料暫時抓不到，等一下再試一次 🙏';
   }
+  // 回的是出門建議（選單或口語都一樣）：記下這堂課，接著 30 分鐘內傳位置就從學生的位置倒推（到校預估.gs）
+  if (etaLastClass_) etaRememberClass_(ev.source.userId, etaLastClass_.day, etaLastClass_.time, etaLastClass_.building);
   reply_(ev.replyToken, answer);
   log_(ev, text, answer);
 }
