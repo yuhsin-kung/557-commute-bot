@@ -274,7 +274,9 @@ function mrtPlan_(lat, lng, nowMs) {
   if (!atStop) return Object.assign(base, { ok: false,
     lines: [`最近的捷運站是${leg.nm}，走路約 ${leg.walk.min} 分鐘`, '這個時間查不到捷運班次（捷運營運時間外）'] });
   const train = leg.st.code === 'R16' ? null : mrtTrain_(leg, now);
+  const both = p557Both_(atStop); // 到校預估.gs
   return Object.assign(base, { ok: true, trainAtShilin: train ? hm(train) : null, atStop: hm(atStop), school: mrtSchool_(atStop),
+    atStopAt: atStop, best: both ? both.best : null, // 預估紀錄用（Date）
     lines: mrtSteps_(leg, now, atStop).concat(p557Lines_(atStop)) }); // 到校預估.gs
 }
 

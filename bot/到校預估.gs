@@ -79,6 +79,7 @@ function etaFromLocation_(lat, lng, uid) {
   const r = mrtPlan_(lat, lng, now.getTime()); // 捷運到站牌.gs
   const again = [['再查一次', '到校預估'], ['我要趕課：幾點要出門', '出門時間']];
   if (!r.ok || !r.school) return choices_(r.lines.join('\n'), again, { title: '🚇 算不出來', badge: '預估到達時間' });
+  etaLog_('現在出發', '', r.atStopAt, r.best);
   const head = `建議走去${r.school.stop}站牌\n${r.school.late ? r.school.early + '–' + r.school.late : '約 ' + r.school.early} 到東吳`;
   return choices_(head + '\n\n' + r.lines.map(l => '・' + l).join('\n'), again, { title: '🚇 幾點到東吳', badge: '預估到達時間' });
 }
@@ -146,6 +147,7 @@ function etaClassFromHere_(lat, lng, pending, now) {
       notes: [res && res.noData ? '這個時間還沒有 557 的預測（目前只有平常日 07:00–18:30）。' : '往前找了 3 小時都趕不上，請確認上課時間。'] });
   }
   const s = res.school.best;
+  etaLog_('趕課（從位置倒推）', pending.day + ' ' + pending.time, res.atStop, s, res.depart);
   const steps = mrtSteps_(leg, res.depart, res.atStop).concat([
     `走去${s.stop}站牌，557 預計 ${s.late ? hm(s.early) + '–' + hm(s.late) : hm(s.early)} 到東吳` + (s.peak ? '（尖峰，已把排隊、等下一台算進去）' : ''),
   ]).concat(building ? ['下車走到 ' + building + ' 棟約 ' + walkMin_(building, CAMPUS) + ' 分鐘'] : []);
@@ -165,6 +167,69 @@ function etaClassFromHere_(lat, lng, pending, now) {
 function etaFromShilin_() {
   const atStop = new Date(cpNow_().getTime() + MRT_EXIT_TO_STOP_MIN * 60000); // 共乘.gs、捷運到站牌.gs
   const hm = d => Utilities.formatDate(d, TZ, 'HH:mm');
+  const both = p557Both_(atStop);
+  etaLog_('已經在士林站', '', atStop, both && both.best);
   return choices_([`從捷運士林站走到 557 站牌約 ${MRT_EXIT_TO_STOP_MIN} 分鐘，約 ${hm(atStop)} 到站牌`].concat(p557Lines_(atStop)).join('\n'),
     [['再查一次', '到校預估'], ['我要趕課：幾點要出門', '出門時間']], { title: '🚇 幾點到東吳', badge: '我已經在士林站' });
+}
+
+// ===== 測試模式：假日也能試「預估到達時間」（只影響傳指令的那個人，10 分鐘後自動結束） =====
+// 「測試時間 週三 09:05」→ 接下來 10 分鐘，這個人傳的訊息都當成「最近的週三 09:05」處理；「測試時間 結束」提早結束
+
+const ETA_REAL_DATE = Date;   // 載入時的真正 Date（測試模式會暫時換掉 Date）
+const ETA_TEST_MIN = 10;
+const ETA_WEEKDAYS = { 週一: 1, 週二: 2, 週三: 3, 週四: 4, 週五: 5, 週六: 6, 週日: 7 };
+let etaTestLabel_ = null;     // 這次訊息在測試模式的話：「週三 09:05」
+
+/** 「測試時間 …」。不是這個開頭回傳 null */
+function etaTestText_(uid, text) {
+  if (!/^測試時間(\s|$)/.test(text)) return null;
+  const cache = CacheService.getScriptCache();
+  if (/結束$/.test(text)) {
+    cache.remove('eta_test_' + uid);
+    return '🧪 測試模式結束，回到現在的時間。';
+  }
+  const m = text.match(/^測試時間 (週[一二三四五六日]) (\d{1,2}):(\d{2})$/);
+  if (!m) return '🧪 測試模式的用法：\n測試時間 週三 09:05\n\n接下來 ' + ETA_TEST_MIN + ' 分鐘，你查「預估到達時間」、趕課倒推，我都當成那個時間來算（只影響你自己）。傳「測試時間 結束」可以提早結束。';
+  const now = new ETA_REAL_DATE();
+  const today = Number(Utilities.formatDate(now, TZ, 'u'));
+  const ahead = (ETA_WEEKDAYS[m[1]] - today + 7) % 7;
+  const day = Utilities.formatDate(new ETA_REAL_DATE(now.getTime() + ahead * 86400000), TZ, 'yyyy-MM-dd');
+  const fake = new ETA_REAL_DATE(day + 'T' + ('0' + m[2]).slice(-2) + ':' + m[3] + ':00+08:00');
+  cache.put('eta_test_' + uid, JSON.stringify({ offset: fake.getTime() - now.getTime(), label: m[1] + ' ' + ('0' + m[2]).slice(-2) + ':' + m[3] }), ETA_TEST_MIN * 60);
+  return choices_('🧪 測試模式開始\n\n接下來 ' + ETA_TEST_MIN + ' 分鐘，你查的都當成「' + m[1] + ' ' + ('0' + m[2]).slice(-2) + ':' + m[3] + '」（' + day + '）來算，只影響你自己。\n傳「測試時間 結束」可以提早結束。', // 卡片.gs
+    [['🚇 預估到達時間', '預估到達時間'], ['我要趕課：幾點要出門', '出門時間']], { title: '🧪 測試模式', badge: '預估到達時間' });
+}
+
+/** 這個人在測試模式嗎：{ offset, label } 或 null */
+function etaTestOf_(uid) {
+  const raw = uid && CacheService.getScriptCache().get('eta_test_' + uid);
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch (e) { return null; }
+}
+
+/** 在測試模式裡執行：這段期間 new Date()、Date.now() 都是假裝的時間，結束一定換回來 */
+function etaWithTestTime_(test, fn) {
+  const Real = ETA_REAL_DATE;
+  class Fake extends Real {
+    constructor(...a) { if (a.length) super(...a); else super(Real.now() + test.offset); }
+    static now() { return Real.now() + test.offset; }
+  }
+  Date = Fake; // eslint-disable-line no-global-assign
+  etaTestLabel_ = test.label;
+  try { return fn(); } finally { Date = Real; etaTestLabel_ = null; } // eslint-disable-line no-global-assign
+}
+
+// ===== 預估紀錄：每次預估都記下來，平常日拿去跟 557 實際到站對答案（不記使用者、不記位置） =====
+
+const ETA_LOG_HEAD = ['記錄時間', '測試模式（假裝的時間）', '類型', '上課時間', '出發／到站牌', '推薦站牌', '預估到東吳（最早）', '預估到東吳（最晚）', '尖峰'];
+
+function etaLog_(kind, classTime, atStop, best, depart) {
+  try {
+    const hm = d => (d ? Utilities.formatDate(d, TZ, 'yyyy-MM-dd HH:mm') : '');
+    cpSheet_('預估紀錄', ETA_LOG_HEAD).appendRow([new ETA_REAL_DATE(), etaTestLabel_ || '', kind, classTime || '',
+      (depart ? '出門 ' + hm(depart) + '／' : '') + '到站牌 ' + hm(atStop), best ? best.stop : '', best ? hm(best.early) : '', best && best.late ? hm(best.late) : '', best && best.peak ? '是' : '']); // 共乘.gs
+  } catch (e) {
+    console.error('預估紀錄寫不進去：' + e);
+  }
 }

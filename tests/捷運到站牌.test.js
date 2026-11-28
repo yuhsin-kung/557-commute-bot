@@ -217,3 +217,46 @@ test('口語問「明天第 3 節 D 棟」也一樣：回出門建議後，接�
   assert.match(r.altText, /明天 10:10 上課/);
   assert.match(r.altText, /從你這裡出發：\d\d:\d\d 前出門/);
 });
+
+// ===== 測試模式、預估紀錄 =====
+const replyOf = (env, uid, message) => {
+  env.call('handleEvent_', { type: 'message', replyToken: 'r', source: { userId: uid }, message });
+  return env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body.messages;
+};
+
+test('測試模式：假裝週三 09:05 → 傳位置照週三算，回覆第一行標明；只影響自己；結束後恢復', () => {
+  const env = loadBot(ALL);
+  env.walkSeconds = () => 6 * 60;
+  const start = replyOf(env, 'A', { type: 'text', text: '測試時間 週三 09:05' });
+  assert.match(start[0].altText, /測試模式開始/);
+  assert.match(start[0].altText, /週三 09:05/);
+  const r = replyOf(env, 'A', { type: 'location', latitude: SHIPAI[0], longitude: SHIPAI[1] });
+  assert.equal(r[0].text, '🧪 測試模式：當成週三 09:05');
+  assert.match(r[1].altText, /搭捷運，09:20 到士林站/);
+  assert.match(r[1].altText, /09:25 到站牌/);
+  assert.match(r[1].altText, /09:\d\d–\d\d:\d\d 到東吳/);
+  // 換回真的時間
+  assert.ok(Math.abs(env.run('Date.now()') - Date.now()) < 5000, 'Date 已經換回來');
+  // 別人不受影響
+  const other = replyOf(env, 'B', { type: 'location', latitude: SHIPAI[0], longitude: SHIPAI[1] });
+  assert.notEqual(other[0].text, '🧪 測試模式：當成週三 09:05');
+  // 預估紀錄：不記使用者和位置
+  const rows = env.sheets['預估紀錄'].rows;
+  assert.deepEqual(plain(rows[0]), ['記錄時間', '測試模式（假裝的時間）', '類型', '上課時間', '出發／到站牌', '推薦站牌', '預估到東吳（最早）', '預估到東吳（最晚）', '尖峰']);
+  const row = rows[1];
+  assert.equal(row[1], '週三 09:05');
+  assert.equal(row[2], '現在出發');
+  assert.match(row[4], /到站牌 \d{4}-\d\d-\d\d 09:25/);
+  assert.match(row[6], / 09:\d\d$/);
+  assert.equal(row[8], '是', '09:25 是尖峰');
+  assert.doesNotMatch(JSON.stringify(rows), /25\.114|121\.515|"A"|"B"/);
+  // 結束
+  assert.match(replyOf(env, 'A', { type: 'text', text: '測試時間 結束' })[0].text, /測試模式結束/);
+  const after = replyOf(env, 'A', { type: 'text', text: '選單' });
+  assert.notEqual(after[0].text, '🧪 測試模式：當成週三 09:05');
+});
+
+test('測試模式：格式不對就教用法', () => {
+  const env = loadBot(ALL);
+  assert.match(replyOf(env, 'A', { type: 'text', text: '測試時間' })[0].text, /測試時間 週三 09:05/);
+});

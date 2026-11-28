@@ -21,6 +21,13 @@ function doPost(e) {
 }
 
 function handleEvent_(ev) {
+  // 到校預估.gs 的測試模式：這個人在測試模式，就整則訊息都當成假裝的時間處理，回覆前面加一行提示
+  const test = typeof etaTestOf_ === 'function' && ev.source && etaTestOf_(ev.source.userId);
+  if (!test) return handleEventNow_(ev);
+  return etaWithTestTime_(test, () => handleEventNow_(ev));
+}
+
+function handleEventNow_(ev) {
   if (ev.type === 'follow') {
     reply_(ev.replyToken, menuWelcome_()); // 選單.gs
     log_(ev, '（加入好友）', menuWelcome_());
@@ -52,6 +59,7 @@ function handleEvent_(ev) {
       console.error(err);
       answer = '抱歉，資料暫時抓不到，等一下再試一次 🙏';
     }
+    if (typeof etaTestLabel_ !== 'undefined' && etaTestLabel_) answer = ['🧪 測試模式：當成' + etaTestLabel_].concat(answer);
     reply_(ev.replyToken, answer);
     log_(ev, '（傳了位置）', answer);
     return;
@@ -72,6 +80,8 @@ function handleEvent_(ev) {
       answer = menuCategory_('557 以外的選擇'); // 「我想找 557 以外的通勤方式」這類說法
     } else if (/^出門時間(\s|$)/.test(text)) {
       answer = menuFlow_(text, ev.source.userId); // 選單.gs：用點的排出門時間（選好課會記下來，接著傳位置就倒推）
+    } else if (/^測試時間(\s|$)/.test(text)) {
+      answer = etaTestText_(ev.source.userId, text); // 到校預估.gs：測試模式（假日也能試預估）
     } else if (text === '到校預估 士林站') {
       answer = etaFromShilin_(); // 到校預估.gs：人已經在捷運士林站
     } else if (/^(到校預估|預估到達時間|🚇 預估到達時間|從我這裡出發幾點到校|幾點到東吳|幾點出門、幾點到東吳|🚇 幾點出門、幾點到東吳|幾點出門)$/.test(text)) {
@@ -92,6 +102,7 @@ function handleEvent_(ev) {
   }
   // 回的是出門建議（選單或口語都一樣）：記下這堂課，接著 30 分鐘內傳位置就從學生的位置倒推（到校預估.gs）
   if (etaLastClass_) etaRememberClass_(ev.source.userId, etaLastClass_.day, etaLastClass_.time, etaLastClass_.building);
+  if (typeof etaTestLabel_ !== 'undefined' && etaTestLabel_ && !/^測試時間/.test(text)) answer = ['🧪 測試模式：當成' + etaTestLabel_].concat(answer);
   reply_(ev.replyToken, answer);
   log_(ev, text, answer);
 }
