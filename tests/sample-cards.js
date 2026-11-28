@@ -82,6 +82,12 @@ function sampleCards() {
   env.run('rainPop_ = () => 80');
   const reminder = env.call('buildReminder_', new Date('2026-10-13T12:00:00+08:00'));
   keep('推播：雨天提醒', env.call('choices_', reminder.message, reminder.buttons, { title: reminder.title, menu: false }));
+  // 預估到達時間（團隊設計稿的樣子）：尖峰從石牌出發、離峰已經在士林站
+  env.walkSeconds = () => 6 * 60;
+  env.setNow('2026-11-25T09:05:00+08:00');
+  keep('預估到達時間尖峰', env.call('etaFromLocation_', 25.1144, 121.5154, 'sample'));
+  env.setNow('2026-11-25T11:05:00+08:00');
+  keep('預估到達時間離峰士林站', env.call('etaFromShilin_'));
   return cards;
 }
 

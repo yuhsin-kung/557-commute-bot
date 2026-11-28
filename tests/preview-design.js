@@ -5,19 +5,19 @@ const fs = require('fs');
 const path = require('path');
 const { sampleCards } = require('./sample-cards');
 
-const SIZE = { xxs: 11, xs: 13, sm: 14, md: 16, lg: 19, xl: 22 };
+const SIZE = { xxs: 11, xs: 13, sm: 14, md: 16, lg: 19, xl: 22, xxl: 29 };
 const GAP = { none: 0, xs: 4, sm: 8, md: 12, lg: 16, xl: 20 };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function render(node, inRow) {
   if (node.type === 'text') {
-    const style = [`font-size:${SIZE[node.size] || 16}px`, `color:${node.color || '#111'}`, `font-weight:${node.weight === 'bold' ? 700 : 400}`,
+    const style = [node.margin ? `margin-top:${GAP[node.margin] != null ? GAP[node.margin] : 0}px` : '', `font-size:${SIZE[node.size] || 16}px`, `color:${node.color || '#111'}`, `font-weight:${node.weight === 'bold' ? 700 : 400}`,
       `text-align:${node.align === 'end' ? 'right' : node.align === 'center' ? 'center' : 'left'}`, !inRow ? '' : node.flex === 0 ? 'flex:0 0 auto;max-width:55%' : 'flex:1 1 0;min-width:0', // 只有橫排的文字要分寬度
       node.wrap ? 'white-space:pre-wrap;overflow-wrap:anywhere' : 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis'];
     return `<div style="${style.join(';')}">${esc(node.text)}</div>`;
   }
   if (node.type === 'filler') return '<div style="flex:1 1 0"></div>';
-  if (node.type === 'separator') return `<div style="height:1px;background:${node.color || '#ddd'};flex:0 0 1px"></div>`;
+  if (node.type === 'separator') return `<div style="height:1px;background:${node.color || '#ddd'};flex:0 0 1px;${node.margin ? 'margin-top:' + (GAP[node.margin] || 0) + 'px' : ''}"></div>`;
   if (node.type === 'button') {
     const primary = node.style === 'primary';
     return `<div style="padding:10px;border-radius:8px;text-align:center;font-size:15px;font-weight:700;${primary ? `background:${node.color};color:#fff` : `color:${node.color}`}">${esc(node.action.label)}</div>`;
@@ -29,8 +29,16 @@ function render(node, inRow) {
     if (node.paddingAll) style.push(`padding:${pad(node.paddingAll)}`);
     if (node.paddingTop) style.push(`padding-top:${pad(node.paddingTop)}`);
     if (node.cornerRadius) style.push(`border-radius:${node.cornerRadius}`);
+    if (node.paddingStart) style.push(`padding-left:${pad(node.paddingStart)}`);
+    if (node.paddingEnd) style.push(`padding-right:${pad(node.paddingEnd)}`);
+    if (node.width) style.push(`width:${node.width}`);
+    if (node.height) style.push(`height:${node.height}`, 'flex:0 0 auto');
+    if (node.margin) style.push(`margin-top:${GAP[node.margin] != null ? GAP[node.margin] : 0}px`);
+    if (node.alignItems) style.push(`align-items:${node.alignItems === 'center' ? 'center' : node.alignItems}`);
+    if (node.layout === 'baseline') style.push('flex-direction:row', 'align-items:baseline');
+    if (inRow && node.flex === 0) style.push('flex:0 0 auto');
     if (inRow && node.flex === 1) style.push('flex:1 1 0', 'min-width:0'); // 兩欄的按鈕一樣寬
-    return `<div style="${style.join(';')}">${node.contents.map(c => render(c, node.layout === 'horizontal')).join('')}</div>`;
+    return `<div style="${style.join(';')}">${node.contents.map(c => render(c, node.layout === 'horizontal' || node.layout === 'baseline')).join('')}</div>`;
   }
   return '';
 }

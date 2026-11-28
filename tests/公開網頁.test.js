@@ -117,3 +117,16 @@ test('傳「定位測試」會拿到打開測試頁的按鈕', () => {
   const reply = env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body;
   assert.equal(buttonsOf(reply.messages[0])[0][1], 'https://script.google.com/macros/s/TEST/exec?page=geo');
 });
+
+test('bot/ 裡不能有兩個同名的函式（Apps Script 全部檔案共用一個空間，後載入的會蓋掉前面的）', () => {
+  const seen = {};
+  const dup = [];
+  fs.readdirSync(path.join(__dirname, '..', 'bot')).filter(f => f.endsWith('.gs')).forEach(file => {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'bot', file), 'utf8');
+    for (const m of src.matchAll(/^function\s+([\w$]+_)\s*\(/gm)) { // 只看 Bot 自己的函式（底線結尾）；網頁 HTML 字串裡的 function 不算
+      if (seen[m[1]]) dup.push(m[1] + '（' + seen[m[1]] + '、' + file + '）');
+      seen[m[1]] = file;
+    }
+  });
+  assert.deepEqual(dup, []);
+});
