@@ -6,12 +6,12 @@ const path = require('path');
 const { sampleCards } = require('./sample-cards');
 
 const SIZE = { xxs: 11, xs: 13, sm: 14, md: 16, lg: 19, xl: 22, xxl: 29 };
-const GAP = { none: 0, xs: 4, sm: 8, md: 12, lg: 16, xl: 20 };
+const GAP = { none: 0, xs: 2, sm: 4, md: 8, lg: 12, xl: 16, xxl: 20 }; // 跟 LINE Flex Message 一樣（md 是 8px、lg 是 12px）
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 function render(node, inRow) {
   if (node.type === 'text') {
-    const style = [node.margin ? `margin-top:${GAP[node.margin] != null ? GAP[node.margin] : 0}px` : '', `font-size:${SIZE[node.size] || 16}px`, `color:${node.color || '#111'}`, `font-weight:${node.weight === 'bold' ? 700 : 400}`,
+    const style = [node.margin ? `margin-top:${GAP[node.margin] != null ? GAP[node.margin] : 0}px` : '', `font-size:${SIZE[node.size] || 16}px`, `color:${node.color || '#111'}`, `font-weight:${node.weight === 'bold' ? 700 : 400}`, node.lineSpacing ? `line-height:calc(1.4em + ${node.lineSpacing})` : 'line-height:1.4',
       `text-align:${node.align === 'end' ? 'right' : node.align === 'center' ? 'center' : 'left'}`, !inRow ? '' : node.flex === 0 ? 'flex:0 0 auto;max-width:55%' : 'flex:1 1 0;min-width:0', // 只有橫排的文字要分寬度
       node.wrap ? 'white-space:pre-wrap;overflow-wrap:anywhere' : 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis'];
     return `<div style="${style.join(';')}">${esc(node.text)}</div>`;
@@ -28,6 +28,8 @@ function render(node, inRow) {
     if (node.backgroundColor) style.push(`background:${node.backgroundColor}`);
     if (node.paddingAll) style.push(`padding:${pad(node.paddingAll)}`);
     if (node.paddingTop) style.push(`padding-top:${pad(node.paddingTop)}`);
+    if (node.paddingBottom) style.push(`padding-bottom:${pad(node.paddingBottom)}`);
+    if (node.borderWidth) style.push(`border:${node.borderWidth} solid ${node.borderColor || '#ddd'}`);
     if (node.cornerRadius) style.push(`border-radius:${node.cornerRadius}`);
     if (node.paddingStart) style.push(`padding-left:${pad(node.paddingStart)}`);
     if (node.paddingEnd) style.push(`padding-right:${pad(node.paddingEnd)}`);

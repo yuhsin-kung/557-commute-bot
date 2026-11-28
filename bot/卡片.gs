@@ -76,6 +76,8 @@ function cardBubble_(spec) {
     if (!bubble.footer) bubble.footer = { type: 'box', layout: 'vertical', backgroundColor: UI.paper, paddingAll: '12px', paddingTop: '0px', spacing: 'sm', contents: [] };
     bubble.footer.contents.push(menuLink_());
   }
+  // 最後一行小字（資料來源）上面隔 8px，下面也只留 8px，看起來置中（下面接按鈕區）
+  if (bubble.footer) bubble.body.paddingBottom = '8px';
   return bubble;
 }
 
@@ -232,6 +234,8 @@ function dsCard_(spec) {
   (spec.after || []).forEach(b => footer.push.apply(footer, dsBlock_(b))); // 按鈕下面的說明（例：位置隱私說明）
   if (spec.menu !== false) footer.push(menuLink_());
   const bubble = { type: 'bubble', body: { type: 'box', layout: 'vertical', paddingAll: '20px', backgroundColor: UI.paper, contents: body } };
+  // 有按鈕時內文底下不再多留 20px：最後一行小字跟上面、跟按鈕的距離一樣（都是 12px），看起來置中
+  if (footer.length) bubble.body.paddingBottom = '0px';
   if (footer.length) bubble.footer = { type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '20px', paddingTop: '12px', backgroundColor: UI.paper, contents: footer }; // 11/28：按鈕之間拉開，不擠
 
   const labels = items.map(item => '［' + (Array.isArray(item) ? item[0] : item.label) + '］').join('');
@@ -290,7 +294,7 @@ function dsBlock_(b) {
   }
   if (b.hr) return [{ type: 'separator', margin: 'lg', color: UI.line }];
   if (b.h) return [dsTx_(b.h, 'md', UI.ink, { weight: 'bold', margin: b.first ? 'md' : 'lg' })];
-  if (b.text) return [dsTx_(b.text, 'sm', b.muted ? UI.muted : UI.ink, { margin: 'md' })];
+  if (b.text) return [dsTx_(b.text, 'sm', b.muted ? UI.muted : UI.ink, { margin: b.tight ? 'sm' : 'lg' })]; // 上下留一樣的空間（12px）；tight 是緊接在標題下面的說明
   if (b.chips) {
     // 卡片裡的按鈕（例：選哪一天、第幾節），預設排兩欄；selected 的那顆是磚紅
     const cols = b.cols || 2;

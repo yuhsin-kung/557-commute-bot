@@ -108,7 +108,7 @@ function menuFlow_(text, uid) {
       { h: '你最早第幾節有課？', first: true },
     ];
     if (periods.length) {
-      blocks.push({ text: '請選擇當天最早需要到校的節次。', muted: true },
+      blocks.push({ text: '請選擇當天最早需要到校的節次。', muted: true, tight: true },
         { chips: periods.map(k => ({ label: '第 ' + k + ' 節 ' + PERIODS[k], text: '出門時間 ' + day + ' ' + PERIODS[k] })) });
     } else {
       blocks.push({ text: '今天的課都已經開始了，請改選明天。', muted: true });

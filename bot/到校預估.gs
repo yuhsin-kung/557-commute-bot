@@ -172,7 +172,7 @@ function designCard_(spec) {
     altText: String(spec.alt || [spec.heading, spec.big].filter(Boolean).join(' ')).slice(0, 400),
     contents: {
       type: 'bubble',
-      body: { type: 'box', layout: 'vertical', paddingAll: '20px', backgroundColor: '#FFFFFF', contents: body },
+      body: { type: 'box', layout: 'vertical', paddingAll: '20px', paddingBottom: '0px', backgroundColor: '#FFFFFF', contents: body }, // 底下的距離交給按鈕區的 12px，跟上面一樣
       footer: { type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '20px', paddingTop: '12px', backgroundColor: '#FFFFFF',
         contents: (spec.buttons || []).map((b, i) => chip(b, i === 0)).concat([menuLink_()]) }, // 卡片.gs
     },
