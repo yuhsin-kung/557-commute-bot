@@ -109,6 +109,7 @@ function cpFareCols_() {
 
 function cpAskDir_() {
   return dsCard_({ // 卡片.gs
+    kicker: '557 以外的選擇',
     title: '🚕 計程車共乘',
     lead: '找同學一起搭，車資分攤更划算！',
     blocks: [{ sec: '預估每人車資' }, cpFareTable_(), { sec: '請選擇搭乘方向' }],
@@ -128,6 +129,7 @@ function cpLiveStatus_(uid, dir) {
   const g = cpJoinable_(groups, dir, now);
   if (!g) {
     return dsCard_({
+      kicker: '計程車共乘',
       title: '🔔 ' + CP_DIRS[dir].label,
       blocks: [
         { text: '目前尚無其他乘客等候\n你可以成為第一位發起共乘的人！' },
@@ -141,6 +143,7 @@ function cpLiveStatus_(uid, dir) {
   const n = g.members.length;
   const left = Math.max(1, Math.ceil((g.depart - now) / 60000));
   return dsCard_({
+    kicker: '計程車共乘',
     title: '🔔 ' + CP_DIRS[dir].label,
     blocks: [
       { text: '目前有 ' + n + ' 位乘客等候中，' + (g.type === '預約' ? cpWhen_(g.depart, now) + ' 出發' : '還剩 ' + left + ' 分鐘') + '。' },
@@ -171,6 +174,7 @@ function cpJoinLive_(uid, dir) {
 
   const n = g.members.length;
   return dsCard_({
+    kicker: '計程車共乘',
     title: n === 1 ? '✅ 共乘已成功發起！' : '✅ 已加入共乘！',
     lead: n === 1 ? '你是本次共乘的團主，目前尚無其他乘客加入。' : '目前 ' + n + ' 人，每人約 $' + cpShare_(n) + '。',
     blocks: [

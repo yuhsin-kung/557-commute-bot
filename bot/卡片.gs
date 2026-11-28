@@ -143,7 +143,7 @@ function choiceChip_(item, primary) {
   else if (item.uri) action = { type: 'uri', label: label.slice(0, 20), uri: item.uri };
   else action = Object.assign({ type: 'datetimepicker', label: label.slice(0, 20) }, item.picker);
   return {
-    type: 'box', layout: 'vertical', flex: 1, backgroundColor: primary ? UI.brand : UI.soft, cornerRadius: '8px', paddingAll: '12px', action: action,
+    type: 'box', layout: 'vertical', flex: 1, backgroundColor: primary ? UI.brand : UI.soft, cornerRadius: '10px', paddingAll: '15px', action: action,
     contents: [{ type: 'text', text: label, size: 'sm', weight: 'bold', color: primary ? UI.onBrand : UI.ink, align: 'center', wrap: true }],
   };
 }
@@ -232,7 +232,7 @@ function dsCard_(spec) {
   (spec.after || []).forEach(b => footer.push.apply(footer, dsBlock_(b))); // 按鈕下面的說明（例：位置隱私說明）
   if (spec.menu !== false) footer.push(menuLink_());
   const bubble = { type: 'bubble', body: { type: 'box', layout: 'vertical', paddingAll: '20px', backgroundColor: UI.paper, contents: body } };
-  if (footer.length) bubble.footer = { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '16px', paddingTop: '0px', backgroundColor: UI.paper, contents: footer };
+  if (footer.length) bubble.footer = { type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '20px', paddingTop: '12px', backgroundColor: UI.paper, contents: footer }; // 11/28：按鈕之間拉開，不擠
 
   const labels = items.map(item => '［' + (Array.isArray(item) ? item[0] : item.label) + '］').join('');
   const words = [];
@@ -256,7 +256,7 @@ function dsChip_(item, primary) {
   const solid = (primary && !(item && item.style === 'outline')) || (item && item.selected);
   const outline = item && item.style === 'outline';
   const box = {
-    type: 'box', layout: 'vertical', flex: 1, cornerRadius: '8px', paddingAll: '12px', action: action,
+    type: 'box', layout: 'vertical', flex: 1, cornerRadius: '10px', paddingAll: '15px', action: action,
     backgroundColor: solid ? UI.brand : outline ? UI.paper : UI.soft,
     contents: [dsTx_(label, 'sm', solid ? UI.onBrand : outline ? UI.brand : UI.ink, { weight: 'bold', align: 'center' })],
   };
@@ -265,7 +265,8 @@ function dsChip_(item, primary) {
 }
 
 function dsTx_(text, size, color, extra) {
-  return Object.assign({ type: 'text', text: String(text), size: size, color: color || UI.ink, wrap: true }, extra || {});
+  // 多行的字行距拉開一點，不擠（11/28 團隊回饋）
+  return Object.assign({ type: 'text', text: String(text), size: size, color: color || UI.ink, wrap: true, lineSpacing: /^(xl|xxl|3xl)$/.test(size) ? undefined : '5px' }, extra || {});
 }
 
 function dsBadge_(text) {
@@ -275,7 +276,7 @@ function dsBadge_(text) {
 
 /** 灰色（或淡磚紅）圓角小框 */
 function dsBox_(contents, extra) {
-  return Object.assign({ type: 'box', layout: 'vertical', backgroundColor: UI.soft, cornerRadius: '12px', paddingAll: '12px', contents: contents }, extra || {});
+  return Object.assign({ type: 'box', layout: 'vertical', backgroundColor: UI.soft, cornerRadius: '12px', paddingAll: '14px', contents: contents }, extra || {});
 }
 
 /** 一塊內容 → 卡片元件（可能好幾個） */
@@ -419,14 +420,14 @@ function dsBlock_(b) {
     ] }));
   }
   if (b.info) {
-    return b.info.map(r => {
-      const right = [dsTx_(r[1], 'sm', UI.ink, { weight: 'bold', align: 'end' })];
-      if (r[2]) right.push({ type: 'box', layout: 'horizontal', margin: 'xs', contents: [{ type: 'filler' }, dsBadge_(r[2])] });
-      return { type: 'box', layout: 'horizontal', margin: 'md', spacing: 'md', contents: [
-        dsTx_(r[0], 'sm', UI.muted, { flex: 2 }),
-        { type: 'box', layout: 'vertical', flex: 5, contents: right },
-      ] };
+    const inner = [];
+    b.info.forEach((r, i) => {
+      if (i) inner.push({ type: 'separator', margin: 'lg', color: UI.line });
+      inner.push(dsTx_(r[0], 'xs', UI.muted, { margin: i ? 'lg' : 'none' }));
+      inner.push(dsTx_(r[1], 'md', UI.ink, { weight: 'bold', margin: 'sm' }));
+      if (r[2]) inner.push({ type: 'box', layout: 'horizontal', margin: 'sm', contents: [dsBadge_(r[2]), { type: 'filler' }] });
     });
+    return [dsBox_(inner, { margin: 'md', paddingAll: '16px' })];
   }
   if (b.panel) {
     const p = b.panel;

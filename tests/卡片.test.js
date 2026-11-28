@@ -74,7 +74,7 @@ test('即時比較：照到校時間排，最快的標成推薦，不會到東�
   // 11/28 團隊設計稿：今日推薦路線（公車最快）→ 其他公車路線 → 其他通勤方式 → 通勤建議
   const card = sampleCards().即時比較;
   const alt = card.altText;
-  assert.match(alt, /^多路線比較\n士林站 → B 棟\n綜合大樓/);
+  assert.match(alt, /^出門前提醒\n士林站 → B 棟\n綜合大樓/, '左上角放上一層的標題');
   assert.match(alt, /今日推薦路線\n紅30\n公車最快\n\d\d:\d\d\n預計抵達 B 棟\n📍 下車後步行進入校園・即將進站/);
   assert.match(alt, /其他公車路線\n255\n錢穆故居站下車，走 5 分鐘\n\d\d:\d\d 到\n\d+ 分鐘後\n304重慶\n[^\n]+\n[^\n]+\n[^\n]+\n557\n直接進校園，走 2 分鐘/);
   assert.match(alt, /其他通勤方式\n🚕 計程車共乘/, '公車下面接著其他方法（這裡沒有 YouBike 資料）');

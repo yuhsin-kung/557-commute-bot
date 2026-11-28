@@ -96,7 +96,7 @@ function handleEventNow_(ev) {
       answer = geoTestButton_(); // 定位測試.gs（暫時的）
     } else if (/^(訂閱提醒|取消提醒|開啟提醒|關閉提醒)$/.test(text)) {
       answer = subscribe_(ev.source.userId, text === '訂閱提醒' || text === '開啟提醒'); // 晚上提醒.gs（按鈕傳出的字跟按鈕一樣：開啟提醒、關閉提醒）
-    } else if (/^(訂閱提醒設定|雨天與考試週訂閱提醒|已開啟提醒|✅ 已開啟提醒)$/.test(text)) {
+    } else if (/^(訂閱提醒設定|雨天與考試週訂閱提醒|雨天與考試週提醒|已開啟提醒|✅ 已開啟提醒)$/.test(text)) {
       answer = remindSettings_(ev.source.userId);
     } else {
       // 積分、打卡、YouBike、雨傘、新生、包車：要知道是誰傳的，所以排在 route_ 前面
@@ -134,7 +134,7 @@ function memberReply_(uid, text) {
   if (/^(借傘|還傘|共享雨傘)(\s|$)/.test(text)) return umText_(); // 雨傘.gs：Raingo 租借站說明
   if (/^(新生須知|新生教學|新生)$/.test(text)) return nbIntro_(); // 新生.gs
   if (text === '新生測驗' || /^答\s*[1-3]$/.test(text)) return nbQuiz_(uid, text);
-  if (text === '排隊禮儀') return nbEtiquette_();
+  if (text === '排隊禮儀' || text === '排隊禮儀短片') return nbEtiquette_();
   if (/^(包車|包車調查|學生包車)(\s|$)/.test(text)) return charterText_(); // 新生.gs
   if (/^(出門提醒 |取消出門提醒$)/.test(text)) return lvText_(uid, text); // 發車提醒.gs
   if (text === '回報我在哪裡排隊') return rpText_(uid, '回報現場'); // 按鈕傳出的字跟按鈕一樣
@@ -202,7 +202,7 @@ function bus557Reply_() {
   if (ended) blocks.push({ panel: { tone: 'warn', title: 'ⓘ 557 今天已經收班', lines: ['可以按「比較所有路線」改搭其他公車，或找人共乘計程車。'] } });
   blocks.push({ hr: true }, { small: '🔄 TDX 即時資料・' + nowText_() });
   return dsCard_({ // 卡片.gs
-    kicker: '557 即時動態',
+    kicker: '出門前提醒',
     title: '557 往東吳 / 往捷運站',
     blocks: blocks,
     buttons: [['比較所有路線', '比較所有路線'], ['回報我在哪裡排隊', '回報我在哪裡排隊'], { label: '查看 557 站牌資訊', text: '查看 557 站牌資訊', style: 'outline' }],
@@ -292,7 +292,7 @@ function rainReply_(uid) {
   // 訂閱過的人按鈕改成「已開啟提醒」（晚上提醒.gs），避免重複訂閱
   const on = uid ? isSubscribed_(uid) : false;
   return dsCard_({ // 卡片.gs
-    kicker: '降雨查詢',
+    kicker: '出門前提醒',
     title: target.title,
     route: '士林區',
     blocks: [

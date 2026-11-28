@@ -77,6 +77,7 @@ function subscribe_(userId, on) {
   }
   if (on) {
     return dsCard_({ // 卡片.gs（11/28 團隊設計稿）
+      kicker: '雨天與考試週提醒',
       title: '✅ 訂閱成功！',
       lead: '已成功開啟雨天與考試週提醒。',
       blocks: [
@@ -88,6 +89,7 @@ function subscribe_(userId, on) {
     });
   }
   return dsCard_({
+    kicker: '雨天與考試週提醒',
     title: '✅ 已取消提醒！',
     lead: '已關閉雨天與考試週提醒，之後不會再收到相關推播。',
     blocks: [{ panel: { title: '想重新開啟提醒嗎？', lines: ['隨時傳送「訂閱提醒」，即可重新開啟通知。'], quiet: true, margin: 'md' } }],

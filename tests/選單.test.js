@@ -28,7 +28,9 @@ function send(env, text, uid = 'A') {
   return env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body.messages;
 }
 const isUnknown = messages => /這個問題我看不太懂/.test(messages[0].altText || messages[0].text || '');
-const titleOf = message => message.contents.header.contents[message.contents.header.contents.length - 1].text;
+// 標題：舊版卡片在標題列，設計稿版型（dsCard_）在內文第一個橫排
+const titleOf = message => (message.contents.header ? message.contents.header.contents[message.contents.header.contents.length - 1].text
+  : message.contents.body.contents.find(c => c.layout === 'horizontal').contents[0].text);
 
 test('選單：一則訊息，四個分類的按鈕', () => {
   const env = start();
@@ -43,12 +45,16 @@ test('按分類，Bot 把那一類的功能按鈕傳到聊天室', () => {
   const env = start();
   const out = send(env, '出門前提醒')[0];
   assert.equal(titleOf(out), '出門前提醒');
+  // 11/28 團隊設計稿（圖五～八）：左上「選單」、標題、灰字說明，按鈕傳出的字跟按鈕上的字一樣，第一顆磚紅
+  assert.match(out.altText, /^選單\n出門前提醒\n想知道現在出發幾點到東吳？或是想提前規劃出門時間？也可以查詢 557 即時動態、其他公車路線及天氣資訊。/);
   assert.deepEqual(buttonsOf(out), [
-    ['🚇 預估到達時間', '預估到達時間'], ['⏰ 出發時間規劃', '出門時間'], ['🚌 557 即時動態', '557 即時動態'], ['🗺️ 比較所有路線', '比較所有路線'],
-    ['🌧️ 降雨查詢', '降雨查詢'], ['📩 雨天與考試週訂閱提醒', '訂閱提醒設定'],
+    ['📍 預估到達時間', '預估到達時間'], ['⏰ 出發時間規劃', '出發時間規劃'], ['🚌 557 即時動態', '557 即時動態'], ['🗺️ 比較所有路線', '比較所有路線'],
+    ['🌧️ 降雨查詢', '降雨查詢'], ['🔔 雨天與考試週提醒', '雨天與考試週提醒'],
   ]);
+  assert.equal(out.contents.footer.contents[0].backgroundColor, '#A63A2B');
+  assert.equal(out.contents.footer.contents[1].backgroundColor, '#EEF2F7');
   assert.deepEqual(buttonsOf(send(env, '公車站牌與排隊禮儀')[0]), [
-    ['📍 557 上車地點', '557 站牌資訊'], ['🎬 排隊禮儀短片', '排隊禮儀'], ['🙋 回報我在哪裡排隊', '回報現場'], ['🎒 新生須知', '新生須知'],
+    ['💬 回報我在哪裡排隊', '回報我在哪裡排隊'], ['📍 557 上車地點', '557 上車地點'], ['🎬 排隊禮儀短片', '排隊禮儀短片'], ['🎒 新生須知', '新生須知'],
   ]);
   const main = send(env, MAIN)[0];
   assert.match(main.altText, /預估到達時間/);
@@ -60,22 +66,24 @@ test('按分類，Bot 把那一類的功能按鈕傳到聊天室', () => {
   assert.deepEqual(buttonsOf(send(env, '557 以外的選擇')[0]), [['🚕 計程車共乘', '計程車共乘'], ['🚲 YouBike 查詢', 'YouBike 查詢'], ['☂️ 共享雨傘', '共享雨傘'], ['🚐 包車調查', '包車調查']]);
   ['共乘', 'YouBike', '包車'].forEach(old => assert.equal(isUnknown(send(env, old)), false, '舊的「' + old + '」也認得'));
   assert.deepEqual(buttonsOf(send(env, '積分與打卡')[0]), [
-    ['🏫 到校打卡', '到校打卡'], ['🏠 出校打卡', '出校打卡'], ['📒 我的紀錄', '我的紀錄'], ['🎟️ 兌換學餐折價券', '兌換折價券'], ['🎫 我的折價券', '我的折價券'], ['🌱 全校減碳', '全校減碳'],
+    ['🏫 到校打卡', '到校打卡'], ['🏠 出校打卡', '出校打卡'], ['📒 我的紀錄', '我的紀錄'], ['🎟️ 兌換學餐折價券', '兌換學餐折價券'], ['🎫 我的折價券', '我的折價券'], ['🌱 全校減碳', '全校減碳'],
   ]);
 });
 
 test('公車站牌與排隊禮儀：舊名稱「公車站牌與排隊」也認得；上車地點、排隊禮儀分開傳也認得', () => {
   const env = start();
-  assert.deepEqual(buttonsOf(send(env, '公車站牌與排隊')[0]).map(b => b[1]), ['557 站牌資訊', '排隊禮儀', '回報現場', '新生須知']);
-  assert.equal(send(env, '557 站牌資訊')[0].contents.type, 'bubble');
-  assert.equal(send(env, '排隊禮儀')[0].altText, '排隊禮儀短片：一起排好，大家都快');
+  assert.deepEqual(buttonsOf(send(env, '公車站牌與排隊')[0]).map(b => b[1]), ['回報我在哪裡排隊', '557 上車地點', '排隊禮儀短片', '新生須知']);
+  ['557 站牌資訊', '557 上車地點'].forEach(t => assert.match(send(env, t)[0].altText, /上車/, t));
+  ['排隊禮儀', '排隊禮儀短片'].forEach(t => assert.equal(send(env, t)[0].altText, '排隊禮儀短片：一起排好，大家都快', t));
+  assert.match(send(env, '回報我在哪裡排隊')[0].altText, /排隊/);
+  assert.match(send(env, '雨天與考試週提醒')[0].altText, /提醒條件/);
 });
 
 test('每個功能的入口都在某個分類裡', () => {
   const env = start();
   const all = CATEGORIES.flatMap(c => buttonsOf(send(env, c)[0]).map(b => b[1]));
-  ['預估到達時間', '比較所有路線', '557 即時動態', '降雨查詢', '訂閱提醒設定', '557 站牌資訊', '排隊禮儀', '回報現場', '新生須知', // 出門時間、我已經在士林站在「預估到達時間」裡
-    '計程車共乘', 'YouBike 查詢', '共享雨傘', '包車調查', '到校打卡', '出校打卡', '我的紀錄', '兌換折價券', '我的折價券', '全校減碳'] // 騎車到校在「到校打卡」裡（積分.test.js）
+  ['預估到達時間', '出發時間規劃', '比較所有路線', '557 即時動態', '降雨查詢', '雨天與考試週提醒', '557 上車地點', '排隊禮儀短片', '回報我在哪裡排隊', '新生須知', // 出門時間、我已經在士林站在「預估到達時間」裡
+    '計程車共乘', 'YouBike 查詢', '共享雨傘', '包車調查', '到校打卡', '出校打卡', '我的紀錄', '兌換學餐折價券', '我的折價券', '全校減碳'] // 騎車到校在「到校打卡」裡（積分.test.js）
     .forEach(command => assert.ok(all.includes(command), '沒有「' + command + '」的按鈕'));
 });
 
@@ -162,7 +170,7 @@ test('加好友：歡迎的話、新生須知、選單', () => {
 test('出發時間規劃（11/28 團隊設計稿）：一張卡片選哪一天、最早第幾節（第 1～C 節兩欄），按了節次直接出建議，不再問大樓', () => {
   const env = start();
   const card = send(env, '出門時間 明天')[0];
-  assert.match(saidOf(card), /^通勤時間設定\n⏰ 出發時間規劃\n/);
+  assert.match(saidOf(card), /^出門前提醒\n⏰ 出發時間規劃\n/);
   const json = JSON.stringify(plain(card.contents.body));
   assert.match(json, /你哪一天要去學校？[\s\S]*你最早第幾節有課？[\s\S]*請選擇當天最早需要到校的節次。[\s\S]*ⓘ 小提醒[\s\S]*選擇當天最早的上課節次，系統將依照課程時間，幫你估算建議出門時間及預計抵達時間。/);
   const b = buttonsOf(card);

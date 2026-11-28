@@ -194,7 +194,7 @@ function liveReply_(originName, building, classAt) {
   const etas = etaAtStop_(o.stop);
   const now = new Date();
   const target = building ? building + ' 棟' : '東吳大學';
-  const head = { kicker: '多路線比較', title: originName + ' → ' + target, route: building ? BUILDINGS[building][0] : '' };
+  const head = { kicker: '出門前提醒', title: originName + ' → ' + target, route: building ? BUILDINGS[building][0] : '' };
 
   const options = [];
   o.routes.forEach(([route, dir, dest]) => {

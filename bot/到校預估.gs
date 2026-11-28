@@ -91,7 +91,7 @@ const ETA_UI = { // 跟卡片.gs 的 UI 同一套顏色：重點色磚紅（變�
   line: '#E5E7EB', panel: '#EEF2F7', track: '#CBD5E1', orange: '#F59E0B', calm: '#64748B', amber: '#B45309' };
 
 function etaTx_(text, size, color, extra) {
-  return Object.assign({ type: 'text', text: String(text), size: size, color: color || ETA_UI.ink, wrap: true }, extra || {});
+  return Object.assign({ type: 'text', text: String(text), size: size, color: color || ETA_UI.ink, wrap: true, lineSpacing: /^(xl|xxl|3xl)$/.test(size) ? undefined : '5px' }, extra || {});
 }
 
 /** 左邊標籤、右邊數值的一列 */
@@ -164,7 +164,7 @@ function designCard_(spec) {
   }
   (spec.warns || []).forEach(w => body.push(etaTx_('⚠️ ' + w, 'sm', ETA_UI.amber, { margin: 'md' })));
   if (spec.footnote) body.push(etaTx_(spec.footnote, 'xxs', ETA_UI.muted, { margin: 'lg' }));
-  const chip = (item, primary) => ({ type: 'box', layout: 'vertical', backgroundColor: primary ? ETA_UI.green : ETA_UI.panel, cornerRadius: '8px', paddingAll: '12px',
+  const chip = (item, primary) => ({ type: 'box', layout: 'vertical', backgroundColor: primary ? ETA_UI.green : ETA_UI.panel, cornerRadius: '10px', paddingAll: '15px',
     action: { type: 'message', label: item[0].slice(0, 20), text: item[1] },
     contents: [etaTx_(item[0], 'sm', primary ? '#FFFFFF' : ETA_UI.ink, { weight: 'bold', align: 'center' })] });
   return {
@@ -173,7 +173,7 @@ function designCard_(spec) {
     contents: {
       type: 'bubble',
       body: { type: 'box', layout: 'vertical', paddingAll: '20px', backgroundColor: '#FFFFFF', contents: body },
-      footer: { type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '16px', paddingTop: '0px', backgroundColor: '#FFFFFF',
+      footer: { type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '20px', paddingTop: '12px', backgroundColor: '#FFFFFF',
         contents: (spec.buttons || []).map((b, i) => chip(b, i === 0)).concat([menuLink_()]) }, // 卡片.gs
     },
   };
@@ -198,7 +198,7 @@ function etaTipOf_(b) {
 function etaCard_(spec) {
   const b = spec.bus;
   return designCard_({
-    kicker: '今日通勤預測', heading: '預計抵達東吳', big: b.arrive.replace(/^約 /, ''), subs: [spec.origin],
+    kicker: '預估到達時間', heading: '預計抵達東吳', big: b.arrive.replace(/^約 /, ''), subs: [spec.origin],
     sections: [{ title: spec.leg.title, note: spec.leg.note, rows: spec.leg.rows }, etaBusSection_(b)],
     tip: etaTipOf_(b),
     buttons: [['再查一次', '到校預估'], ['⏰ 出發時間規劃', '出門時間']],
@@ -217,7 +217,7 @@ function p557Lines_(atStop) {
 /** 「預估到達時間」的入口：現在出發，幾點到東吳（11/28 團隊設計稿；趕課倒推是另一顆按鈕「⏰ 出發時間規劃」） */
 function etaButton_() {
   return dsCard_({ // 卡片.gs
-    kicker: '通勤時間預估',
+    kicker: '出門前提醒', // 左上角放上一層的標題
     title: '📍 預估到達時間',
     blocks: [
       { h: '現在出發，幾點能到東吳？', first: true },
@@ -406,7 +406,7 @@ function etaFromShilin_() {
   const walk = `從捷運士林站走到 557 站牌約 ${MRT_EXIT_TO_STOP_MIN} 分鐘，約 ${hm(atStop)} 到站牌`;
   if (!bus) {
     return dsCard_({ // 卡片.gs（11/28 團隊設計稿）
-      kicker: '我已經在士林站', title: '🚉 幾點到東吳',
+      kicker: '預估到達時間', title: '🚉 幾點到東吳',
       blocks: [
         { stat: { label: '預計抵達 557 站牌', value: hm(atStop), note: '從捷運士林站步行約 ' + MRT_EXIT_TO_STOP_MIN + ' 分鐘' } },
         { panel: { tone: 'warn', title: 'ⓘ 班次預測提醒', lines: ['目前尚無 557 班次預測資料，僅提供平日 07:00–18:30 的預測。'], margin: 'md' } },

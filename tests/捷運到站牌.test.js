@@ -172,8 +172,8 @@ const sendLoc = (env, lat, lng) => { env.call('handleEvent_', { type: 'message',
 test('入口（11/28 團隊設計稿）：傳送我的位置、選擇捷運站、我已經在士林站、出發時間規劃；說明和位置隱私說明', () => {
   const env = loadBot(ALL);
   const card = env.call('etaButton_');
-  assert.match(card.altText, /^通勤時間預估\n📍 預估到達時間\n現在出發，幾點能到東吳？\n傳送目前位置，Bot 將幫你估算：\n🚉 走到哪個捷運站或公車站\n🚌 建議搭乘哪班公車\n🕘 幾點到達東吳大學\n如果已經在士林站，也可以直接選擇下方按鈕。\n🛡️ 位置隱私說明\n位置僅用於計算通勤時間，不會記錄。/);
-  assert.doesNotMatch(card.altText, /^出門前提醒/, '左上角不再寫出門前提醒');
+  assert.match(card.altText, /^出門前提醒\n📍 預估到達時間\n現在出發，幾點能到東吳？\n傳送目前位置，Bot 將幫你估算：\n🚉 走到哪個捷運站或公車站\n🚌 建議搭乘哪班公車\n🕘 幾點到達東吳大學\n如果已經在士林站，也可以直接選擇下方按鈕。\n🛡️ 位置隱私說明\n位置僅用於計算通勤時間，不會記錄。/);
+  // 左上角放上一層的標題（出門前提醒）
   assert.deepEqual(buttonsOf(card), [['📍 傳送我的位置', 'https://line.me/R/nv/location/'], ['🚇 選擇捷運站', '選擇捷運站'], ['🚉 我已經在士林站', '我已經在士林站'], ['⏰ 出發時間規劃', '出發時間規劃']]);
   assert.match(sendText(env, '我已經在士林站').altText, /幾點到東吳/);
   assert.match(sendText(env, '出發時間規劃').altText, /出發時間規劃/);
