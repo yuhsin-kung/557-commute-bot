@@ -241,7 +241,7 @@ function liveReply_(originName, building, classAt) {
     notes: notes,
     warns: warns,
     footer: (classAt ? fmt_(classAt) + ' 上課・' : '') + 'TDX 即時資料・' + nowText_() + '・車程為估計值',
-    buttons: [{ label: '找人共乘計程車', text: '共乘' }, { label: 'YouBike 車數', text: 'YouBike' }],
+    buttons: [{ label: '找人共乘計程車', text: '共乘' }, { label: 'YouBike 查詢', text: 'YouBike' }],
   }));
 }
 

@@ -108,7 +108,7 @@ function etaRow_(label, value) {
  *   heading   粗體標題（例：預計抵達東吳）
  *   big       綠色大字（例：09:35–09:40）
  *   subs      大字下面的小字（陣列）
- *   sections  [{ title, badge, big, bigNote, note, queue: { pct, busy, caption }, rows: [[標籤, 值]], subTitle, subRows }]
+ *   sections  [{ title, badge, big, bigNote, note, queue: { pct, busy }, rows: [[標籤, 值]], subTitle, subRows }]
  *   tip       { title, name, pct, pctLabel, text }（淺綠色框）
  *   warns     要注意的事（琥珀色字）
  *   footnote  最下面的小字
@@ -142,7 +142,6 @@ function designCard_(spec) {
         { type: 'box', layout: 'vertical', margin: 'sm', height: '8px', cornerRadius: '4px', backgroundColor: ETA_UI.track,
           contents: [{ type: 'box', layout: 'vertical', width: Math.max(pct, 1) + '%', height: '8px', cornerRadius: '4px',
             backgroundColor: sec.queue.busy ? ETA_UI.orange : ETA_UI.calm, contents: [{ type: 'filler' }] }] },
-        etaTx_(sec.queue.caption, 'xs', ETA_UI.muted, { margin: 'sm' }),
       ] });
     }
     (sec.rows || []).forEach(r => body.push(etaRow_(r[0], r[1])));
@@ -184,7 +183,7 @@ function etaBusSection_(b, title) {
   return {
     title: title || '02 557 搭乘建議', badge: '首選班次', big: b.first.replace(/^約 /, ''), bigNote: '預計公車進站時間',
     queue: { pct: b.qm, busy: b.peak && b.qm >= 10,
-      caption: (b.peak && b.qm >= 10 ? '常常要排，排不上就搭下一班。' : '這個時段通常不用排。') + '搭上後約 ' + b.arrive.replace(/^約 /, '') + ' 抵達' },
+    },
     subTitle: '下一班備選', subRows: [['進站時間', b.next.replace(/^約 /, '')], ['抵達東吳', b.nextArrive.replace(/^約 /, '')]],
   };
 }
