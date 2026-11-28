@@ -78,8 +78,8 @@ function handleEventNow_(ev) {
       answer = menuCategory_(text); // 選單.gs：按了分類，傳那一類的功能按鈕
     } else if (/557\s*以外|替代(路線|方式|交通)|其他的?(通勤|交通)/.test(text)) {
       answer = menuCategory_('557 以外的選擇'); // 「我想找 557 以外的通勤方式」這類說法
-    } else if (/^(⏰ ?)?幾點出門$/.test(text)) {
-      answer = menuFlow_('出門時間', ev.source.userId); // 選單.gs：趕課倒推（跟按「⏰ 幾點出門」一樣）
+    } else if (/^(⏰ ?)?(出發時間規劃|幾點出門)$/.test(text)) {
+      answer = menuFlow_('出門時間', ev.source.userId); // 選單.gs：趕課倒推（跟按「⏰ 出發時間規劃」一樣）
     } else if (/^出門時間(\s|$)/.test(text)) {
       answer = menuFlow_(text, ev.source.userId); // 選單.gs：用點的排出門時間（選好課會記下來，接著傳位置就倒推）
     } else if (/^測試時間(\s|$)/.test(text)) {

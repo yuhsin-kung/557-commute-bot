@@ -16,8 +16,8 @@ const MENU = [
   {
     name: '出門前提醒',
     hint: '現在出發幾點到東吳？要趕課最晚幾點出門？出門前也看看 557 現在到哪、其他路線和天氣。',
-    // 11/28 團隊決定：「預估到達時間」（現在出發幾點到）和「幾點出門」（趕課倒推）分成兩顆
-    buttons: [['🚇 預估到達時間', '預估到達時間'], ['⏰ 幾點出門', '出門時間'], ['557 即時動態', '557 即時動態'], ['比較所有路線', '比較所有路線'],
+    // 11/28 團隊決定：「預估到達時間」（現在出發幾點到）和「出發時間規劃」（趕課倒推）分成兩顆
+    buttons: [['🚇 預估到達時間', '預估到達時間'], ['⏰ 出發時間規劃', '出門時間'], ['557 即時動態', '557 即時動態'], ['比較所有路線', '比較所有路線'],
       ['降雨查詢', '降雨查詢'], ['雨天與考試週訂閱提醒', '訂閱提醒設定']],
   },
   {
@@ -88,13 +88,13 @@ function menuFlow_(text, uid) {
   const now = new Date();
 
   if (day !== '今天' && day !== '明天') {
-    return choices_('哪一天要去學校？', [['今天', '出門時間 今天'], ['明天', '出門時間 明天']], { title: '⏰ 幾點出門', badge: '第 1 步', primary: false });
+    return choices_('哪一天要去學校？', [['今天', '出門時間 今天'], ['明天', '出門時間 明天']], { title: '⏰ 出發時間規劃', badge: '第 1 步', primary: false });
   }
   if (!/^\d{2}:\d{2}$/.test(time || '')) {
     // 今天只列還沒開始的節次
     const periods = MENU_PERIODS.filter(k => day === '明天' || timeOn_(now, PERIODS[k]) > now);
     if (!periods.length) return choices_('今天的課都已經開始了，要改看明天的上課時間嗎？', [['看明天的', '出門時間 明天']]);
-    return choices_('你' + day + '第幾節有課？\n\n例如：第一節、第二節', periods.map(k => ['第 ' + k + ' 節 ' + PERIODS[k], '出門時間 ' + day + ' ' + PERIODS[k]]), { title: '⏰ 幾點出門', badge: '第 2 步' });
+    return choices_('你' + day + '第幾節有課？\n\n例如：第一節、第二節', periods.map(k => ['第 ' + k + ' 節 ' + PERIODS[k], '出門時間 ' + day + ' ' + PERIODS[k]]), { title: '⏰ 出發時間規劃', badge: '第 2 步' });
   }
   // 日期和節次已確定：先查放假／考試週。放假就不用再問大樓、也不出建議卡。
   const ctx = classContext_({ day: day, arriveTime: time, building: BUILDINGS[building] ? building : '' });
@@ -104,11 +104,11 @@ function menuFlow_(text, uid) {
     const carried = ORIGINS[building] ? building : (ORIGINS[origin] ? origin : '');
     const originTail = carried && carried !== '士林站' ? ' ' + carried : '';
     const items = MENU_BUILDINGS.map(k => [k + ' ' + menuBuildingName_(k), '出門時間 ' + day + ' ' + time + ' ' + k + originTail]);
-    return choices_('你在哪一棟上課？\n\n我會幫你估算從下車地點走到教室需要的時間。', items.concat([['不指定', '出門時間 ' + day + ' ' + time + ' 不指定' + originTail]]), { title: '⏰ 幾點出門', badge: '第 3 步' });
+    return choices_('你在哪一棟上課？\n\n我會幫你估算從下車地點走到教室需要的時間。', items.concat([['不指定', '出門時間 ' + day + ' ' + time + ' 不指定' + originTail]]), { title: '⏰ 出發時間規劃', badge: '第 3 步' });
   }
   if (origin === '選出發站') {
     const base = ['出門時間', day, time, building].join(' ');
-    return choices_('要從哪一個捷運站出發？', Object.keys(ORIGINS).map(name => [name, base + ' ' + name]), { title: '⏰ 幾點出門', badge: '換出發站', primary: false });
+    return choices_('要從哪一個捷運站出發？', Object.keys(ORIGINS).map(name => [name, base + ' ' + name]), { title: '⏰ 出發時間規劃', badge: '換出發站', primary: false });
   }
   return compareQuery_({ // 比較器.gs
     intent: '去學校',
