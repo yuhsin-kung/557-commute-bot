@@ -59,6 +59,10 @@ function p557Bus_(atStop) {
   const wd = Number(Utilities.formatDate(atStop, TZ, 'u'));
   if (wd >= 6) return null;
   const minute = mrtMinuteOfDay_(atStop); // 捷運到站牌.gs
+  if (typeof P557_BUS === 'undefined') { // 預測表557.gs 還是舊版（沒有以車為主的表）：不要讓整則回覆壞掉
+    console.error('預測表557.gs 是舊版，沒有 P557_BUS，請貼上最新的 bot/預測表557.gs');
+    return null;
+  }
   let row = null;
   P557_BUS.forEach(r => { if (Math.abs(r[0] - minute) <= 5 && (!row || Math.abs(r[0] - minute) < Math.abs(row[0] - minute))) row = r; });
   if (!row) return null;
