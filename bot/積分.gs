@@ -230,7 +230,7 @@ function ptRedeemAsk_(uid) {
   const can = Math.floor(user.points / PT.COUPON_POINTS);
   if (!can) {
     return card_({ // 卡片.gs
-      badge: '積分與打卡',
+      badge: '通勤集點與校園回饋',
       title: '兌換學餐折價券',
       rows: [{ label: '目前積分', value: user.points + ' 點' }, { label: '還差', value: (PT.COUPON_POINTS - user.points) + ' 點', best: true }],
       notes: ['集滿 ' + PT.COUPON_POINTS + ' 點換一張 ' + PT.COUPON_VALUE + ' 元學餐折價券。早到、步行、騎車到校，一次都是 1 點。'],
@@ -238,7 +238,7 @@ function ptRedeemAsk_(uid) {
     });
   }
   return card_({
-    badge: '積分與打卡',
+    badge: '通勤集點與校園回饋',
     title: '兌換學餐折價券',
     rows: [
       { label: '目前積分', value: user.points + ' 點' },
@@ -326,7 +326,7 @@ function ptMyCoupons_(uid) {
   const usable = ptCoupons_(uid).filter(c => c.status === '未使用' && !c.expired);
   if (!usable.length) {
     return card_({ // 卡片.gs
-      badge: '積分與打卡',
+      badge: '通勤集點與校園回饋',
       title: '我的折價券',
       notes: ['目前沒有可以用的折價券。早到、步行、騎車到校一次 1 點，集滿 ' + PT.COUPON_POINTS + ' 點就能換一張 ' + PT.COUPON_VALUE + ' 元學餐折價券。'],
       buttons: user.points >= PT.COUPON_POINTS ? [{ label: '兌換學餐折價券', text: '兌換折價券' }] : [],
@@ -449,7 +449,7 @@ function ptBike_(uid) {
   if (ptFull_(uid)) return PT_FULL_TEXT;
   CacheService.getScriptCache().put('bike_wait_' + uid, '到校', PT_BIKE_WAIT_MIN * 60);
   return card_({ // 卡片.gs
-    badge: '積分與打卡',
+    badge: '通勤集點與校園回饋',
     title: '騎車到校',
     rows: [
       { label: '1', value: '騎 YouBike 到學校，在學校附近的站還車' },

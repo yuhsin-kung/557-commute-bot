@@ -65,10 +65,10 @@ function cardsPage() {
 // 11/28 試過「上一大格＋下三格」，因為簡報已經用四格，改回四格；主要功能「預估到達時間」放在出門前提醒的第一顆。
 // 上排左到右、下排左到右。text 是按了以後替使用者傳出去的字，要跟 LINE 後台設定的一樣
 const MENU = [
-  { icon: 'route', label: '出門前提醒', hint: '怎麼去・幾點出門・天氣', text: '出門前提醒', primary: true },
-  { icon: 'car', label: '557 以外的選擇', hint: '共乘・YouBike・共享雨傘', text: '557 以外的選擇' },
-  { icon: 'bus-stop', label: '公車站牌與排隊', hint: '上車地點・排隊禮儀', text: '公車站牌與排隊' },
-  { icon: 'award', label: '積分與打卡', hint: '5 點換 30 元學餐折價券', text: '積分與打卡' },
+  { icon: 'route', label: '通勤查詢與出發規劃', hint: '預估到達・出發時間・天氣', text: '通勤查詢與出發規劃', primary: true },
+  { icon: 'car', label: '多元通勤服務', hint: '共乘・YouBike・共享雨傘', text: '多元通勤服務' },
+  { icon: 'bus-stop', label: '557 搭車資訊與排隊回報', hint: '上車地點・排隊回報', text: '557 搭車資訊與排隊回報' },
+  { icon: 'award', label: '通勤集點與校園回饋', hint: '5 點換 30 元學餐折價券', text: '通勤集點與校園回饋' },
 ];
 
 function menuPage() {
@@ -108,7 +108,9 @@ Promise.all(MENU.map(function (m) { return icon(m.icon, m.primary ? '#FFFFFF' : 
     ctx.drawImage(icons[i], x + (CW - s) / 2, y + 190, s, s);
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = m.primary ? '#FFFFFF' : UI.brandDark;
-    ctx.font = '700 132px "Noto Sans TC","Microsoft JhengHei",sans-serif';
+    // 名稱長的（例：557 搭車資訊與排隊回報）字自動縮小，左右各留 80px 不超出格子
+    let size = 132;
+    do { ctx.font = '700 ' + size + 'px "Noto Sans TC","Microsoft JhengHei",sans-serif'; size -= 4; } while (ctx.measureText(m.label).width > CW - 160 && size > 60);
     ctx.fillText(m.label, x + CW / 2, y + 640);
     ctx.fillStyle = m.primary ? UI.soft : UI.muted;
     ctx.font = '400 72px "Noto Sans TC","Microsoft JhengHei",sans-serif';

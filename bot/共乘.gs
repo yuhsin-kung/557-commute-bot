@@ -109,7 +109,7 @@ function cpFareCols_() {
 
 function cpAskDir_() {
   return dsCard_({ // 卡片.gs
-    kicker: '557 以外的選擇',
+    kicker: '多元通勤服務',
     title: '🚕 計程車共乘',
     lead: '找同學一起搭，車資分攤更划算！',
     blocks: [{ sec: '預估每人車資' }, cpFareTable_(), { sec: '請選擇搭乘方向' }],

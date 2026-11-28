@@ -17,7 +17,7 @@ const YB_RETURN = [['東吳大學', '東吳大學'], ['國立故宮博物院', '
 
 function ybReply_() {
   const stations = ybStations_();
-  const head = { kicker: '557 以外的選擇', title: 'YouBike 通勤資訊', route: '捷運士林站 → 東吳大學' };
+  const head = { kicker: '多元通勤服務', title: 'YouBike 通勤資訊', route: '捷運士林站 → 東吳大學' };
   if (!stations.length) {
     return dsCard_(Object.assign(head, { blocks: [{ text: '現在查不到 YouBike 即時資料，等一下再試一次 🙏' }] })); // 卡片.gs
   }

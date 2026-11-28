@@ -1,4 +1,4 @@
-// 出門前提醒的新規則：557 即時動態一次看兩個方向、降雨查詢看哪一段、下雨或考試週多留 20 分鐘。執行：npm test
+// 通勤查詢與出發規劃的新規則：557 即時動態一次看兩個方向、降雨查詢看哪一段、下雨或考試週多留 20 分鐘。執行：npm test
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
@@ -25,10 +25,10 @@ test('557 即時動態：往東吳（士林站、士林國中）和往捷運站�
   assert.doesNotMatch(card.altText, /15 分鐘/);
   assert.doesNotMatch(card.altText, /今天已經收班/);
   const b = buttonsOf(card);
-  assert.deepEqual(b, [['比較所有路線', '比較所有路線'], ['回報我在哪裡排隊', '回報我在哪裡排隊'], ['查看 557 站牌資訊', '查看 557 站牌資訊']]);
+  assert.deepEqual(b, [['比較所有路線', '比較所有路線'], ['回報排隊狀況', '回報排隊狀況'], ['查看 557 站牌資訊', '查看 557 站牌資訊']]);
   const chips = card.contents.footer.contents;
   assert.equal(chips[0].backgroundColor, '#A63A2B', '比較所有路線：紅色主要按鈕');
-  assert.equal(chips[1].backgroundColor, '#EEF2F7', '回報我在哪裡排隊：灰色次要按鈕');
+  assert.equal(chips[1].backgroundColor, '#EEF2F7', '回報排隊狀況：灰色次要按鈕');
   assert.equal(chips[2].borderWidth, '1px', '557 站牌資訊：紅字外框');
   assert.equal(chips[2].contents[0].color, '#A63A2B');
   // 末班車已過：琥珀色狀態標籤，並提醒改搭其他路線

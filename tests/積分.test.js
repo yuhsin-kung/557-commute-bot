@@ -59,9 +59,9 @@ test('「打卡」五種都列：到校三種在前、出校兩種在後', () =>
   assert.deepEqual(menu.map(b => b[1]), ['打卡 進校', '打卡 早到', '騎車到校', '打卡 出校', '騎車回士林']);
 });
 
-test('「積分與打卡」選單：到校打卡、出校打卡在最上面', () => {
+test('「通勤集點與校園回饋」選單：到校打卡、出校打卡在最上面', () => {
   const env = start();
-  const btns = buttonsOf(env.call('menuCategory_', '積分與打卡')).map(b => b[1]);
+  const btns = buttonsOf(env.call('menuCategory_', '通勤集點與校園回饋')).map(b => b[1]);
   assert.deepEqual(btns.slice(0, 2), ['到校打卡', '出校打卡']);
 });
 
@@ -681,7 +681,7 @@ test('新生須知、新生測驗：全對 +1 點、解鎖新生上路，再考�
 test('新生測驗：答錯會告訴正確答案，沒全對不給分', () => {
   const env = start();
   say(env, 'A', '新生測驗');
-  assert.match(textOf(say(env, 'A', '答 1')), /正確答案是「按「公車站牌與排隊禮儀」問我」/);
+  assert.match(textOf(say(env, 'A', '答 1')), /正確答案是「按「557 搭車資訊與排隊回報」問我」/);
   say(env, 'A', '答 1');
   assert.match(textOf(say(env, 'A', '答 2')), /答對 2\/3 題/);
   assert.equal(user(env, 'A').points, 0);

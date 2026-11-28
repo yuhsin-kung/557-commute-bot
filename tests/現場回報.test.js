@@ -63,7 +63,7 @@ test('亂打的站名不會記', () => {
   assert.equal(rows(env).length, 0);
 });
 
-test('「公車站牌與排隊禮儀」選單有回報排隊按鈕', () => {
+test('「557 搭車資訊與排隊回報」選單有回報排隊按鈕', () => {
   const env = start();
-  assert.ok(buttonsOf(env.call('menuCategory_', '公車站牌與排隊禮儀')).some(b => b[1] === '回報我在哪裡排隊'));
+  assert.ok(buttonsOf(env.call('menuCategory_', '557 搭車資訊與排隊回報')).some(b => b[1] === '回報排隊狀況'));
 });

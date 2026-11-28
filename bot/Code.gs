@@ -77,7 +77,7 @@ function handleEventNow_(ev) {
     } else if (menuCategory_(text)) {
       answer = menuCategory_(text); // 選單.gs：按了分類，傳那一類的功能按鈕
     } else if (/557\s*以外|替代(路線|方式|交通)|其他的?(通勤|交通)/.test(text)) {
-      answer = menuCategory_('557 以外的選擇'); // 「我想找 557 以外的通勤方式」這類說法
+      answer = menuCategory_('多元通勤服務'); // 「我想找 557 以外的通勤方式」這類說法
     } else if (/^(⏰ ?)?(出發時間規劃|幾點出門)$/.test(text)) {
       answer = menuFlow_('出門時間', ev.source.userId); // 選單.gs：趕課倒推（跟按「⏰ 出發時間規劃」一樣）
     } else if (/^出門時間(\s|$)/.test(text)) {
@@ -137,7 +137,7 @@ function memberReply_(uid, text) {
   if (text === '排隊禮儀' || text === '排隊禮儀短片') return nbEtiquette_();
   if (/^(包車|包車調查|學生包車)(\s|$)/.test(text)) return charterText_(); // 新生.gs
   if (/^(出門提醒 |取消出門提醒$)/.test(text)) return lvText_(uid, text); // 發車提醒.gs
-  if (text === '回報我在哪裡排隊') return rpText_(uid, '回報現場'); // 按鈕傳出的字跟按鈕一樣
+  if (text === '回報我在哪裡排隊' || text === '回報排隊狀況') return rpText_(uid, '回報現場'); // 按鈕傳出的字跟按鈕一樣
   if (/^回報現場(\s|$)/.test(text)) return rpText_(uid, text); // 現場回報.gs：我在哪一站排隊
   return null;
 }
@@ -165,7 +165,7 @@ function route_(text, uid) {
 function remindSettings_(uid) {
   const on = uid ? isSubscribed_(uid) : false; // 晚上提醒.gs
   return dsCard_({ // 卡片.gs
-    kicker: '出門前提醒',
+    kicker: '通勤查詢與出發規劃',
     title: '🔔 雨天與考試週提醒',
     badge: uid ? (on ? '已開啟' : '未開啟') : '',
     lead: '訂閱提醒，讓你提前掌握隔天的天氣與考試週資訊，不再匆忙出門。',
@@ -202,10 +202,10 @@ function bus557Reply_() {
   if (ended) blocks.push({ panel: { tone: 'warn', title: 'ⓘ 557 今天已經收班', lines: ['可以按「比較所有路線」改搭其他公車，或找人共乘計程車。'] } });
   blocks.push({ hr: true }, { small: '🔄 TDX 即時資料・' + nowText_() });
   return dsCard_({ // 卡片.gs
-    kicker: '出門前提醒',
+    kicker: '通勤查詢與出發規劃',
     title: '557 往東吳 / 往捷運站',
     blocks: blocks,
-    buttons: [['比較所有路線', '比較所有路線'], ['回報我在哪裡排隊', '回報我在哪裡排隊'], { label: '查看 557 站牌資訊', text: '查看 557 站牌資訊', style: 'outline' }],
+    buttons: [['比較所有路線', '比較所有路線'], ['回報排隊狀況', '回報排隊狀況'], { label: '查看 557 站牌資訊', text: '查看 557 站牌資訊', style: 'outline' }],
   });
 }
 
@@ -292,7 +292,7 @@ function rainReply_(uid) {
   // 訂閱過的人按鈕改成「已開啟提醒」（晚上提醒.gs），避免重複訂閱
   const on = uid ? isSubscribed_(uid) : false;
   return dsCard_({ // 卡片.gs
-    kicker: '出門前提醒',
+    kicker: '通勤查詢與出發規劃',
     title: target.title,
     route: '士林區',
     blocks: [

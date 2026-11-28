@@ -217,7 +217,7 @@ function p557Lines_(atStop) {
 /** 「預估到達時間」的入口：現在出發，幾點到東吳（11/28 團隊設計稿；趕課倒推是另一顆按鈕「⏰ 出發時間規劃」） */
 function etaButton_() {
   return dsCard_({ // 卡片.gs
-    kicker: '出門前提醒', // 左上角放上一層的標題
+    kicker: '通勤查詢與出發規劃', // 左上角放上一層的標題
     title: '📍 預估到達時間',
     blocks: [
       { h: '現在出發，幾點能到東吳？', first: true },

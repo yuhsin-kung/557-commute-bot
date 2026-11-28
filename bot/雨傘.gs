@@ -12,7 +12,7 @@ const UM_SPOTS = ['錢穆故居站', '東吳大學校門口'];
 function umText_() {
   const guide = PROPS.getProperty('RAINGO_URL');
   return dsCard_({ // 卡片.gs
-    kicker: '557 以外的選擇',
+    kicker: '多元通勤服務',
     title: '☂️ 共享雨傘服務',
     badge: '規劃中',
     lead: '與 Raingo 合作，提供通勤途中雨傘租借服務。',

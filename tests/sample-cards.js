@@ -55,8 +55,8 @@ function sampleCards() {
 
   // 訊息裡的按鈕（choices_）：選單、分類、一步一步點的流程
   keep('選單', env.call('menuCard_'));
-  keep('分類：出門前提醒', env.call('menuCategory_', '出門前提醒'));
-  keep('分類：557 以外的選擇', env.call('menuCategory_', '557 以外的選擇'));
+  keep('分類：通勤查詢與出發規劃', env.call('menuCategory_', '通勤查詢與出發規劃'));
+  keep('分類：多元通勤服務', env.call('menuCategory_', '多元通勤服務'));
   keep('出發時間規劃：選日期和節次', env.call('menuFlow_', '出門時間 明天'));
   keep('共乘：選方向', env.call('cpText_', 'A', '計程車共乘'));
   keep('共乘：現在走', env.call('cpText_', 'A', '士林站 → 東吳'));
@@ -70,7 +70,7 @@ function sampleCards() {
   keep('新生測驗', env.call('nbQuiz_', 'A', '新生測驗'));
   keep('新生教學', env.call('nbIntro_'));
   keep('排隊禮儀短片', env.call('nbEtiquette_'));
-  keep('公車站牌與排隊禮儀', env.call('nbStopQueue_'));
+  keep('557 搭車資訊與排隊回報', env.call('nbStopQueue_'));
   keep('共享雨傘（Raingo）', env.call('umText_'));
   keep('學生包車', env.call('charterText_'));
   keep('出門提醒設好了', env.call('lvText_', 'A', '出門提醒 明天 07:40'));
