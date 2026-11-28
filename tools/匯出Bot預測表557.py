@@ -11,6 +11,7 @@ Bot 在 Apps Script 上，跑不了 Python 的零件模型；學生多半是在�
   要排隊（照團隊規則；士林站用顏色規則，國中用「連續紅色前 k−1 台」）：
     第一台要排的比例、最晚（第一台不用排的車）到東吳要幾分的 P80
 Bot：離峰給「到站牌＋第一台中位數」一個時間；尖峰給範圍「第一台中位數 ～ 最晚 P80」。
+另外一張 P557_BUS（以車為主，11/28）：到站牌後第一台、下一台大概幾點來，搭上各自幾點到東吳（P20～P80）。
 
   uv run tools/匯出Bot預測表557.py
 """
@@ -51,6 +52,35 @@ def samples(days, data_dir=p.DATA_DIR):
     return {s: np.array(v, float) for s, v in out.items()}
 
 
+def bus_samples(days, data_dir=p.DATA_DIR, stop="捷運士林站"):
+    """以車為主（11/28 團隊建議）：到站牌後第一台、下一台幾分鐘來，搭上各要幾分鐘到東吳（都從到站牌算起）。
+    同一台車在國中、士林站上車，到東吳的時間一樣，所以只用捷運士林站當基準"""
+    out = []
+    for d in days:
+        buses = p.load_day(d, data_dir)
+        seq = sorted((r for r in P.stop_rows(L.load_trips(d, data_dir), buses) if r[stop]), key=lambda r: r[stop])
+        go = p.on_day("07:00", d) - timedelta(minutes=WINDOW)
+        while go <= p.on_day("18:30", d) + timedelta(minutes=WINDOW):
+            nx = [r for r in seq if r[stop] >= go][:2]
+            if len(nx) == 2 and nx[0][stop] - go <= p.MAX_WAIT and p.seen(buses, go, nx[1][stop]):
+                m = lambda a: (a - go).total_seconds() / 60
+                out.append((L.tod(go), m(nx[0][stop]), m(nx[0]["東吳"]), m(nx[1][stop]), m(nx[1]["東吳"])))
+            go += timedelta(minutes=1)
+    return np.array(out, float)
+
+
+def bus_table(bs):
+    """每 5 分鐘一格：[分鐘, 第一台幾分後來 P20, P80, 搭第一台幾分後到東吳 P20, P80, 下一台幾分後來 P20, P80, 搭下一台到東吳 P20, P80, 樣本數]"""
+    rows = []
+    for m in range(START, END + 1, STEP):
+        x = bs[np.abs(bs[:, 0] - m) <= WINDOW]
+        if len(x) < 5:
+            continue
+        q = lambda col: [round(float(np.percentile(x[:, col], 20)), 1), round(float(np.percentile(x[:, col], 80)), 1)]
+        rows.append([m] + q(1) + q(2) + q(3) + q(4) + [len(x)])
+    return rows
+
+
 def table(sm):
     """每 5 分鐘一格：[分鐘, 第一台中位數, 第一台 P80, 第一台要排 %, 最晚 P80, 樣本數]"""
     out = {}
@@ -67,8 +97,9 @@ def table(sm):
     return out
 
 
-def write_gs(tab, days, path):
+def write_gs(tab, days, path, bus=None):
     peaks = [[a, b] for a, b in Z.OUT_PEAKS]
+    bus_body = json.dumps(bus or []).replace("], [", "],\n  [")
     body = json.dumps(tab, ensure_ascii=False).replace("], [", "],\n    [").replace('"捷運士林站": [', '\n  "捷運士林站": [\n    ').replace('"士林國中": [', '\n  "士林國中": [\n    ')
     gs = f"""/**
  * 557 預測表：tools/匯出Bot預測表557.py 自動產生，不要手改（改了重跑程式）。
@@ -78,6 +109,10 @@ def write_gs(tab, days, path):
  */
 const P557_PEAKS = {json.dumps(peaks)}; // 往東吳尖峰（分）：07:30–08:00、09:15–10:00
 const P557_TABLE = {body};
+
+// 以車為主（捷運士林站當基準；同一台車在國中上車，到東吳時間一樣）：每 5 分鐘一格
+// [到站牌的時刻（分）, 第一台幾分後來 P20, P80, 搭第一台幾分後到東吳 P20, P80, 下一台幾分後來 P20, P80, 搭下一台幾分後到東吳 P20, P80, 樣本數]
+const P557_BUS = {bus_body};
 """
     with open(path, "w", encoding="utf-8") as f:
         f.write(gs)
@@ -94,7 +129,9 @@ def main():
     ap.add_argument("--out", default=os.path.join(HERE, "..", "bot", "預測表557.gs"))
     a = ap.parse_args()
     tab = table(samples(a.days, a.data))
-    write_gs(tab, a.days, a.out)
+    bus = bus_table(bus_samples(a.days, a.data))
+    write_gs(tab, a.days, a.out, bus)
+    print("以車為主：", len(bus), "格；例：", [r for r in bus if r[0] in (570, 670)])
     for stop, rows in tab.items():
         print(stop, len(rows), "格；例：", [r for r in rows if r[0] in (450, 570, 585)])
     print("已寫入", os.path.abspath(a.out))

@@ -104,9 +104,22 @@ test('接到 557：09:30 到站牌是尖峰 → 給範圍；國中最晚比較�
   assert.equal(mrt.peak, true);
   assert.ok(mrt.late && jhs.late, '尖峰一定有最晚時間');
   assert.ok(new Date(mrt.late) > new Date(mrt.early));
-  const lines = env.call('p557Lines_', at);
-  assert.match(lines[0], /^建議走去士林國中站牌：09:\d\d–\d\d:\d\d 到東吳（尖峰/);
-  assert.match(lines[1], /捷運士林站站牌/);
+});
+
+test('以車為主：幾點會來一台、要不要排、搭上幾點到、下一台幾點來、錯過幾點到；尖峰國中比較不用排就建議國中', () => {
+  const env = loadBot(ALL);
+  const lines = env.call('p557Lines_', new Date('2026-11-25T09:30:00+08:00'));
+  assert.match(lines[0], /^🚌 09:\d\d–09:\d\d 之間會來一台 557$/);
+  assert.match(lines[1], /第一台常常要排（約 \d+%）/);
+  assert.match(lines[2], /^🏫 搭上這台：09:\d\d–09:\d\d 到東吳$/);
+  assert.match(lines[3], /^⏭️ 下一台 09:\d\d–\d\d:\d\d 來；錯過這台，09:\d\d–\d\d:\d\d 到東吳$/);
+  assert.match(lines[4], /建議走去士林國中站牌排：同一台車/);
+  assert.equal(lines.join('\n').includes('捷運士林站站牌：'), false, '不再列兩個站牌兩個時間');
+  const off = env.call('p557Lines_', new Date('2026-11-25T11:10:00+08:00'));
+  assert.match(off[1], /通常不用排/);
+  assert.equal(off.length, 4, '離峰不用建議走去國中');
+  const b = plain(env.call('p557Bus_', new Date('2026-11-25T09:30:00+08:00')));
+  assert.ok(new Date(b.late) > new Date(b.early), '記錄用：最早（搭上）＜最晚（錯過）');
 });
 
 test('接到 557：08:30 離峰只給一個時間；週末、晚上沒有預測', () => {
@@ -126,7 +139,7 @@ test('整個流程：石牌 09:05 出發 → 09:25 到站牌 → 尖峰範圍到
   assert.equal(r.atStop, '09:25');
   assert.equal(r.school.peak, true);
   assert.ok(r.school.late > r.school.early);
-  assert.match(r.lines.join('\n'), /建議走去.+站牌：09:\d\d–\d\d:\d\d 到東吳/);
+  assert.match(r.lines.join('\n'), /🏫 搭上這台：09:\d\d–\d\d:\d\d 到東吳/);
 });
 
 test('在 LINE 裡完成：傳「到校預估」→ 按鈕打開 LINE 的傳送位置畫面（不是外部網頁）→ 傳位置 → 直接回卡片', () => {
@@ -139,7 +152,8 @@ test('在 LINE 裡完成：傳「到校預估」→ 按鈕打開 LINE 的傳送�
   env.call('handleEvent_', { type: 'message', replyToken: 'r', source: { userId: 'A' }, message: { type: 'location', latitude: SHIPAI[0], longitude: SHIPAI[1] } });
   const reply = env.fetches.filter(f => f.url.endsWith('/message/reply')).pop().body.messages[0];
   assert.match(reply.altText, /幾點到東吳/);
-  assert.match(reply.altText, /建議走去.+站牌\n09:\d\d–\d\d:\d\d 到東吳/);
+  assert.match(reply.altText, /🚌 09:\d\d–\d\d:\d\d 之間會來一台 557/);
+  assert.match(reply.altText, /⏭️ 下一台 .+；錯過這台，.+ 到東吳/);
   assert.match(reply.altText, /09:25 到站牌/);
   const logged = env.sheets['訊息紀錄'].rows.pop();
   assert.equal(logged[2], '（傳了位置）', '紀錄裡不寫經緯度');
@@ -166,7 +180,7 @@ test('我已經在士林站：走 5 分鐘到站牌，再估幾點到東吳', ()
   env.setNow('2026-11-25T09:20:00+08:00');
   const r = sendText(env, '到校預估 士林站');
   assert.match(r.altText, /約 09:25 到站牌/);
-  assert.match(r.altText, /建議走去.+站牌：09:\d\d–\d\d:\d\d 到東吳/);
+  assert.match(r.altText, /🏫 搭上這台：09:\d\d–\d\d:\d\d 到東吳/);
 });
 
 test('趕課：選好明天第 3 節（10:10，尖峰前後）D 棟，接著傳位置 → 倒推最晚幾點出門，可以設出門提醒', () => {

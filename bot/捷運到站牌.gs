@@ -277,7 +277,7 @@ function mrtPlan_(lat, lng, nowMs) {
   const both = p557Both_(atStop); // 到校預估.gs
   return Object.assign(base, { ok: true, trainAtShilin: train ? hm(train) : null, atStop: hm(atStop), school: mrtSchool_(atStop),
     atStopAt: atStop, best: both ? both.best : null, // 預估紀錄用（Date）
-    lines: mrtSteps_(leg, now, atStop).concat(p557Lines_(atStop)) }); // 到校預估.gs
+    steps: mrtSteps_(leg, now, atStop), lines: mrtSteps_(leg, now, atStop).concat(p557Lines_(atStop)) }); // 到校預估.gs
 }
 
 /** 推薦的站牌和幾點到東吳（給網頁顯示）：{ stop, early, late }，時間是 'HH:mm'，離峰 late＝null */

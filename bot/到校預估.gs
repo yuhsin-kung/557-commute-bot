@@ -50,13 +50,38 @@ function p557Both_(atStop) {
   return { best, all };
 }
 
+/**
+ * 以車為主（11/28 團隊建議）：同一台車在國中或捷運站上車，到東吳的時間一樣，所以不列兩個站牌，改講
+ * 「幾點會來一台、要不要排、搭上幾點到、下一台幾點來、錯過幾點到」。時間用捷運士林站當基準（P557_BUS，P20～P80）。
+ * 回傳 { lines, early, late, peak }（early／late：搭上這台最早、錯過改搭下一台最晚，記錄用），沒有預測回 null
+ */
+function p557Bus_(atStop) {
+  const wd = Number(Utilities.formatDate(atStop, TZ, 'u'));
+  if (wd >= 6) return null;
+  const minute = mrtMinuteOfDay_(atStop); // 捷運到站牌.gs
+  let row = null;
+  P557_BUS.forEach(r => { if (Math.abs(r[0] - minute) <= 5 && (!row || Math.abs(r[0] - minute) < Math.abs(row[0] - minute))) row = r; });
+  if (!row) return null;
+  const at = m => new Date(atStop.getTime() + m * 60000);
+  const hm = d => Utilities.formatDate(d, TZ, 'HH:mm');
+  const span = (a, b) => { const x = hm(at(Math.floor(a))), y = hm(at(Math.ceil(b))); return x === y ? '約 ' + x : x + '–' + y; };
+  const peak = p557InPeak_(minute);
+  const qm = (p557Row_('捷運士林站', minute) || [])[3] || 0;
+  const qj = (p557Row_('士林國中', minute) || [])[3] || 0;
+  const lines = [
+    `🚌 ${span(row[1], row[2])} 之間會來一台 557`,
+    '　' + (peak && qm >= 10 ? `排隊：這個時段第一台常常要排（約 ${qm}%），排不上就搭下一台` : '排隊：這個時段通常不用排'),
+    `🏫 搭上這台：${span(row[3], row[4])} 到東吳`,
+    `⏭️ 下一台 ${span(row[5], row[6])} 來；錯過這台，${span(row[7], row[8])} 到東吳`,
+  ];
+  if (peak && qm - qj >= 15) lines.push(`💡 建議走去士林國中站牌排：同一台車，國中先上車，比較不用排（國中約 ${qj}%）`);
+  return { lines, early: at(Math.floor(row[3])), late: at(Math.ceil(row[8])), peak };
+}
+
 /** 給學生看的幾行字 */
 function p557Lines_(atStop) {
-  const r = p557Both_(atStop);
-  if (!r) return ['這個時間還沒有 557 的預測（目前只有平常日 07:00–18:30）'];
-  const lines = [`建議走去${r.best.stop}站牌：${r.best.text}`];
-  r.all.filter(e => e !== r.best).forEach(e => lines.push(`（${e.stop}站牌：${e.text}）`));
-  return lines;
+  const b = p557Bus_(atStop);
+  return b ? b.lines : ['這個時間還沒有 557 的預測（目前只有平常日 07:00–18:30）'];
 }
 
 // ===== 在 LINE 裡完成：按按鈕 → LINE 自己的「傳送位置」畫面 → Bot 收到位置訊息 → 直接回幾點到東吳（不開外部網頁） =====
@@ -78,10 +103,10 @@ function etaFromLocation_(lat, lng, uid) {
   }
   const r = mrtPlan_(lat, lng, now.getTime()); // 捷運到站牌.gs
   const again = [['再查一次', '到校預估'], ['⏰ 出發時間規劃', '出門時間']];
-  if (!r.ok || !r.school) return choices_(r.lines.join('\n'), again, { title: '🚇 算不出來', badge: '預估到達時間' });
-  etaLog_('現在出發', '', r.atStopAt, r.best);
-  const head = `建議走去${r.school.stop}站牌\n${r.school.late ? r.school.early + '–' + r.school.late : '約 ' + r.school.early} 到東吳`;
-  return choices_(head + '\n\n' + r.lines.map(l => '・' + l).join('\n'), again, { title: '🚇 幾點到東吳', badge: '預估到達時間' });
+  const bus = r.ok && p557Bus_(r.atStopAt);
+  if (!bus) return choices_(r.lines.join('\n'), again, { title: '🚇 算不出來', badge: '預估到達時間' });
+  etaLog_('現在出發', '', r.atStopAt, { stop: '捷運士林站（基準）', early: bus.early, late: bus.late, peak: bus.peak });
+  return choices_(r.steps.map(l => '・' + l).join('\n') + '\n\n' + bus.lines.join('\n'), again, { title: '🚇 幾點到東吳', badge: '預估到達時間' });
 }
 
 // ===== 出發時間規劃：趕課 → 倒推最晚幾點出門（11/28：跟預估到達時間同一套算法，按鈕分開） =====
@@ -167,8 +192,8 @@ function etaClassFromHere_(lat, lng, pending, now) {
 function etaFromShilin_() {
   const atStop = new Date(cpNow_().getTime() + MRT_EXIT_TO_STOP_MIN * 60000); // 共乘.gs、捷運到站牌.gs
   const hm = d => Utilities.formatDate(d, TZ, 'HH:mm');
-  const both = p557Both_(atStop);
-  etaLog_('已經在士林站', '', atStop, both && both.best);
+  const bus = p557Bus_(atStop);
+  etaLog_('已經在士林站', '', atStop, bus && { stop: '捷運士林站（基準）', early: bus.early, late: bus.late, peak: bus.peak });
   return choices_([`從捷運士林站走到 557 站牌約 ${MRT_EXIT_TO_STOP_MIN} 分鐘，約 ${hm(atStop)} 到站牌`].concat(p557Lines_(atStop)).join('\n'),
     [['再查一次', '到校預估'], ['⏰ 出發時間規劃', '出門時間']], { title: '🚇 幾點到東吳', badge: '我已經在士林站' });
 }
