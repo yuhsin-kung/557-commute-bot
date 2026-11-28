@@ -293,6 +293,26 @@ function dsBlock_(b) {
     return out;
   }
   if (b.hr) return [{ type: 'separator', margin: 'lg', color: UI.line }];
+  if (b.numbered) {
+    // 一則一個灰色面板：左上小編號標籤＋粗體標題，下面灰字說明（例：新生須知三件事）
+    return b.numbered.map(n => dsBox_([
+      { type: 'box', layout: 'horizontal', alignItems: 'center', spacing: 'sm', contents: [dsBadge_(n[0]), dsTx_(n[1], 'md', UI.ink, { weight: 'bold', flex: 1 })] },
+      dsTx_(n[2], 'xs', UI.muted, { margin: 'sm' }),
+    ], { margin: 'md', paddingAll: '14px' }));
+  }
+  // 磚紅小標（例：557 上車地點的「捷運士林站」）
+  if (b.label) return [dsTx_(b.label, 'sm', UI.brand, { weight: 'bold', margin: 'xl' })];
+  if (b.report) {
+    // 回報成功：站名、回報時間，分隔線，磚紅大字人數，說明
+    const r = b.report;
+    return [dsBox_([
+      dsTx_(r.stop, 'md', UI.ink, { weight: 'bold' }),
+      dsTx_(r.time, 'xs', UI.muted, { margin: 'sm' }),
+      { type: 'separator', margin: 'lg', color: UI.line },
+      dsTx_(r.count, 'xxl', UI.brand, { weight: 'bold', margin: 'lg' }),
+      dsTx_(r.note, 'xs', UI.muted, { margin: 'sm' }),
+    ], { margin: 'md', paddingAll: '16px' })];
+  }
   if (b.h) return [dsTx_(b.h, 'md', UI.ink, { weight: 'bold', margin: b.first ? 'md' : 'lg' })];
   if (b.text) return [dsTx_(b.text, 'sm', b.muted ? UI.muted : UI.ink, { margin: b.tight ? 'sm' : 'lg' })]; // 上下留一樣的空間（12px）；tight 是緊接在標題下面的說明
   if (b.chips) {

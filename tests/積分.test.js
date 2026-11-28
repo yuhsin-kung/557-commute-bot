@@ -667,7 +667,7 @@ test('新生須知、新生測驗：全對 +1 點、解鎖新生上路，再考�
   const env = start();
   assert.match(textOf(say(env, 'A', '新生須知')), /新生須知：第一次搭 557/);
   assert.match(textOf(say(env, 'A', '新生教學')), /新生須知/, '舊的關鍵字也還認得');
-  assert.match(textOf(say(env, 'A', '新生測驗')), /第 1 題／共 3 題/);
+  assert.match(textOf(say(env, 'A', '新生測驗')), /新生須知\n第 1 題 \/ 共 3 題\n不確定 557 現在在哪裡上車，應該怎麼查？/);
   say(env, 'A', '答 2');
   say(env, 'A', '答 1');
   const done = say(env, 'A', '答 2');
@@ -681,7 +681,7 @@ test('新生須知、新生測驗：全對 +1 點、解鎖新生上路，再考�
 test('新生測驗：答錯會告訴正確答案，沒全對不給分', () => {
   const env = start();
   say(env, 'A', '新生測驗');
-  assert.match(textOf(say(env, 'A', '答 1')), /正確答案是「按「557 搭車資訊與排隊回報」問我」/);
+  assert.match(textOf(say(env, 'A', '答 1')), /正確答案是「查看「557 搭車資訊與排隊回報」」/);
   say(env, 'A', '答 1');
   assert.match(textOf(say(env, 'A', '答 2')), /答對 2\/3 題/);
   assert.equal(user(env, 'A').points, 0);

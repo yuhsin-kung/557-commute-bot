@@ -49,7 +49,8 @@ function sampleCards() {
   env.onFetch = null;
 
   keep('上車地點', env.call('stationReply_'));
-  env.props.STATION_SUMMARY = '這是德育中心公告的摘要：\n📍士林站：大成安心購（中正路 205 號）前\n📍士林國中站：富邦銀行（中正路 341 號）前，尖峰建議來這裡排\n📍校內：操場側站牌後，依藍線排隊';
+  // 新版摘要是 JSON（站位變更.gs 的 summarizeStation_）
+  env.props.STATION_SUMMARY = JSON.stringify({ 士林站: '這是德育中心公告的摘要：557 在大成安心購（中正路 205 號）前上車。', 士林國中站: '富邦銀行（中正路 341 號）前，尖峰建議來這裡排。', 校內: '操場側站牌後，依藍線排隊。', 其他公車: ['300 公車：A 棟前面對階梯左側。'] });
   env.props.STATION_CHECKED_AT = '10/13 09:00';
   keep('上車地點有摘要', env.call('stationReply_'));
 
@@ -67,6 +68,8 @@ function sampleCards() {
   keep('打卡：走路進學校', env.call('ptCheckinButton_', 'A', '進校'));
   keep('打卡：走路出學校', env.call('ptCheckinButton_', 'A', '出校'));
   keep('打卡：早到', env.call('ptCheckinButton_', 'A', '早到'));
+  keep('回報排隊狀況', env.call('rpText_', 'A', '回報現場'));
+  keep('回報排隊成功', env.call('rpText_', 'A', '回報現場 士林站'));
   keep('新生測驗', env.call('nbQuiz_', 'A', '新生測驗'));
   keep('新生教學', env.call('nbIntro_'));
   keep('排隊禮儀短片', env.call('nbEtiquette_'));

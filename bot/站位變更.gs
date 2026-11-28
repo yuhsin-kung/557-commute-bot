@@ -73,11 +73,13 @@ function diffSummary_(before, after) {
 /** 把整頁整理成學生看得懂的上車地點說明 */
 function summarizeStation_(text) {
   const answer = gemini_(
-    '以下是東吳大學德育中心公告的公車上車資訊。請整理成給學生看的 LINE 訊息，繁體中文，不超過 250 字，'
-    + '分成「士林站」「士林國中站」「校內」三段，寫出 557 的上車地點和排隊方式；300、通勤30、劍南路站師生專車各用一行帶過。'
-    + '不要用 Markdown 的 ** 或 #，可以用 📍 開頭。\n\n' + text
+    '以下是東吳大學德育中心公告的公車上車資訊。請整理成給學生看的 JSON（只回 JSON，不要其他字），繁體中文，格式：'
+    + '{"士林站":"557 的上車地點和排隊方式，一句","士林國中站":"一句","校內":"一句","其他公車":["300 公車：…","通勤 30 公車：…","劍南路站專車：…"]}。'
+    + '每一句不超過 40 字。\n\n' + text
   );
-  return answer ? answer.trim() : '';
+  if (!answer) return '';
+  const json = answer.replace(/^[^{]*/, '').replace(/[^}]*$/, ''); // 去掉 ```json 這種包裝
+  try { JSON.parse(json); return json; } catch (e) { return ''; } // 格式不對就不存，卡片繼續用上一次的內容
 }
 
 function gemini_(prompt) {
@@ -111,21 +113,37 @@ function geminiParts_(parts) {
 
 // ===== 學生問「在哪裡搭」 =====
 
+// 德育中心公告（2026-11-28 核對 web_page/2440）：Gemini 摘要還沒有、或是舊版的純文字摘要時用這份
+const STATION_DEFAULT = {
+  士林站: '557 上車處為大成安心購（中正路 205 號）前，請依序排隊。',
+  士林國中站: '557 上車處為富邦銀行士林分行（中正路 341 號）前，尖峰時段建議在此排隊搭乘。',
+  校內: '557 請於操場側站牌後，依照地上藍線依序排隊。',
+  其他公車: ['300 公車：請於 A 棟前面對階梯左側排隊上下車。', '通勤 30 公車：請於 A 棟前面對階梯右側排隊上下車。', '劍南路站專車：不適用 T-PASS，請於 A 棟前面對階梯右側排隊。'],
+};
+
+/** STATION_SUMMARY 是 JSON（新版摘要）就用它；舊版純文字或沒有就用 STATION_DEFAULT */
+function stationInfo_() {
+  try {
+    const s = JSON.parse(PROPS.getProperty('STATION_SUMMARY') || '');
+    if (s && s.士林站 && s.士林國中站 && s.校內) return { 士林站: String(s.士林站), 士林國中站: String(s.士林國中站), 校內: String(s.校內), 其他公車: Array.isArray(s.其他公車) ? s.其他公車.map(String) : [] };
+  } catch (e) { /* 舊版純文字摘要 */ }
+  return STATION_DEFAULT;
+}
+
 function stationReply_() {
-  const summary = PROPS.getProperty('STATION_SUMMARY');
   const checked = PROPS.getProperty('STATION_CHECKED_AT');
-  const fallback = [
-    { label: '捷運士林站', value: '中正路 205 號前', sub: '大成安心購前面' },
-    { label: '士林國中站', value: '中正路 341 號前', sub: '富邦銀行士林分行前面。尖峰建議來這裡排', best: true },
-    { label: '校內', value: '操場側站牌後', sub: '依藍線排隊' },
-  ];
-  return card_({ // 卡片.gs
-    badge: '德育中心公告',
+  const info = stationInfo_();
+  const blocks = [{ text: '查看各站 557 上車位置及排隊方式，避免搭錯位置。', muted: true, tight: true }, { hr: true }];
+  [['捷運士林站', info.士林站], ['士林國中站', info.士林國中站], ['校內站', info.校內]].forEach(([name, text]) => {
+    blocks.push({ label: name }, { panel: { lines: [text], margin: 'sm' } });
+  });
+  if (info.其他公車.length) blocks.push({ label: '其他公車' }, { panel: { lines: info.其他公車.map(t => '・' + t), margin: 'sm' } });
+  blocks.push({ small: '來源：德育中心公告' + (checked ? '，' + checked + ' 更新' : '') });
+  return dsCard_({ // 卡片.gs（11/28 團隊設計稿）
+    kicker: '557 搭車資訊與排隊回報',
     title: '557 上車地點',
-    rows: summary ? [] : fallback,
-    notes: summary ? [summary] : [],
-    footer: '來源：德育中心' + (checked ? '，' + checked + ' 更新' : ''),
-    buttons: [{ label: '看德育中心公告', uri: STATION_PAGE_URL }, { label: '557 現在到哪了', text: '557' }],
+    blocks: blocks,
+    buttons: [{ label: '查看德育中心公告', uri: STATION_PAGE_URL }, { label: '557 現在到哪了', text: '557', style: 'outline' }],
   });
 }
 

@@ -15,13 +15,24 @@ const RP_ONCE_MIN = 15;  // 一次排隊大概多久：這段時間內同一個�
 const RP_COUNT_MIN = 10; // 告訴學生「最近幾分鐘有幾人回報」
 const RP_HEAD = ['時間', '使用者 ID', '站牌'];
 
-/** 「回報現場 …」。不是這個開頭就回傳 null */
+/** 「回報現場 …」「回報排隊狀況」。不是這個開頭就回傳 null（11/28 團隊設計稿） */
 function rpText_(uid, text) {
   if (!/^回報現場(\s|$)/.test(text)) return null;
   const stop = text.trim().split(/\s+/)[1];
   if (!RP_STOPS[stop]) {
-    return choices_('你現在在哪裡排隊等車？\n\n按一下就好，幫我們統計各站有多少人在等。只記你按的站，不用 GPS 定位。', // 卡片.gs
-      Object.keys(RP_STOPS).map(k => [RP_STOPS[k], '回報現場 ' + k]), { title: '回報排隊', badge: '557 現場', primary: false });
+    // 四個站一樣是灰色按鈕，不設主要按鈕（避免以為哪一站比較優先）
+    return dsCard_({ // 卡片.gs
+      kicker: '557 搭車資訊與排隊回報',
+      title: '回報排隊狀況',
+      blocks: [
+        { h: '你目前在哪一站等車？', first: true },
+        { text: '選擇你目前排隊的站點，幫助我們統計各站候車人數，讓其他同學掌握現場狀況。', muted: true },
+        { panel: { title: 'ⓘ 回報方式', lines: ['點選下方站點即可完成回報，不需要 GPS 定位。'], quiet: true } },
+        { hr: true },
+      ],
+      buttons: Object.keys(RP_STOPS).map(k => [RP_STOPS[k], '回報現場 ' + k]),
+      primaryCount: 0,
+    });
   }
   return cpLocked_(() => { // 共乘.gs
     const sheet = cpSheet_('現場回報', RP_HEAD);
@@ -40,8 +51,17 @@ function rpText_(uid, text) {
     const others = sheet.getDataRange().getValues().slice(1)
       .filter(r => r[2] === RP_STOPS[stop] && new Date(r[0]).getTime() >= since).length;
     const hhmm = Utilities.formatDate(now, TZ, 'HH:mm');
-    return choices_(['🙏 謝謝回報！', '', hhmm + '｜' + RP_STOPS[stop],
-      '最近 ' + RP_COUNT_MIN + ' 分鐘有 ' + others + ' 位同學回報在這裡排隊（只算有按的人）。'].join('\n'),
-      [['557 即時動態', '557 即時動態'], ['比較所有路線', '比較所有路線']], { title: '回報排隊', badge: '已記錄', primary: false });
+    return dsCard_({
+      kicker: '回報排隊狀況',
+      title: '回報排隊成功',
+      blocks: [
+        { h: '✅ 感謝你的回報！', first: true },
+        { report: { stop: RP_STOPS[stop], time: '回報時間｜' + hhmm, count: others + ' 人',
+          note: '最近 ' + RP_COUNT_MIN + ' 分鐘內有 ' + others + ' 位同學回報在此排隊（僅統計有主動回報的人數）。' } },
+        { text: '你的回報能幫助其他同學了解各站候車狀況。', muted: true },
+        { hr: true },
+      ],
+      buttons: [['557 即時動態', '557 即時動態'], ['比較所有路線', '比較所有路線']],
+    });
   });
 }

@@ -124,8 +124,11 @@ test('天氣：中等機率橘色；已訂閱的人按鈕變成「已開啟提�
 
 test('上車地點：還沒有德育中心的摘要時，用內建的三個地點', () => {
   const cards = sampleCards();
-  assert.match(cards.上車地點.altText, /捷運士林站：中正路 205 號前/);
-  assert.match(cards.上車地點有摘要.altText, /這是德育中心公告的摘要/);
+  assert.match(cards.上車地點.altText, /捷運士林站\n557 上車處為大成安心購（中正路 205 號）前，請依序排隊。\n士林國中站\n[^\n]*富邦銀行士林分行（中正路 341 號）前[^\n]*\n校內站\n[^\n]*藍線/);
+  assert.match(cards.上車地點.altText, /其他公車\n・300 公車：請於 A 棟前面對階梯左側排隊上下車。/);
+  assert.match(cards.上車地點有摘要.altText, /這是德育中心公告的摘要/, '新版 JSON 摘要就用摘要的內容');
+  assert.deepEqual(buttonsOf(cards.上車地點), [['查看德育中心公告', 'https://web-ch.scu.edu.tw/life/web_page/2440'], ['557 現在到哪了', '557']]);
+  assert.equal(cards.上車地點.contents.footer.contents[1].borderWidth, '1px', '557 現在到哪了：紅字外框');
   assert.equal(cards.上車地點.contents.footer.contents[0].action.uri, 'https://web-ch.scu.edu.tw/life/web_page/2440');
 });
 
@@ -138,7 +141,7 @@ test('LINE 不接受卡片時，改用純文字再回一次', () => {
   assert.equal(replies.length, 2);
   assert.equal(replies[0].body.messages[0].type, 'flex');
   assert.equal(replies[1].body.messages[0].type, 'text');
-  assert.match(replies[1].body.messages[0].text, /^557 上車地點\n・捷運士林站：中正路 205 號前/);
+  assert.match(replies[1].body.messages[0].text, /557 上車地點\n[\s\S]*捷運士林站\n557 上車處為大成安心購/);
   assert.equal('quickReply' in replies[1].body.messages[0], false, '備用的純文字也不放輸入框上面那排按鈕');
 });
 

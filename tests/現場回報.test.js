@@ -20,15 +20,17 @@ test('回報現場：先選在哪一站排隊，四個站', () => {
   const env = start();
   const pick = say(env, 'A', '回報現場');
   assert.deepEqual(buttonsOf(pick), [['捷運士林站', '回報現場 士林站'], ['士林國中', '回報現場 士林國中'], ['校內 557 站', '回報現場 校內站'], ['錢穆故居站', '回報現場 錢穆故居站']]);
-  assert.match(JSON.stringify(pick), /不用 GPS 定位/);
+  assert.match(pick.altText, /^557 搭車資訊與排隊回報\n回報排隊狀況\n你目前在哪一站等車？/);
+  assert.match(pick.altText, /ⓘ 回報方式\n點選下方站點即可完成回報，不需要 GPS 定位。/);
+  assert.ok(pick.contents.footer.contents.slice(0, 4).every(c => c.backgroundColor === '#EEF2F7'), '四個站都是灰色按鈕，不設主要按鈕');
   assert.equal(rows(env).length, 0, '還沒選站不記');
 });
 
 test('按一下站就記一筆，只記時間、誰、哪一站', () => {
   const env = start();
   const done = say(env, 'A', '回報現場 士林站');
-  assert.match(JSON.stringify(done), /09:40｜捷運士林站/);
-  assert.match(JSON.stringify(done), /最近 10 分鐘有 1 位同學回報在這裡排隊/);
+  assert.match(done.altText, /回報排隊成功\n✅ 感謝你的回報！\n捷運士林站\n回報時間｜09:40\n1 人\n最近 10 分鐘內有 1 位同學回報在此排隊（僅統計有主動回報的人數）。/);
+  assert.deepEqual(buttonsOf(done), [['557 即時動態', '557 即時動態'], ['比較所有路線', '比較所有路線']]);
   const r = rows(env);
   assert.equal(r.length, 1);
   assert.deepEqual([r[0][1], r[0][2]], ['A', '捷運士林站']);
@@ -42,7 +44,7 @@ test('告訴學生最近 10 分鐘這一站有幾人回報；超過 10 分鐘、
   say(env, 'B', '回報現場 士林站');
   say(env, 'C', '回報現場 士林國中');
   env.addMinutes(1);
-  assert.match(JSON.stringify(say(env, 'D', '回報現場 士林站')), /最近 10 分鐘有 2 位同學/);
+  assert.match(JSON.stringify(say(env, 'D', '回報現場 士林站')), /最近 10 分鐘內有 2 位同學/);
 });
 
 test('同一個人 15 分鐘內再按算同一次排隊，只留最後一筆（按錯站可以重按）', () => {
@@ -59,7 +61,7 @@ test('同一個人 15 分鐘內再按算同一次排隊，只留最後一筆（�
 
 test('亂打的站名不會記', () => {
   const env = start();
-  assert.match(JSON.stringify(say(env, 'A', '回報現場 火星')), /你現在在哪裡排隊/);
+  assert.match(JSON.stringify(say(env, 'A', '回報現場 火星')), /你目前在哪一站等車/);
   assert.equal(rows(env).length, 0);
 });
 

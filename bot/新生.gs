@@ -11,22 +11,29 @@
  * 用到卡片.gs 的 choices_，共乘.gs 的 cpSheet_、cpNow_，積分.gs 的 ptAdd_、ptStats_、PT。
  */
 const NB_QUIZ = [
-  { q: '不確定 557 現在在哪裡上車，最可靠的方法是？', a: ['問路人', '按「557 搭車資訊與排隊回報」問我', '照去年的位置'], ok: 1 },
+  { q: '不確定 557 現在在哪裡上車，應該怎麼查？', a: ['直接詢問路人', '查看「557 搭車資訊與排隊回報」', '參考以前的站牌位置'], ok: 1 },
   { q: '隊伍被馬路切成兩段，你應該？', a: ['接在隊伍最後面', '從斷開的地方排進去', '站到車門旁邊等'], ok: 0 },
   { q: '557 太擠擠不上去，還可以怎麼辦？', a: ['只能等下一班 557', '搭其他公車到錢穆故居站再走進學校', '放棄上課'], ok: 1 },
 ];
 
 function nbIntro_() {
   const video = PROPS.getProperty('NEWBIE_VIDEO_URL');
-  return choices_([
-    '🎒 新生須知：第一次搭 557，三件事先知道',
-    '',
-    '1️⃣ 上車地點會調整：捷運施工期間站牌搬過家，按「557 搭車資訊與排隊回報」看最新位置。',
-    '2️⃣ 排隊看清楚：隊伍可能被馬路切成兩段，請接在最後面。',
-    '3️⃣ 不一定要等 557：士林站有其他公車到錢穆故居站，走進學校大約 10 分鐘。按「比較所有路線」就知道哪一種最快。',
-  ].concat(video ? ['', '🎬 一分鐘教學短片：' + video] : [])
-    .concat(['', '看完做個小測驗，全對有 ' + PT.QUIZ + ' 點，還能解鎖第一個成就 👇']).join('\n'),
-  [['新生測驗', '新生測驗'], ['557 搭車資訊與排隊回報', '557 搭車資訊與排隊回報']]);
+  const blocks = [
+    { h: '搭車前，三件事先知道', first: true },
+    { numbered: [
+      ['01', '上車地點會調整', '捷運施工期間站牌搬過家，請按「557 搭車資訊與排隊回報」查看最新位置。'],
+      ['02', '排隊看清楚', '隊伍可能被馬路切成兩段，請接在最後面，不要排錯隊。'],
+      ['03', '不一定要等 557', '士林站有其他公車到錢穆故居站，走進學校大約 10 分鐘。按「比較所有路線」就知道哪一種最快。'],
+    ] },
+  ];
+  if (video) blocks.push({ text: '🎬 一分鐘教學短片：' + video, muted: true });
+  blocks.push({ panel: { tone: 'brand', title: '完成新生測驗，拿下第一個成就！', lines: ['看完三個小知識，全對即可獲得 ' + PT.QUIZ + ' 點。'] } });
+  return dsCard_({ // 卡片.gs（11/28 團隊設計稿）
+    kicker: '557 搭車資訊與排隊回報',
+    title: '🎒 新生須知：第一次搭 557',
+    blocks: blocks,
+    buttons: [['新生測驗', '新生測驗'], ['557 搭車資訊與排隊回報', '557 搭車資訊與排隊回報']],
+  });
 }
 
 /**
@@ -104,9 +111,15 @@ function nbQuiz_(uid, text) {
 function nbAsk_(uid, i, score, feedback) {
   CacheService.getScriptCache().put('quiz_' + uid, JSON.stringify({ i: i, score: score }), 30 * 60);
   const item = NB_QUIZ[i];
-  return choices_((feedback ? feedback + '\n\n' : '') + item.q,
-    item.a.map((a, k) => [a, '答 ' + (k + 1)]),
-    { title: '第 ' + (i + 1) + ' 題／共 ' + NB_QUIZ.length + ' 題', badge: '新生測驗', primary: false, menu: false });
+  // 11/28 團隊設計稿：題目在上，三個選項都是灰色按鈕（不先暗示正確答案）
+  return dsCard_({ // 卡片.gs
+    kicker: '新生須知',
+    title: '第 ' + (i + 1) + ' 題 / 共 ' + NB_QUIZ.length + ' 題',
+    blocks: (feedback ? [{ text: feedback, tight: true }] : []).concat([{ hr: true }, { h: item.q }]),
+    buttons: item.a.map((a, k) => [a, '答 ' + (k + 1)]),
+    primaryCount: 0,
+    menu: false,
+  });
 }
 
 // ===== 學生包車（43）：選課後統計各時段人數，再洽詢業者 =====
