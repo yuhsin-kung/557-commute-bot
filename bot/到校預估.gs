@@ -82,9 +82,9 @@ function p557Bus_(atStop) {
 
 // ===== 預估到達時間的卡片（11/28 團隊的設計稿：預計抵達、01 前往士林站、02 557 搭乘建議、03 更推薦的上車地點） =====
 
-const ETA_UI = { green: '#16A34A', // 跟卡片.gs 的 UI 同一套顏色
-  greenSoft: '#DCFCE7', greenBg: '#ECFDF3', greenInk: '#15803D', ink: '#111827', muted: '#6B7280',
-  line: '#E5E7EB', panel: '#EEF2F7', track: '#CBD5E1', orange: '#F59E0B', amber: '#B45309' };
+const ETA_UI = { // 跟卡片.gs 的 UI 同一套顏色：重點色磚紅（變數名稱沿用設計稿的 green）
+  green: '#A63A2B', greenSoft: '#F7DCD5', greenBg: '#FBF1EE', greenInk: '#7A2A1F', ink: '#111827', muted: '#6B7280',
+  line: '#E5E7EB', panel: '#EEF2F7', track: '#CBD5E1', orange: '#F59E0B', calm: '#64748B', amber: '#B45309' };
 
 function etaTx_(text, size, color, extra) {
   return Object.assign({ type: 'text', text: String(text), size: size, color: color || ETA_UI.ink, wrap: true }, extra || {});
@@ -137,7 +137,7 @@ function designCard_(spec) {
         ] },
         { type: 'box', layout: 'vertical', margin: 'sm', height: '8px', cornerRadius: '4px', backgroundColor: ETA_UI.track,
           contents: [{ type: 'box', layout: 'vertical', width: Math.max(pct, 1) + '%', height: '8px', cornerRadius: '4px',
-            backgroundColor: sec.queue.busy ? ETA_UI.orange : ETA_UI.green, contents: [{ type: 'filler' }] }] },
+            backgroundColor: sec.queue.busy ? ETA_UI.orange : ETA_UI.calm, contents: [{ type: 'filler' }] }] },
         etaTx_(sec.queue.caption, 'xs', ETA_UI.muted, { margin: 'sm' }),
       ] });
     }
