@@ -16,7 +16,7 @@ function walk(node, visit) {
   if (node.contents && !Array.isArray(node.contents)) walk(node.contents, visit);
 }
 
-test('card_：標題列磚紅底白字，第一顆按鈕是主要按鈕，其他是連結樣式', () => {
+test('card_：設計稿樣式（白底標題區、深色標題字），第一顆按鈕是綠色主要按鈕，其他是連結樣式', () => {
   const env = loadBot(FILES);
   const card = plain(env.call('card_', {
     badge: '小字', title: '標題', subtitle: '副標',
@@ -26,22 +26,22 @@ test('card_：標題列磚紅底白字，第一顆按鈕是主要按鈕，其他
   }));
   assert.equal(card.type, 'flex');
   const b = card.contents;
-  assert.equal(b.header.backgroundColor, '#A63A2B');
+  assert.equal(b.header.backgroundColor, '#FFFFFF');
   assert.deepEqual(b.header.contents.map(c => c.text), ['小字', '標題', '副標']);
-  assert.equal(b.header.contents[1].color, '#FFFFFF');
-  assert.equal(b.body.backgroundColor, '#FBF7F0');
+  assert.equal(b.header.contents[1].color, '#111827');
+  assert.equal(b.body.backgroundColor, '#FFFFFF');
   assert.deepEqual(b.footer.contents.filter(c => c.type === 'button').map(c => [c.style, c.action.type]), [['primary', 'message'], ['link', 'uri']]);
   const last = b.footer.contents[b.footer.contents.length - 1];
   assert.deepEqual([last.type, last.text, last.action.text], ['text', '回選單 ›', '選單'], '最下面有回選單');
-  assert.equal(b.footer.contents[0].color, '#A63A2B');
+  assert.equal(b.footer.contents[0].color, '#16A34A');
   assert.equal(card.altText, '標題（副標）\n★ A：1\n　說明\n・B：2\n\n提示\n\n注意\n\n（來源）');
 });
 
-test('card_：提醒用琥珀色，不用品牌的紅色', () => {
+test('card_：提醒用琥珀色，不用重點的綠色', () => {
   const env = loadBot(FILES);
   const body = plain(env.call('card_', { title: 't', notes: ['提示'], warns: ['注意'] })).contents.body.contents;
-  assert.equal(body[0].contents[0].color, '#1B1D22');
-  assert.equal(body[1].contents[0].color, '#8A5A00');
+  assert.equal(body[0].contents[0].color, '#111827');
+  assert.equal(body[1].contents[0].color, '#B45309');
 });
 
 test('card_：沒有內容時也不會產生 LINE 不接受的空卡片；純文字版最多 400 字', () => {
@@ -73,8 +73,8 @@ test('即時比較：照到校時間排，最快的標成推薦，不會到東�
   const card = sampleCards().即時比較;
   const rows = card.contents.body.contents.filter(c => c.type === 'box' && c.contents[0].layout === 'horizontal');
   assert.deepEqual(rows.map(r => r.contents[0].contents[0].text), ['紅30', '255', '304重慶', '557', '🚕 計程車共乘'], '公車下面接著其他方法（這裡沒有 YouBike 資料）');
-  assert.equal(rows[0].contents[0].contents[0].color, '#A63A2B', '最快的那一列用品牌色');
-  assert.equal(rows[1].contents[0].contents[0].color, '#1B1D22');
+  assert.equal(rows[0].contents[0].contents[0].color, '#16A34A', '最快的那一列用重點色（綠）');
+  assert.equal(rows[1].contents[0].contents[0].color, '#111827');
   assert.match(rows[0].contents[0].contents[1].text, /^即將進站・\d\d:\d\d 到$/);
   assert.equal(rows[0].contents[1].text, '錢穆故居站下車，走 5 分鐘');
   assert.equal(rows[3].contents[1].text, '直接進校園，走 2 分鐘');
@@ -102,9 +102,9 @@ test('天氣：60% 以上用提醒的顏色，並把降雨機率標出來', () =
   const cards = sampleCards();
   const rainy = cards.天氣會下雨.contents.body.contents;
   assert.equal(rainy[0].contents[0].contents[1].text, '80%');
-  assert.equal(rainy[1].contents[0].color, '#8A5A00');
+  assert.equal(rainy[1].contents[0].color, '#B45309');
   const fine = cards.天氣不會下雨.contents.body.contents;
-  assert.equal(fine[1].contents[0].color, '#1B1D22');
+  assert.equal(fine[1].contents[0].color, '#111827');
   assert.match(cards.天氣不會下雨.altText, /應該不會下雨/);
 });
 

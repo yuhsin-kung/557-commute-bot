@@ -82,7 +82,8 @@ function p557Bus_(atStop) {
 
 // ===== 預估到達時間的卡片（11/28 團隊的設計稿：預計抵達、01 前往士林站、02 557 搭乘建議、03 更推薦的上車地點） =====
 
-const ETA_UI = { green: '#16A34A', greenSoft: '#DCFCE7', greenBg: '#ECFDF3', greenInk: '#15803D', ink: '#111827', muted: '#6B7280',
+const ETA_UI = { green: '#16A34A', // 跟卡片.gs 的 UI 同一套顏色
+  greenSoft: '#DCFCE7', greenBg: '#ECFDF3', greenInk: '#15803D', ink: '#111827', muted: '#6B7280',
   line: '#E5E7EB', panel: '#EEF2F7', track: '#CBD5E1', orange: '#F59E0B', amber: '#B45309' };
 
 function etaTx_(text, size, color, extra) {

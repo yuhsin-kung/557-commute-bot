@@ -1,8 +1,8 @@
 /**
  * 卡片式回覆（LINE 的 Flex Message）和配色
  *
- * 配色是「磚紅米白」：標題列磚紅底白字，內文米白底深色字。
- * 紅色只當品牌色用，不拿來表示警告；要提醒的事情用琥珀色的字。
+ * 配色（11/28 改）：照團隊的設計稿，白底、綠色重點、灰色面板；標題區也是白底深色字。
+ * 綠色只當重點色用，不拿來表示警告；要提醒的事情用琥珀色的字。
  *
  * 其他檔案用 card_({ … }) 做一張卡片：
  *   badge     標題上面的小字（這張卡片是什麼）
@@ -23,16 +23,20 @@
  * 每張卡片都帶一份純文字版（altText）：通知預覽、訊息紀錄、LINE 不接受卡片時的備用回覆都用它。
  */
 const UI = {
-  brand: '#A63A2B',      // 磚紅：標題列、主要按鈕、最推薦的那一列
-  brandDark: '#7A2A1F',  // 深磚紅：次要按鈕的字
-  onBrand: '#FFFFFF',
-  onBrandSoft: '#F7DCD5',
-  paper: '#FBF7F0',      // 米白：卡片底色
-  soft: '#F3E9DC',       // 提示的底色
-  line: '#E6D9C8',       // 分隔線
-  ink: '#1B1D22',        // 內文
-  muted: '#6B6257',      // 次要文字
-  warn: '#8A5A00',       // 要注意的事
+  // 11/28 改成團隊設計稿的樣子：白底、綠色重點、灰色面板（原本是磚紅標題列、米白底）
+  brand: '#16A34A',      // 綠：主要按鈕、最推薦的那一列、重點數字
+  brandDark: '#15803D',  // 深綠：次要按鈕的字
+  onBrand: '#FFFFFF',    // 綠底上的字
+  onBrandSoft: '#DCFCE7',
+  head: '#FFFFFF',       // 標題區：白底
+  headInk: '#111827',    // 標題字
+  headSoft: '#6B7280',   // 標題上面的小字、副標
+  paper: '#FFFFFF',      // 卡片底色
+  soft: '#EEF2F7',       // 提示、次要按鈕的底色（灰色面板）
+  line: '#E5E7EB',       // 分隔線
+  ink: '#111827',        // 內文
+  muted: '#6B7280',      // 次要文字
+  warn: '#B45309',       // 要注意的事（琥珀色）
 };
 
 function card_(spec) {
@@ -51,13 +55,13 @@ function cardBubble_(spec) {
   if (!body.length) body.push({ type: 'text', text: spec.title, size: 'sm', color: UI.ink, wrap: true }); // Flex 不接受空的內文
 
   const header = [];
-  if (spec.badge) header.push({ type: 'text', text: spec.badge, size: 'xs', color: UI.onBrandSoft });
-  header.push({ type: 'text', text: spec.title, size: 'lg', weight: 'bold', color: UI.onBrand, wrap: true });
-  if (spec.subtitle) header.push({ type: 'text', text: spec.subtitle, size: 'sm', color: UI.onBrandSoft, wrap: true });
+  if (spec.badge) header.push({ type: 'text', text: spec.badge, size: 'xs', color: UI.headSoft });
+  header.push({ type: 'text', text: spec.title, size: 'lg', weight: 'bold', color: UI.headInk, wrap: true });
+  if (spec.subtitle) header.push({ type: 'text', text: spec.subtitle, size: 'sm', color: UI.headSoft, wrap: true });
 
   const bubble = {
     type: 'bubble',
-    header: { type: 'box', layout: 'vertical', backgroundColor: UI.brand, paddingAll: '16px', spacing: 'xs', contents: header },
+    header: { type: 'box', layout: 'vertical', backgroundColor: UI.head, paddingAll: '20px', paddingBottom: '4px', spacing: 'xs', contents: header },
     body: { type: 'box', layout: 'vertical', backgroundColor: UI.paper, paddingAll: '16px', spacing: 'md', contents: body },
   };
   const buttons = (spec.buttons || []).map(cardButton_);
@@ -120,9 +124,9 @@ function choices_(text, items, options) {
   const bubble = { type: 'bubble', body: { type: 'box', layout: 'vertical', backgroundColor: UI.paper, paddingAll: '16px', spacing: chips.length <= 6 ? 'md' : 'sm', contents: body } };
   if (o.title) {
     const header = [];
-    if (o.badge) header.push({ type: 'text', text: o.badge, size: 'xs', color: UI.onBrandSoft });
-    header.push({ type: 'text', text: o.title, size: 'lg', weight: 'bold', color: UI.onBrand, wrap: true });
-    bubble.header = { type: 'box', layout: 'vertical', backgroundColor: UI.brand, paddingAll: '16px', spacing: 'xs', contents: header };
+    if (o.badge) header.push({ type: 'text', text: o.badge, size: 'xs', color: UI.headSoft });
+    header.push({ type: 'text', text: o.title, size: 'lg', weight: 'bold', color: UI.headInk, wrap: true });
+    bubble.header = { type: 'box', layout: 'vertical', backgroundColor: UI.head, paddingAll: '20px', paddingBottom: '4px', spacing: 'xs', contents: header };
   }
   const labels = items.map(item => '［' + (Array.isArray(item) ? item[0] : item.label) + '］').join('');
   return { type: 'flex', altText: ((o.title && !o.quietTitle ? o.title + '\n' : '') + (text || '') + '\n' + labels).trim().slice(0, 400), contents: bubble };
@@ -136,7 +140,7 @@ function choiceChip_(item, primary) {
   else action = Object.assign({ type: 'datetimepicker', label: label.slice(0, 20) }, item.picker);
   return {
     type: 'box', layout: 'vertical', flex: 1, backgroundColor: primary ? UI.brand : UI.soft, cornerRadius: '8px', paddingAll: '12px', action: action,
-    contents: [{ type: 'text', text: label, size: 'sm', weight: 'bold', color: primary ? UI.onBrand : UI.brandDark, align: 'center', wrap: true }],
+    contents: [{ type: 'text', text: label, size: 'sm', weight: 'bold', color: primary ? UI.onBrand : UI.ink, align: 'center', wrap: true }],
   };
 }
 
